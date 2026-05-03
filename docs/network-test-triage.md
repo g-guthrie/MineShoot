@@ -2,43 +2,86 @@
 
 This tracker exists so networking tests do not stay green for the wrong reasons.
 
-## Keep
+## Current Gates
 
-- `tests/actors/player-movement-parity.test.js`
-- `tests/gameplay-runtime-loop.test.js`
-- `tests/transport.test.js`
-- `tests/net/connection-timing.test.js`
+- `npm run test:networking`
+  - Canonical behavior-first Node networking guardrail.
+  - Uses explicit file lists, not broad `tests/net/*.test.js` or `tests/server/room/*.test.js` wildcards.
+  - Covers owner-player correction, transport/reconnect, jitter-buffering, state-view wiring, server room runtime, snapshot deltas, socket handling, combat rewind, and hit feedback.
+- `npm run test:networking:integration`
+  - Real Playwright plus local Worker guardrail.
+  - Runs:
+    - `e2e/live-websocket-gameplay.spec.js`
+    - `e2e/quick-match-handoff.spec.js`
+    - `e2e/social.spec.js`
+- `npm run test:smoke`
+  - Build plus `test:networking:smoke`.
+  - This is the high-signal default smoke for networking correctness.
+- `npm run test:networking:full`
+  - Broader networking-adjacent coverage, including auth/client helpers, room rules, private-room config, architecture ownership guards, and the live browser/Worker integration proof.
+  - Use this when changing surrounding room or auth behavior; do not treat every included test as smoke proof.
+- `npm run test:full`
+  - Build plus every Node test plus every Playwright spec.
+  - Use this for broad release confidence, not as the fast networking smoke.
+
+## Keep As Networking Proof
+
 - `tests/net/runtime-state.test.js`
+- `tests/net/network-runtime.test.js`
+- `tests/net/runtime-core.test.js`
+- `tests/net/commands.test.js`
+- `tests/net/join-state.test.js`
+- `tests/net/network-state-view-wiring.test.js`
+- `tests/net/remote-entities.test.js`
+- `tests/net/remote-sync.test.js`
+- `tests/net/connection-timing.test.js`
+- `tests/transport.test.js`
+- `tests/server/room/entity-serializer.test.js`
+- `tests/server/room/room-helper-stack.test.js`
+- `tests/server/room/room-idle-tick.test.js`
 - `tests/server/room/room-runtime.test.js`
-- `tests/server/room/room-state.test.js`
 - `tests/server/room/room-snapshot-runtime.test.js`
+- `tests/server/room/room-state.test.js`
+- `tests/server/room/room-socket.test.js`
+- `tests/server/room/room-transport.test.js`
+- `tests/server/room/projectile-service.test.js`
+- `tests/shared/authoritative-reconciliation.test.js`
+- `tests/shared/authoritative-movement.test.js`
 - `tests/shared/hitscan-authority.test.js`
 - `tests/net/feedback-sync.test.js`
+- `e2e/live-websocket-gameplay.spec.js`
+- `e2e/quick-match-handoff.spec.js`
+- `e2e/social.spec.js`
 
-## Rewrite
+## Do Not Treat As Networking Proof
 
-- `tests/integration/real-worker-multiplayer.test.js`
-  The movement smoke currently measures observer snapshot messages more directly than final presented motion.
-- `tests/helpers/real-worker-harness.js`
-  The harness currently models outbound impairment better than inbound impairment and still exposes direct `sendFire` paths that bypass the real local firing flow.
-- `tests/server/room/room-idle-tick.test.js`
-  The current test hand-simulates tick logic instead of driving the live room timer path.
+- `tests/net/auth-client.test.js`
+  - Useful auth/session/client security coverage, but not a motion, transport, or snapshot proof.
+- `tests/net/state-view.test.js`
+  - Useful selector coverage, but historically contained implementation-shape assertions. Smoke should prove the state-view wiring path instead.
+- `tests/server/room/room-loadout.test.js`
+  - Useful loadout/game-state coverage, not a networking quality gate.
+- `tests/server/room/room-match.test.js`
+  - Useful match rules, not transport or interpolation proof.
+- `tests/server/room/room-private-config.test.js`
+  - Useful private-room config coverage, not a core live socket proof.
+- `tests/server/room/canonical-runtime-ownership.test.js`
+  - Useful architecture guard, but lint-like rather than runtime behavior.
+- `tests/server/lobby-smoke.test.js`
+  - Useful API coverage, but it is a fake-D1 handler suite, not a live socket or motion proof.
+- `e2e/menu-shell.spec.js`
+  - Useful UI/layout coverage, but not a networking quality gate.
+- `e2e/weapon-swap-input.spec.js`
+  - Useful browser input wiring coverage, but not a transport, snapshot, or reconciliation proof.
 
-## Known Gaps
+## Removed Stale Assumptions
 
-- Browser Playwright netcode smokes still need serial-run stability before they can replace the last browser-side gap note.
+- There is no current `e2e/netcode-runtime.spec.js` gate.
+- There is no current `tests/integration/real-worker-multiplayer.test.js` gate.
+- `test:smoke` is not an alias for all tests. It is the build plus networking proof gate.
 
-## Covered
+## Remaining Gaps
 
-- `e2e/netcode-runtime.spec.js`
-  - end-to-end shooting through the real local firing path under impaired links
-  - live render-path smoke for `js/net/remote-sync.js` under inbound delay/loss/reorder
-  - end-to-end owner correction smoke under delay, jitter, loss, and reconnect
-  - degraded-viewer cadence proof using unique snapshot sequences in a shared server-time window
-
-The browser netcode smokes intentionally run on the fixed local shared network mode (`single_dev_server` with `local-shared`) so they measure transport behavior instead of public or private room allocation timing.
-
-## Temporary Compatibility Notes
-
-- `npm run test:smoke` is retained as a compatibility alias to `npm run test:all`.
-- `npm run test:networking` is the networking gate and should be treated as the required networking guardrail.
+- Add an end-to-end browser impairment proof that drives inbound delay, loss, and reordering against final presented remote motion.
+- Add an end-to-end owner correction proof under delay, jitter, loss, and reconnect.
+- Keep thresholds tied to visible behavior: final presented motion, correction magnitude, and stale-frame rejection matter more than raw message counts.

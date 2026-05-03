@@ -334,11 +334,43 @@
             };
         }
 
+        function remoteFrameFreshness(frame) {
+            var snapshotSeq = Math.max(0, Number(frame && frame.snapshotSeq || 0));
+            var serverTime = Math.max(0, Number(frame && frame.serverTime || 0));
+            var receivedAt = Math.max(0, Number(frame && frame.receivedAt || 0));
+            var readyAt = Math.max(0, Number(frame && frame.readyAt || 0));
+            return snapshotSeq || serverTime || receivedAt || readyAt;
+        }
+
         function enqueueRemoteFrame(frame) {
             if (!frame || typeof frame !== 'object') return remoteFrameQueue;
-            remoteFrameQueue.push(frame);
+            var readyAt = Math.max(0, Number(frame.readyAt || 0));
+            var snapshotSeq = Math.max(0, Number(frame.snapshotSeq || 0));
+            var insertAt = remoteFrameQueue.length;
+            for (var i = 0; i < remoteFrameQueue.length; i++) {
+                var queued = remoteFrameQueue[i] || {};
+                var queuedReadyAt = Math.max(0, Number(queued.readyAt || 0));
+                var queuedSnapshotSeq = Math.max(0, Number(queued.snapshotSeq || 0));
+                if (
+                    readyAt < queuedReadyAt ||
+                    (readyAt === queuedReadyAt && snapshotSeq > 0 && queuedSnapshotSeq > 0 && snapshotSeq < queuedSnapshotSeq)
+                ) {
+                    insertAt = i;
+                    break;
+                }
+            }
+            remoteFrameQueue.splice(insertAt, 0, frame);
             while (remoteFrameQueue.length > MAX_REMOTE_FRAME_QUEUE_SIZE) {
-                remoteFrameQueue.shift();
+                var dropIndex = 0;
+                var oldestFreshness = remoteFrameFreshness(remoteFrameQueue[0]);
+                for (var j = 1; j < remoteFrameQueue.length; j++) {
+                    var nextFreshness = remoteFrameFreshness(remoteFrameQueue[j]);
+                    if (nextFreshness < oldestFreshness) {
+                        oldestFreshness = nextFreshness;
+                        dropIndex = j;
+                    }
+                }
+                remoteFrameQueue.splice(dropIndex, 1);
             }
             return remoteFrameQueue;
         }

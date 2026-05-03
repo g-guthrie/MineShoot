@@ -20,12 +20,15 @@ import {
     triggerFireRecoil
 } from './boxman-fire-recoil.js';
 import {
+    applyBarrelCrosshairAlignment
+} from './boxman-barrel-alignment.js';
+import {
     applyWeaponArmLayer,
-    createWeaponArmLayerState,
-    setWeaponArmLayerEnabled
+    createWeaponArmLayerState
 } from './boxman-weapon-arm-layer.js';
 import {
     clearManualRollState,
+    clearStopRecoveryState,
     createRigMotionState
 } from './boxman-rig-state.js';
 
@@ -41,8 +44,6 @@ import {
     var GameBoxmanRig = {};
     var MODEL_URL = '/assets/models/boxman.glb';
     var MANUAL_ROLL_CLIP = 'drop_running_roll';
-    var BACKWARD_ROLL_ALIGN_DURATION = 0.12;
-    var BACKWARD_ROLL_ALIGN_EPSILON = 10 * (Math.PI / 180);
     var ROLL_LANDING_MIN_DROP_WU = 2.0;
     var ROLL_LANDING_MIN_HORIZONTAL_SPEED_WU = 2.0;
     var RUN_LANDING_MIN_HORIZONTAL_SPEED_WU = 2.8;
@@ -56,7 +57,8 @@ import {
     var IDLE_AIM_RESPONSE_SCALE = 0.5;
     var IDLE_AIM_YAW_LIMIT = 90 * (Math.PI / 180);
     var IDLE_AIM_YAW_RESPONSE_SCALE = 1;
-    var RUN_AIM_YAW_RESPONSE_WEIGHT = 0.88;
+    var RUN_AIM_YAW_RESPONSE_WEIGHT = 0.8;
+    var STOP_SETTLE_AIM_YAW_RESPONSE_WEIGHT = RUN_AIM_YAW_RESPONSE_WEIGHT;
     var IDLE_AIM_UPPER_PITCH_SCALE = -1.9;
     var IDLE_AIM_LOWER_PITCH_SCALE = -0.65;
     var IDLE_AIM_UPPER_YAW_SCALE = 1;
@@ -64,6 +66,9 @@ import {
     var IDLE_AIM_BLEND_IN_SPEED = 12;
     var IDLE_AIM_BLEND_OUT_SPEED = 10;
     var OUTWARD_GUN_YAW_COMPENSATION_SCALE = -0.4;
+    var BARREL_CROSSHAIR_ALIGNMENT_DISTANCE = 96;
+    var BARREL_CROSSHAIR_ALIGNMENT_MAX_CORRECTION = 18 * (Math.PI / 180);
+    var BARREL_CROSSHAIR_ALIGNMENT_WEIGHT = 0.85;
     var STOP_SETTLE_RIGHT_ARM_RECOVERY_SCALE = 0.65;
     var WEAPON_MODEL_ROTATE_X = (Math.PI * 0.5) - (15 * (Math.PI / 180));
     var WEAPON_MODEL_ROTATE_Y = 0;
@@ -91,8 +96,6 @@ import {
     var weaponTextureMap = Object.create(null);
     var weaponGltfLoader = null;
     var weaponTextureLoader = null;
-    var WEAPON_ARM_LAYER_STORAGE_KEY = 'mayhem.experimentalWeaponArmLayer';
-    var weaponArmLayerEnabled = readStoredWeaponArmLayerEnabled();
     var weaponAssetMuzzleScratch = new THREE.Vector3();
     var weaponAssetRotScratch = new THREE.Euler();
 
@@ -106,31 +109,6 @@ import {
 
     function isBrowserRuntime() {
         return typeof window !== 'undefined' && typeof document !== 'undefined';
-    }
-
-    function readStoredWeaponArmLayerEnabled() {
-        try {
-            if (typeof window === 'undefined' || !window.localStorage) return false;
-            return window.localStorage.getItem(WEAPON_ARM_LAYER_STORAGE_KEY) === '1';
-        } catch (_err) {
-            return false;
-        }
-    }
-
-    function storeWeaponArmLayerEnabled(enabled) {
-        try {
-            if (typeof window === 'undefined' || !window.localStorage) return !!enabled;
-            window.localStorage.setItem(WEAPON_ARM_LAYER_STORAGE_KEY, enabled ? '1' : '0');
-        } catch (_err) {
-            // Storage can fail in private or embedded contexts; the runtime flag
-            // still changes for the current session.
-        }
-        return !!enabled;
-    }
-
-    function setGlobalWeaponArmLayerEnabled(enabled) {
-        weaponArmLayerEnabled = storeWeaponArmLayerEnabled(!!enabled);
-        return weaponArmLayerEnabled;
     }
 
     function desiredAvatarHeight() {
@@ -440,10 +418,6 @@ import {
         return out;
     }
 
-    function lerpAngle(start, target, t) {
-        return normalizeAngle(Number(start || 0) + (normalizeAngle(Number(target || 0) - Number(start || 0)) * clamp01(t)));
-    }
-
     function resolveClipPlayback(animState, clipName) {
         var name = String(clipName || '');
         var reverse = false;
@@ -585,7 +559,9 @@ import {
         var settleWeight = clamp01(stopSettleWeight);
         if (settleWeight > 0 && motionState && motionState.stopDirectionalSnapshot) {
             return {
-                facingYaw: Number(motionState.stopDirectionalSnapshot.facingYaw || 0) * settleWeight
+                facingYaw: Number(motionState.stopDirectionalSnapshot.facingYaw || 0) *
+                    settleWeight *
+                    STOP_SETTLE_AIM_YAW_RESPONSE_WEIGHT
             };
         }
         var directional = motionState && motionState.directional ? motionState.directional : null;
@@ -755,10 +731,6 @@ import {
             : resolveRollFacingYaw(animState);
     }
 
-    function needsBackwardRollAlign(currentFacingYaw) {
-        return Math.abs(normalizeAngle(currentFacingYaw)) > BACKWARD_ROLL_ALIGN_EPSILON;
-    }
-
     function resolveIdleTurnClip(motionState) {
         var directional = motionState && motionState.directional ? motionState.directional : null;
         if (!directional || !directional.useTurnLoopClip) return '';
@@ -831,9 +803,7 @@ import {
         var poseName = String(
             motionState.stopDirectionalSnapshot && motionState.stopDirectionalSnapshot.poseName || ''
         );
-        if (poseName === 'strafe_left' || poseName === 'strafe_right') {
-            requestedDuration *= 0.55;
-        } else if (poseName === 'forward_left' || poseName === 'forward_right') {
+        if (poseName === 'forward_left' || poseName === 'forward_right') {
             requestedDuration *= 0.75;
         }
         motionState.stopSettleDuration = requestedDuration;
@@ -874,10 +844,7 @@ import {
 
         if (motionState.lockName === 'stop' && motionState.lockRemaining > 0 && moving) {
             if (canInterruptStopLock(motionState, directional && directional.intent)) {
-                motionState.lockName = '';
-                motionState.lockRemaining = 0;
-                motionState.stopSettleRemaining = 0;
-                motionState.stopLockDuration = 0;
+                clearStopRecoveryState(motionState);
             } else {
                 return motionState.lockName;
             }
@@ -1389,7 +1356,6 @@ import {
         var motionState = createRigMotionState();
         var fireRecoilState = createFireRecoilState();
         var weaponArmLayerState = createWeaponArmLayerState({
-            enabled: weaponArmLayerEnabled,
             animations: template.animations
         });
         var currentWeaponId = String(options.weaponId || 'rifle');
@@ -1556,30 +1522,11 @@ import {
         applyWeaponVisualState(rig, currentWeaponId);
 
         function startManualRoll(targetFacingYaw, reverse) {
-            motionState.manualRollPending = false;
             motionState.manualRollActive = true;
             motionState.manualRollReverse = !!reverse;
             motionState.manualRollFacingYaw = normalizeAngle(targetFacingYaw);
             motionState.lockName = MANUAL_ROLL_CLIP;
             motionState.lockRemaining = Math.max(0.2, clipDuration(actions, MANUAL_ROLL_CLIP, 0.36) * 0.92);
-        }
-
-        function updatePendingBackwardRoll(dt) {
-            if (!motionState.manualRollPending) return;
-            motionState.manualRollAlignElapsed += Math.max(0, Number(dt || 0));
-            var duration = Math.max(0.0001, Number(motionState.manualRollAlignDuration || BACKWARD_ROLL_ALIGN_DURATION));
-            var progress = clamp01(motionState.manualRollAlignElapsed / duration);
-            motionState.manualRollFacingYaw = lerpAngle(
-                motionState.manualRollAlignStartYaw,
-                motionState.manualRollAlignTargetYaw,
-                progress
-            );
-            if (
-                progress >= 1 ||
-                !needsBackwardRollAlign(normalizeAngle(motionState.manualRollFacingYaw - motionState.manualRollAlignTargetYaw))
-            ) {
-                startManualRoll(motionState.manualRollAlignTargetYaw, true);
-            }
         }
 
         function applyTintColor() {
@@ -1640,7 +1587,6 @@ import {
 
             motionState.directional = updateDirectionalLocomotionState(motionState.directional, dt, animState);
             refreshRecentForwardStopWindow(motionState, animState, motionState.directional, dt);
-            updatePendingBackwardRoll(dt);
             var clipName = selectClip(animState, motionState, actions);
             var playbackState = animState;
             if (motionState.manualRollActive && clipName === MANUAL_ROLL_CLIP) {
@@ -1680,13 +1626,11 @@ import {
                 motionState.idleAimCurrentYaw = idleAimTargetYawValue;
             }
 
-            if (motionState.manualRollPending || (motionState.manualRollActive && rig.activeClipName === MANUAL_ROLL_CLIP)) {
+            if (motionState.manualRollActive && rig.activeClipName === MANUAL_ROLL_CLIP) {
                 if (rig.modelRoot) {
                     rig.modelRoot.rotation.y = Number(rig.modelBaseYaw || 0) + Number(motionState.manualRollFacingYaw || 0);
                 }
-                rig.activePoseName = motionState.manualRollPending
-                    ? 'roll_align'
-                    : (motionState.manualRollReverse ? 'roll_back' : 'roll');
+                rig.activePoseName = motionState.manualRollReverse ? 'roll_back' : 'roll';
             } else if (rig.activeClipName === MANUAL_ROLL_CLIP && isDirectionalMove(animState)) {
                 if (rig.modelRoot) {
                     rig.modelRoot.rotation.y = Number(rig.modelBaseYaw || 0) + resolveRollFacingYaw(animState);
@@ -1708,12 +1652,13 @@ import {
             } else if (stopSettleWeight > 0 && motionState.stopDirectionalSnapshot) {
                 applyStopSettleRightArmRecoveryPose(rig, stopSettleWeight);
             }
-            setWeaponArmLayerEnabled(weaponArmLayerState, weaponArmLayerEnabled);
             applyWeaponArmLayer(rig, {
                 state: weaponArmLayerState,
                 activeClipName: rig.activeClipName,
                 animState: animState,
                 directionalState: motionState.directional,
+                stopDirectionalState: motionState.stopDirectionalSnapshot,
+                stopSettleWeight: stopSettleWeight,
                 deltaSec: dt,
                 activeActionTime: actionState.action ? actionState.action.time : 0
             });
@@ -1726,6 +1671,13 @@ import {
             applyWeaponOrientationCompensation(rig, {
                 currentYaw: motionState.idleAimCurrentYaw
             });
+            if (idleAimActive) {
+                applyBarrelCrosshairAlignment(rig, animState, {
+                    targetDistance: BARREL_CROSSHAIR_ALIGNMENT_DISTANCE,
+                    maxCorrectionRad: BARREL_CROSSHAIR_ALIGNMENT_MAX_CORRECTION,
+                    weight: BARREL_CROSSHAIR_ALIGNMENT_WEIGHT
+                });
+            }
             applyFireRecoilPose(rig, fireRecoilState);
             decayFireRecoilState(fireRecoilState, dt);
 
@@ -1761,6 +1713,7 @@ import {
         function triggerAction(action, options) {
             var kind = String(action || '').toLowerCase();
             if (kind === 'fire') {
+                cancelStopRecoveryForFire();
                 return triggerFireRecoil(fireRecoilState, options);
             }
             if (kind === 'jump') {
@@ -1770,7 +1723,6 @@ import {
             if (kind === 'roll') {
                 if (!isDirectionalMove(options)) return false;
                 if (
-                    motionState.manualRollPending ||
                     motionState.manualRollActive ||
                     (motionState.lockName === MANUAL_ROLL_CLIP && motionState.lockRemaining > 0.05)
                 ) {
@@ -1782,21 +1734,23 @@ import {
                         : 0
                 );
                 var targetFacingYaw = resolveManualRollFacingYaw(options, currentFacingYaw);
-                if (isBackwardRollIntent(options) && needsBackwardRollAlign(motionState.directional && motionState.directional.facingYaw)) {
-                    motionState.manualRollPending = true;
-                    motionState.manualRollActive = false;
-                    motionState.manualRollReverse = true;
-                    motionState.manualRollAlignElapsed = 0;
-                    motionState.manualRollAlignDuration = BACKWARD_ROLL_ALIGN_DURATION;
-                    motionState.manualRollAlignStartYaw = currentFacingYaw;
-                    motionState.manualRollAlignTargetYaw = targetFacingYaw;
-                    motionState.manualRollFacingYaw = motionState.manualRollAlignStartYaw;
-                    return true;
-                }
                 startManualRoll(targetFacingYaw, isBackwardRollIntent(options));
                 return true;
             }
             return false;
+        }
+
+        function cancelStopRecoveryForFire() {
+            var canceled = clearStopRecoveryState(motionState);
+            if (!canceled) return false;
+            if (actionState.clipName === 'stop') {
+                var idlePlayback = resolveClipPlayback(null, 'idle');
+                playAction(actions, actionState, 'idle', 0.04, idlePlayback);
+                keepPlaybackLooping(actionState.action, idlePlayback);
+                mixer.update(0);
+                rig.activeClipName = actionState.clipName || 'idle';
+            }
+            return true;
         }
 
         function getCoreWorldPosition(outVec3) {
@@ -1874,6 +1828,7 @@ import {
             setMuzzleVisible: setMuzzleVisible,
             getWeaponId: getWeaponId,
             getCameraProfile: getCameraProfile,
+            cancelStopRecoveryForFire: cancelStopRecoveryForFire,
             isMovementAnimationLocked: isMovementAnimationLocked,
             dispose: dispose
         };
@@ -1899,18 +1854,6 @@ import {
     GameBoxmanRig.create = function (options) {
         if (!templateAsset) return null;
         return createRig(options || {});
-    };
-
-    GameBoxmanRig.isWeaponArmLayerEnabled = function () {
-        return !!weaponArmLayerEnabled;
-    };
-
-    GameBoxmanRig.setWeaponArmLayerEnabled = function (enabled) {
-        return setGlobalWeaponArmLayerEnabled(!!enabled);
-    };
-
-    GameBoxmanRig.toggleWeaponArmLayer = function () {
-        return setGlobalWeaponArmLayerEnabled(!weaponArmLayerEnabled);
     };
 
     runtime.GameBoxmanRig = GameBoxmanRig;

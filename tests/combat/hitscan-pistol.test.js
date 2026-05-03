@@ -25,7 +25,7 @@ function createHitbox(type, center, size, targetId = 'target') {
   return mesh;
 }
 
-async function loadHitscanHarness(pistolOverrides = {}, targets = []) {
+async function loadHitscanHarness(pistolOverrides = {}, targets = [], netOverrides = {}, options = {}) {
   const [tracerCode, weaponRuntimeCode, shotRuntimeCode, code] = await Promise.all([
     fs.readFile(new URL('../../js/combat/hitscan-tracer-runtime.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/combat/hitscan-weapon-runtime.js', import.meta.url), 'utf8'),
@@ -37,6 +37,7 @@ async function loadHitscanHarness(pistolOverrides = {}, targets = []) {
   camera.position.set(0, 1.6, 0);
   camera.lookAt(new THREE.Vector3(0, 1.6, -10));
   scene.add(camera);
+  const tracerSpawns = [];
 
   const runtime = {
     triggeredActions: [],
@@ -78,7 +79,8 @@ async function loadHitscanHarness(pistolOverrides = {}, targets = []) {
     },
     GameNet: {
       getLockTargets() { return []; },
-      getHitboxArray() { return []; }
+      getHitboxArray() { return []; },
+      ...netOverrides
     },
     GameWorld: {
       getCollidables() { return []; }
@@ -86,7 +88,11 @@ async function loadHitscanHarness(pistolOverrides = {}, targets = []) {
     GamePlayer: {
       getAdsState() { return { active: false, weaponId: 'pistol' }; },
       getCamera() { return camera; },
-      getMuzzleWorldPosition() { return new THREE.Vector3(0, 1.6, 0); },
+      getMuzzleWorldPosition() {
+        return options.getMuzzleWorldPosition
+          ? options.getMuzzleWorldPosition()
+          : new THREE.Vector3(0, 1.6, 0);
+      },
       getRotation() { return { yaw: 0, pitch: 0 }; },
       getPosition() { return new THREE.Vector3(0, 1.6, 0); },
       setAdsEnabled() {},
@@ -118,6 +124,24 @@ async function loadHitscanHarness(pistolOverrides = {}, targets = []) {
 
   const context = vm.createContext(sandbox);
   vm.runInContext(tracerCode, context);
+  if (options.fakeTracerRuntime) {
+    const fakeTracerRuntime = {
+      spawnTracer(_camera, _weapon, endPoint, originPoint) {
+        tracerSpawns.push({
+          origin: { x: originPoint.x, y: originPoint.y, z: originPoint.z },
+          end: { x: endPoint.x, y: endPoint.y, z: endPoint.z }
+        });
+      },
+      updateTracers() {},
+      dispose() {}
+    };
+    sandbox.__MAYHEM_RUNTIME.GameWorldTracerFx = fakeTracerRuntime;
+    sandbox.__MAYHEM_RUNTIME.GameHitscanTracerRuntime = {
+      create() {
+        return fakeTracerRuntime;
+      }
+    };
+  }
   vm.runInContext(weaponRuntimeCode, context);
   vm.runInContext(shotRuntimeCode, context);
   vm.runInContext(code, context);
@@ -127,6 +151,7 @@ async function loadHitscanHarness(pistolOverrides = {}, targets = []) {
     camera,
     runtime: sandbox.__MAYHEM_RUNTIME,
     GameHitscan: sandbox.__MAYHEM_RUNTIME.GameHitscan,
+    tracerSpawns,
     setNow(value) {
       sandbox.__now = Number(value || 0);
     }
@@ -420,6 +445,61 @@ test('network fire intent starts exactly at the muzzle world position', async ()
   assert.equal(intent.aimOrigin.y, 1.6);
   assert.equal(intent.aimOrigin.z, 0);
   assert.ok(intent.aimForward.z < 0);
+});
+
+test('multiplayer hitscan draws the local tracer immediately from the shot-init muzzle', async () => {
+  let muzzle = new THREE.Vector3(2, 1.75, -0.35);
+  const harness = await loadHitscanHarness({}, [], {
+    isActive() { return true; },
+    isConnected() { return true; }
+  }, {
+    fakeTracerRuntime: true,
+    getMuzzleWorldPosition() {
+      return muzzle.clone();
+    }
+  });
+
+  const fired = harness.GameHitscan.fire(
+    harness.camera,
+    () => {},
+    () => {},
+    'authoritative-tracer'
+  );
+  muzzle = new THREE.Vector3(9, 9, 9);
+  assert.equal(fired, true);
+
+  assert.equal(harness.tracerSpawns.length, 1);
+  assert.deepEqual(harness.tracerSpawns[0].origin, { x: 2, y: 1.75, z: -0.35 });
+});
+
+test('shot samples keep local tracer and network fire intent on the same muzzle origin', async () => {
+  let muzzle = new THREE.Vector3(2, 1.75, -0.35);
+  const harness = await loadHitscanHarness({}, [], {
+    isActive() { return true; },
+    isConnected() { return true; }
+  }, {
+    fakeTracerRuntime: true,
+    getMuzzleWorldPosition() {
+      return muzzle.clone();
+    }
+  });
+
+  const sample = harness.GameHitscan.captureShotSample(harness.camera, 'sampled-origin');
+  assert.ok(sample);
+  muzzle = new THREE.Vector3(9, 9, 9);
+
+  const fired = harness.GameHitscan.fire(
+    harness.camera,
+    () => {},
+    () => {},
+    'sampled-origin',
+    sample
+  );
+  const intent = harness.GameHitscan.buildNetworkFireIntent('sampled-origin', sample);
+
+  assert.equal(fired, true);
+  assert.deepEqual(harness.tracerSpawns[0].origin, { x: 2, y: 1.75, z: -0.35 });
+  assert.deepEqual(JSON.parse(JSON.stringify(intent.aimOrigin)), { x: 2, y: 1.75, z: -0.35 });
 });
 
 test('tracer renderer uses traveled head-tail distance on early frames', async () => {

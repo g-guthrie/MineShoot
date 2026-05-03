@@ -91,6 +91,18 @@
 
         function buildFireZoneMesh(radius) {
             var root = new THREE.Group();
+            var scorch = new THREE.Mesh(
+                new THREE.CylinderGeometry(radius * 1.02, radius * 1.02, 0.025, 28),
+                new THREE.MeshBasicMaterial({
+                    color: 0x201812,
+                    transparent: true,
+                    opacity: 0.32,
+                    depthWrite: false
+                })
+            );
+            scorch.position.y = -0.02;
+            root.add(scorch);
+
             var disk = new THREE.Mesh(
                 new THREE.CylinderGeometry(radius, radius, 0.08, 16),
                 new THREE.MeshBasicMaterial({
@@ -137,6 +149,36 @@
             ringOuter.position.y = 0.04;
             root.add(ringOuter);
 
+            var flameJets = [];
+            var jetHot = new THREE.MeshBasicMaterial({
+                color: 0xffc45d,
+                transparent: true,
+                opacity: 0.72,
+                depthWrite: false
+            });
+            var jetWarm = new THREE.MeshBasicMaterial({
+                color: 0xff6d2d,
+                transparent: true,
+                opacity: 0.62,
+                depthWrite: false
+            });
+            for (var jetIndex = 0; jetIndex < 8; jetIndex++) {
+                var angle = (jetIndex / 8) * Math.PI * 2;
+                var jetRadius = radius * (0.22 + ((jetIndex % 3) * 0.16));
+                var jet = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.11 + ((jetIndex % 2) * 0.04), 0.55 + ((jetIndex % 3) * 0.12), 6),
+                    (jetIndex % 2) ? jetWarm.clone() : jetHot.clone()
+                );
+                jet.position.set(Math.cos(angle) * jetRadius, 0.28, Math.sin(angle) * jetRadius);
+                jet.rotation.z = (Math.sin(angle) * 0.18);
+                jet.rotation.x = (Math.cos(angle) * -0.18);
+                jet.userData.baseAngle = angle;
+                jet.userData.baseRadius = jetRadius;
+                jet.userData.baseHeight = 0.55 + ((jetIndex % 3) * 0.12);
+                root.add(jet);
+                flameJets.push(jet);
+            }
+
             var assetFactory = globalThis.__MAYHEM_RUNTIME.GameAssetFactory || null;
             var flame = null;
             var flameA = null;
@@ -170,10 +212,12 @@
             }
 
             root.userData.zoneParts = {
+                scorch: scorch,
                 disk: disk,
                 innerDisk: innerDisk,
                 ring: ring,
                 ringOuter: ringOuter,
+                flameJets: flameJets,
                 flame: flame,
                 flameA: flameA,
                 flameB: flameB,
@@ -203,7 +247,10 @@
             });
 
             if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
-                globalThis.__MAYHEM_RUNTIME.GameAudio.play('fireIgnite');
+                globalThis.__MAYHEM_RUNTIME.GameAudio.play('molotov_ignite', {
+                    throwable: 'molotov',
+                    projectileType: 'molotov'
+                });
                 globalThis.__MAYHEM_RUNTIME.GameAudio.play('fireBurning');
             }
             fireAudioPulseTimer = 0.9;
@@ -245,6 +292,10 @@
                 parts.disk.material.opacity = 0.14 + (lifeBlend * 0.2);
                 parts.disk.scale.set(0.96 + (pulse * 0.06), 1, 0.96 + (pulse * 0.06));
             }
+            if (parts.scorch && parts.scorch.material) {
+                parts.scorch.material.opacity = 0.18 + (lifeBlend * 0.18);
+                parts.scorch.scale.set(0.98 + (pulse * 0.04), 1, 0.98 + (pulse * 0.04));
+            }
             if (parts.innerDisk && parts.innerDisk.material) {
                 parts.innerDisk.material.opacity = 0.16 + (lifeBlend * 0.18);
                 parts.innerDisk.scale.set(0.94 + (pulse * 0.08), 1, 0.94 + (pulse * 0.08));
@@ -258,6 +309,23 @@
                 parts.ringOuter.material.opacity = 0.06 + (lifeBlend * 0.1);
                 parts.ringOuter.scale.set(0.94 + (pulse * 0.22), 0.94 + (pulse * 0.22), 1);
                 parts.ringOuter.rotation.z = Math.cos(stamp * 0.0013) * -0.22;
+            }
+            if (parts.flameJets && parts.flameJets.length) {
+                for (var i = 0; i < parts.flameJets.length; i++) {
+                    var jet = parts.flameJets[i];
+                    if (!jet) continue;
+                    var jetPulse = 0.82 + (Math.sin((stamp * 0.007) + i) * 0.22);
+                    var angle = Number(jet.userData.baseAngle || 0) + (Math.sin((stamp * 0.0014) + i) * 0.08);
+                    var baseRadius = Number(jet.userData.baseRadius || zone.radius * 0.3);
+                    jet.position.set(
+                        Math.cos(angle) * baseRadius,
+                        0.22 + (jetPulse * 0.08),
+                        Math.sin(angle) * baseRadius
+                    );
+                    jet.scale.set(0.82 + (jetPulse * 0.16), Math.max(0.36, lifeBlend) * (0.9 + jetPulse * 0.28), 0.82 + (jetPulse * 0.16));
+                    jet.rotation.y = angle;
+                    if (jet.material) jet.material.opacity = (0.36 + (lifeBlend * 0.36)) * jetPulse;
+                }
             }
             if (parts.flame) {
                 parts.flame.scale.set(

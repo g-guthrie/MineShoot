@@ -97,6 +97,67 @@ test('tickProjectiles reflects frag grenades off authoritative world colliders i
   assert.equal(projectile.bounces, 1);
 });
 
+test('tickProjectiles uses swept entity collision before a farther world hit', () => {
+  const broadcasts = [];
+  const target = {
+    id: 'usr_target',
+    alive: true,
+    x: 0,
+    y: 1.6,
+    z: -2,
+    hp: 500,
+    hpMax: 500,
+    armor: 0,
+    armorMax: 100,
+    spawnShieldUntil: 0,
+    respawnAt: 0
+  };
+  const room = createRoom({
+    players: new Map([[target.id, target]]),
+    worldCollidables() {
+      return [{
+        min: { x: -0.25, y: 0, z: -3.2 },
+        max: { x: 0.25, y: 2, z: -2.8 }
+      }];
+    },
+    canTargetEntity(entity, ownerId) {
+      return !!entity && entity.alive && entity.id !== ownerId;
+    },
+    getEntityById(id) {
+      return this.players.get(id) || null;
+    },
+    broadcast(payload) {
+      broadcasts.push(payload);
+    }
+  });
+  room.projectiles.set('proj_knife', {
+    id: 'proj_knife',
+    type: 'knife',
+    ownerId: 'usr_owner',
+    x: 0,
+    y: 1.1,
+    z: 0,
+    vx: 0,
+    vy: 0,
+    vz: -28,
+    age: 0,
+    lifeSec: 1.8,
+    fuseSec: 0,
+    hitRadius: 0.5,
+    alive: true
+  });
+
+  tickProjectiles(room, 0.15);
+
+  assert.equal(room.projectiles.size, 0);
+  assert.equal(target.hp < 500, true);
+  const impact = broadcasts.find((payload) => payload.t === 'throw_impact');
+  assert.ok(impact);
+  assert.equal(impact.impactType, 'enemy');
+  assert.equal(impact.targetId, target.id);
+  assert.equal(impact.z > -2.8, true);
+});
+
 test('tickProjectiles lets plasma seek then stick once a target enters the catch radius', () => {
   const target = {
     id: 'usr_target',

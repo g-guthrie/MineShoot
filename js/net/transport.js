@@ -13,6 +13,35 @@
         var ws = null;
         var reconnectTimer = null;
         var closedByShutdown = false;
+        var reconnectAttempt = 0;
+
+        function baseReconnectMs() {
+            return Math.max(100, Number(opts.reconnectMs || 1200));
+        }
+
+        function maxReconnectMs() {
+            return Math.max(baseReconnectMs(), Number(opts.maxReconnectMs || 10000));
+        }
+
+        function maxReconnectAttempts() {
+            return Math.max(1, Math.floor(Number(opts.maxReconnectAttempts || 8)));
+        }
+
+        function reconnectJitterMs() {
+            return Math.max(0, Number(opts.reconnectJitterMs || 0));
+        }
+
+        function random() {
+            return typeof opts.random === 'function' ? Number(opts.random() || 0) : Math.random();
+        }
+
+        function nextReconnectDelayMs() {
+            var base = baseReconnectMs();
+            var uncapped = base * Math.pow(2, reconnectAttempt);
+            var jitter = reconnectJitterMs();
+            var jitterValue = jitter > 0 ? Math.floor(Math.max(0, Math.min(1, random())) * jitter) : 0;
+            return Math.min(maxReconnectMs(), uncapped) + jitterValue;
+        }
 
         function clearReconnectTimer() {
             if (reconnectTimer) {
@@ -30,6 +59,7 @@
 
             ws.addEventListener('open', function () {
                 if (ws !== socketRef) return;
+                reconnectAttempt = 0;
                 if (opts.onOpen) opts.onOpen(socketRef);
             });
 
@@ -41,11 +71,17 @@
             function scheduleReconnect() {
                 if (closedByShutdown) return;
                 if (opts.isActive && !opts.isActive()) return;
+                if (reconnectAttempt >= maxReconnectAttempts()) {
+                    if (typeof opts.onPermanentClose === 'function') opts.onPermanentClose();
+                    return;
+                }
+                var delayMs = nextReconnectDelayMs();
+                reconnectAttempt += 1;
                 reconnectTimer = setTimeout(function () {
                     if (closedByShutdown) return;
                     if (opts.isActive && !opts.isActive()) return;
                     connect();
-                }, opts.reconnectMs || 1200);
+                }, delayMs);
             }
 
             ws.addEventListener('close', function (event) {
@@ -82,6 +118,7 @@
 
         function shutdown() {
             closedByShutdown = true;
+            reconnectAttempt = 0;
             clearReconnectTimer();
             if (ws) {
                 try { ws.close(); } catch (_err) {}

@@ -48,6 +48,15 @@
         return runtime().GameWorldTracerFx || null;
     }
 
+    function worldVector3(value) {
+        if (!value || typeof THREE === 'undefined' || !THREE || !THREE.Vector3) return null;
+        var x = Number(value.x);
+        var y = Number(value.y);
+        var z = Number(value.z);
+        if (!isFinite(x) || !isFinite(y) || !isFinite(z)) return null;
+        return new THREE.Vector3(x, y, z);
+    }
+
     function feedbackTuning() {
         var shared = sharedApi();
         var network = shared.getNetworkTuning ? shared.getNetworkTuning() : null;
@@ -236,45 +245,105 @@
         };
     }
 
-    function resolveShotEffectOrigin(sourceId, fallbackOrigin) {
+    function remoteRenderForSource(sourceId) {
         var remoteEntitiesApi = netRemoteEntities();
         var renderMap = remoteEntitiesApi && remoteEntitiesApi.getRenderMap ? remoteEntitiesApi.getRenderMap() : null;
-        var render = renderMap && renderMap.get ? renderMap.get(String(sourceId || '')) : null;
+        return renderMap && renderMap.get ? renderMap.get(String(sourceId || '')) : null;
+    }
+
+    function shotPresentationConfig(weaponId) {
+        var shared = sharedApi();
+        var presentation = shared && shared.getWeaponPresentation
+            ? shared.getWeaponPresentation(String(weaponId || ''))
+            : null;
+        var recoil = presentation && presentation.recoil ? presentation.recoil : {};
+        var network = shared && shared.getNetworkTuning ? shared.getNetworkTuning() : null;
+        var remoteInterpolation = network && network.remoteInterpolation ? network.remoteInterpolation : {};
+        var durationMs = Math.max(
+            16,
+            Number(recoil.muzzleMs || 0),
+            Number(remoteInterpolation.muzzleFlashPresentationMs || 70)
+        );
+        return {
+            durationMs: durationMs,
+            durationSec: durationMs / 1000
+        };
+    }
+
+    function triggerShotEffectPresentation(sourceId, event) {
+        var render = remoteRenderForSource(sourceId);
+        if (!render) return false;
+        var token = String(event && event.shotToken || '');
+        if (token && render._lastShotEffectPresentationToken === token) return false;
+        var config = shotPresentationConfig(event && event.weaponId || '');
+        var visibleUntil = Date.now() + config.durationMs;
+        render._localMuzzleFlashUntilMs = Math.max(
+            Number(render._localMuzzleFlashUntilMs || 0),
+            visibleUntil
+        );
+        render._shotEffectPresentationUntilMs = Math.max(
+            Number(render._shotEffectPresentationUntilMs || 0),
+            visibleUntil
+        );
+        var visualApi = render.actorVisual || render.rigApi || null;
+        if (event && event.weaponId) {
+            render.weaponId = String(event.weaponId || render.weaponId || 'rifle');
+            if (render.actorVisual && render.actorVisual.setWeapon) {
+                render.actorVisual.setWeapon(render.weaponId);
+            } else if (render.rigApi && render.rigApi.setWeapon) {
+                render.rigApi.setWeapon(render.weaponId);
+            }
+        }
+        if (visualApi && visualApi.setMuzzleVisible) {
+            visualApi.setMuzzleVisible(true);
+            render._muzzleVisible = true;
+        }
+        if (visualApi && visualApi.triggerAction) {
+            visualApi.triggerAction('fire', {
+                duration: config.durationSec,
+                strength: 1,
+                shotToken: token
+            });
+            if (token) render._lastShotEffectPresentationToken = token;
+            return true;
+        }
+        return false;
+    }
+
+    function resolveShotEffectOrigin(sourceId, fallbackOrigin) {
+        var authoritativeOrigin = worldVector3(fallbackOrigin);
+        if (authoritativeOrigin) return authoritativeOrigin;
+        var render = remoteRenderForSource(sourceId);
         if (render && render.actorVisual && render.actorVisual.getMuzzleWorldPosition && typeof THREE !== 'undefined' && THREE && THREE.Vector3) {
             var muzzleWorld = render.actorVisual.getMuzzleWorldPosition(new THREE.Vector3());
-            if (muzzleWorld && typeof muzzleWorld.x === 'number') return muzzleWorld;
+            var fallbackMuzzle = worldVector3(muzzleWorld);
+            if (fallbackMuzzle) return fallbackMuzzle;
         }
-        if (!fallbackOrigin || typeof THREE === 'undefined' || !THREE || !THREE.Vector3) return null;
-        return new THREE.Vector3(
-            Number(fallbackOrigin.x || 0),
-            Number(fallbackOrigin.y || 0),
-            Number(fallbackOrigin.z || 0)
-        );
+        return null;
     }
 
     function handleShotEffect(event, camera, selfState) {
         if (!event || !camera) return;
-        var tracerFx = worldTracerFx();
-        if (!tracerFx || !tracerFx.spawnTracer) return;
-        var selfId = String(selfState && selfState.id || '');
         var sourceId = String(event.sourceId || '');
+        var selfId = String(selfState && selfState.id || '');
         if (sourceId && selfId && sourceId === selfId) return;
         var traces = Array.isArray(event.traces) ? event.traces : [];
         if (!traces.length) return;
+        triggerShotEffectPresentation(sourceId, event);
+        var tracerFx = worldTracerFx();
+        if (!tracerFx || !tracerFx.spawnTracer) return;
         var origin = resolveShotEffectOrigin(sourceId, event.origin);
         if (!origin) return;
         var weapon = tracerWeaponConfig(event.weaponId || '');
         for (var i = 0; i < traces.length; i++) {
             var trace = traces[i];
             if (!trace) continue;
+            var end = worldVector3(trace);
+            if (!end) continue;
             tracerFx.spawnTracer(
                 camera,
                 weapon,
-                new THREE.Vector3(
-                    Number(trace.x || 0),
-                    Number(trace.y || 0),
-                    Number(trace.z || 0)
-                ),
+                end,
                 origin
             );
         }

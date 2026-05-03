@@ -80,6 +80,12 @@
         return weaponStats[String(weaponId || '')] || null;
     }
 
+    function shotEffectDrivesFirePresentation(weaponId) {
+        var stats = sharedWeaponStatsFor(weaponId);
+        var primitiveType = String(stats && stats.primitiveType || '');
+        return primitiveType.indexOf('hitscan') === 0;
+    }
+
     function sharedMovementTuning() {
         var runtime = globalThis.__MAYHEM_RUNTIME || {};
         var shared = runtime.GameShared || {};
@@ -274,7 +280,7 @@
                     r.actorVisual.setMuzzleVisible(muzzleVisible);
                 }
                 if (triggerApi && triggerApi.triggerAction) {
-                    if (muzzleVisible && !r._muzzleVisible) {
+                    if (muzzleVisible && !r._muzzleVisible && !shotEffectDrivesFirePresentation(r.weaponId || 'rifle')) {
                         triggerApi.triggerAction('fire', { duration: 0.09, strength: 1 });
                     }
                 }

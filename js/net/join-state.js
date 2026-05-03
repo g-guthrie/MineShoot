@@ -99,7 +99,9 @@
                     resolve: resolve,
                     reject: reject
                 };
-                markJoinConnectStart();
+                if (nextOpts.startTimerImmediately === true) {
+                    markJoinConnectStart();
+                }
             });
         }
 

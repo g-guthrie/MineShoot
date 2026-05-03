@@ -459,6 +459,7 @@
         projectileApi.reset();
         fireZoneApi.reset();
         sceneRef = scene;
+        if (projectileApi.preloadThrowableAssets) projectileApi.preloadThrowableAssets();
         netFireZoneMap = {};
         debugTelemetry.lastIntent = null;
         debugTelemetry.lastAckClientThrowId = '';
@@ -656,6 +657,10 @@
             effectPaletteForProjectileType: effectPaletteForProjectileType,
             spawnFlash: projectileApi.spawnFlash,
             spawnExplosionBurst: projectileApi.spawnExplosionBurst,
+            playAudioCue: function (cueId, options) {
+                var audioApi = runtime().GameAudio || null;
+                if (audioApi && audioApi.play) audioApi.play(cueId, options || {});
+            },
             removeProjectile: projectileApi.removeProjectile,
             removePredictedProjectileByClientThrowId: projectileApi.removePredictedProjectileByClientThrowId,
             removePredictedProjectileByAuthoritativeId: projectileApi.removePredictedProjectileByAuthoritativeId,
@@ -706,6 +711,10 @@
 
     GameThrowables.fireAbilityMissile = function (camera, options) {
         return projectileApi.fireAbilityMissile(camera, options);
+    };
+
+    GameThrowables.getThrowableAssetSpec = function (type) {
+        return projectileApi.getThrowableAssetSpec ? projectileApi.getThrowableAssetSpec(type) : null;
     };
 
     /**

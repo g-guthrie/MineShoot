@@ -253,6 +253,16 @@ function worldProjectileHit(room, start, end) {
   };
 }
 
+function firstSegmentHit(room, projectile, start, end, expandRadius, trackedOnlyId, now = Date.now()) {
+  const worldHit = worldProjectileHit(room, start, end);
+  const entityHit = firstEntityHit(room, projectile, start, end, expandRadius, trackedOnlyId, now);
+  if (entityHit && (!worldHit || Number(entityHit.distance || Infinity) <= Number(worldHit.distance || Infinity))) {
+    return { kind: 'entity', entityHit };
+  }
+  if (worldHit) return { kind: 'world', worldHit };
+  return null;
+}
+
 export function tickProjectiles(room, dtSec) {
   if (room.projectiles.size === 0) return;
   const now = room && typeof room.currentNowMs === 'function' ? room.currentNowMs() : nowMs();
@@ -287,6 +297,43 @@ export function tickProjectiles(room, dtSec) {
       proj.stuckOffsetY = 0;
       proj.stuckOffsetZ = 0;
     }
+    return true;
+  };
+
+  const startPlasmaSeek = (proj, hit) => {
+    if (!proj || !hit || !hit.entity) return false;
+    proj.seekingTargetId = hit.entity.id;
+    proj.seekingUntil = proj.age + 0.3;
+    proj.x = hit.point.x;
+    proj.y = hit.point.y;
+    proj.z = hit.point.z;
+    return true;
+  };
+
+  const applyEntityProjectileImpact = (proj, hit) => {
+    if (!proj || !hit || !hit.entity) return false;
+    const target = hit.entity;
+    const point = hit.point || { x: proj.x, y: proj.y, z: proj.z };
+    const hitX = Number(point.x);
+    const hitY = Number(point.y);
+    const hitZ = Number(point.z);
+    proj.x = Number.isFinite(hitX) ? hitX : proj.x;
+    proj.y = Number.isFinite(hitY) ? hitY : proj.y;
+    proj.z = Number.isFinite(hitZ) ? hitZ : proj.z;
+    if (proj.type === 'plasma_stream') {
+      projectileDamageHit(room, proj, target, 'body');
+      room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: proj.id, projectileType: proj.type, impactType: 'enemy', x: proj.x, y: proj.y, z: proj.z, targetId: target.id });
+      toRemove.push(proj.id);
+      return true;
+    }
+    if (proj.type === 'knife') {
+      projectileDamageHit(room, proj, target, hit.hitType === 'head' ? 'head' : 'body');
+      room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: proj.id, projectileType: proj.type, impactType: 'enemy', x: proj.x, y: proj.y, z: proj.z, targetId: target.id });
+      toRemove.push(proj.id);
+      return true;
+    }
+    explodeProjectile(room, proj, proj.x, proj.y, proj.z);
+    toRemove.push(proj.id);
     return true;
   };
 
@@ -367,9 +414,16 @@ export function tickProjectiles(room, dtSec) {
       p.gravity = 0;
       const prevSeekPos = { x: p.x, y: p.y, z: p.z };
       integrateProjectileMotion(p, dtSec, false);
-      const seekWallHit = worldProjectileHit(room, prevSeekPos, { x: p.x, y: p.y, z: p.z });
-      if (seekWallHit) {
-        stickProjectile(p, null, seekWallHit.point.x, seekWallHit.point.y, seekWallHit.point.z);
+      const seekHit = firstSegmentHit(room, p, prevSeekPos, { x: p.x, y: p.y, z: p.z }, 0, seekTarget.id, now);
+      if (seekHit && seekHit.kind === 'entity') {
+        if (stickProjectile(p, seekHit.entityHit.entity, seekHit.entityHit.point.x, seekHit.entityHit.point.y, seekHit.entityHit.point.z)) {
+          room.broadcast({
+            t: MSG_S2C.THROW_IMPACT, projectileId: p.id, projectileType: p.type,
+            impactType: 'enemy', x: p.x, y: p.y, z: p.z, targetId: seekHit.entityHit.entity.id
+          });
+        }
+      } else if (seekHit && seekHit.kind === 'world') {
+        stickProjectile(p, null, seekHit.worldHit.point.x, seekHit.worldHit.point.y, seekHit.worldHit.point.z);
         room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, projectileType: p.type, impactType: 'world', x: p.x, y: p.y, z: p.z });
       }
       return;
@@ -438,7 +492,27 @@ export function tickProjectiles(room, dtSec) {
     p.gravity = Number(def.gravity || 0);
     const prevPos = { x: p.x, y: p.y, z: p.z };
     integrateProjectileMotion(p, dtSec, true);
-    const obstacleHit = worldProjectileHit(room, prevPos, { x: p.x, y: p.y, z: p.z });
+    const nextPos = { x: p.x, y: p.y, z: p.z };
+    const obstacleHit = worldProjectileHit(room, prevPos, nextPos);
+    if (p.type === 'plasma') {
+      const contactHit = firstSegmentHit(room, p, prevPos, nextPos, 0, '', now);
+      if (contactHit && contactHit.kind === 'entity') {
+        startPlasmaSeek(p, contactHit.entityHit);
+        return;
+      }
+      const catchHit = firstSegmentHit(room, p, prevPos, nextPos, Number(def.catchRadius || 0), '', now);
+      if (catchHit && catchHit.kind === 'entity') {
+        startPlasmaSeek(p, catchHit.entityHit);
+        return;
+      }
+    } else {
+      const hitRadius = Math.max(0.1, Number(p.hitRadius || 1.2));
+      const segmentHit = firstSegmentHit(room, p, prevPos, nextPos, hitRadius, '', now);
+      if (segmentHit && segmentHit.kind === 'entity') {
+        applyEntityProjectileImpact(p, segmentHit.entityHit);
+        return;
+      }
+    }
     if (obstacleHit) {
       if (p.type === 'knife' || p.type === 'plasma_stream') {
         room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, projectileType: p.type, impactType: 'world', x: obstacleHit.point.x, y: obstacleHit.point.y, z: obstacleHit.point.z });
@@ -530,21 +604,13 @@ export function tickProjectiles(room, dtSec) {
     if (p.type === 'plasma') {
       const contactHit = firstEntityHit(room, p, prevPos, { x: p.x, y: p.y, z: p.z }, 0, '', now);
       if (contactHit) {
-        p.seekingTargetId = contactHit.entity.id;
-        p.seekingUntil = p.age + 0.3;
-        p.x = contactHit.point.x;
-        p.y = contactHit.point.y;
-        p.z = contactHit.point.z;
+        startPlasmaSeek(p, contactHit);
         return;
       }
 
       const catchHit = firstEntityHit(room, p, prevPos, { x: p.x, y: p.y, z: p.z }, Number(def.catchRadius || 0), '', now);
       if (catchHit) {
-        p.seekingTargetId = catchHit.entity.id;
-        p.seekingUntil = p.age + 0.3;
-        p.x = catchHit.point.x;
-        p.y = catchHit.point.y;
-        p.z = catchHit.point.z;
+        startPlasmaSeek(p, catchHit);
         return;
       }
     }

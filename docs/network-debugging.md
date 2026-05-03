@@ -11,21 +11,22 @@ Use this order when debugging multiplayer motion issues.
 - Snapshot creation and send cadence: `cloudflare/server/room/RoomSnapshotRuntime.js` plus `cloudflare/server/room/RoomState.js`
 - Clock translation and reconnect behavior: `js/net/runtime-core.js`, `js/net/transport.js`, and `js/net/message-router.js`
 
-## 2. Use the smoke command first
+## 2. Use the networking smoke gate first
 
-- Run `npm run test:networking`
+- Run `npm run test:networking:smoke`
 - This covers:
   - owner-player correction and runtime handoff
   - transport, reconnect, stale-packet, and clock behavior
-  - remote interpolation and state-view helpers
+  - remote interpolation and state-view wiring
   - server room runtime, snapshot, serializer, and socket behavior
   - combat, rewind, and hit-feedback behavior
+  - real browser/Worker quick-match, social/private-room handoff, and two-browser gameplay websocket movement
 
-This is a fast Node guardrail that uses the local test doubles where needed.
-It does not prove Wrangler, real D1 migrations, or browser handoff behavior.
+The Node slices use local test doubles where needed. The integration slice starts the local Worker through Playwright and proves browser-to-Worker socket behavior.
 
-For the real browser/Worker integration path, run `npm run test:networking:integration`.
-For the full local deploy gate, run `npm run test:smoke`.
+For the build plus networking smoke gate, run `npm run test:smoke`.
+For broader networking-adjacent coverage, including auth helpers, room rules, private-room config, and architecture ownership guards, run `npm run test:networking:full`.
+For every Node test and every Playwright spec, run `npm run test:full`.
 
 Useful slices while debugging:
 
@@ -36,6 +37,8 @@ Useful slices while debugging:
 - `npm run test:networking:combat`
 - `npm run test:networking:integration`
 - `npm run test:networking:full`
+- `npm run test:networking:client:full`
+- `npm run test:networking:server:full`
 
 ## 2.5. Remember the shipped input baseline
 

@@ -1,3 +1,5 @@
+const SHOT_EFFECT_MAX_TRACES = 32;
+
 export function sendRoomMessage(ws, obj) {
   if (!ws || typeof ws.send !== 'function') return;
   try {
@@ -38,7 +40,7 @@ export function buildShotEffectPayload(effect, msgType) {
       y: Number(effect.origin.y || 0),
       z: Number(effect.origin.z || 0)
     },
-    traces: effect.traces.slice(0, 8).map((trace) => ({
+    traces: effect.traces.slice(0, SHOT_EFFECT_MAX_TRACES).map((trace) => ({
       x: Number(trace && trace.x || 0),
       y: Number(trace && trace.y || 0),
       z: Number(trace && trace.z || 0),

@@ -46,6 +46,39 @@
             return opts.getDebugTelemetry ? opts.getDebugTelemetry() : null;
         }
 
+        function eventProjectileType(event) {
+            return String((event && (event.projectileType || event.throwableId)) || '');
+        }
+
+        function playNetworkAudio(cueId, event) {
+            if (!opts.playAudioCue) return;
+            var projectileType = eventProjectileType(event);
+            opts.playAudioCue(cueId, {
+                throwable: projectileType,
+                projectileType: projectileType,
+                impactType: event && event.impactType ? event.impactType : '',
+                radius: event && event.radius ? Number(event.radius) : 0
+            });
+        }
+
+        function playNetworkImpactAudio(event) {
+            var projectileType = eventProjectileType(event);
+            if (projectileType === 'knife') {
+                playNetworkAudio('knife_impact', event);
+                return;
+            }
+            if (projectileType === 'plasma') {
+                playNetworkAudio('plasma_stick', event);
+                return;
+            }
+            if (projectileType === 'molotov') {
+                playNetworkAudio('molotov_ignite', event);
+                playNetworkAudio('fireBurning', event);
+                return;
+            }
+            playNetworkAudio('throwable_impact', event);
+        }
+
         function reconcilePredictedAgainstAuthoritative(selfId, projectilesState) {
             var seenByClientThrowId = {};
             for (var i = 0; i < projectilesState.length; i++) {
@@ -215,6 +248,7 @@
                     event.projectileType === 'missile' ? 0.14 : 0.1,
                     event.projectileType === 'missile' ? 0.12 : 0.1
                 );
+                playNetworkImpactAudio(event);
                 return;
             }
             if (event.t === 'throw_explode') {
@@ -230,6 +264,7 @@
                     explosionPalette.explosion,
                     Number(event.radius || (projectileDefs.frag && projectileDefs.frag.radius) || 5.4)
                 );
+                playNetworkAudio('explosion', event);
                 return;
             }
             if (event.t === 'aoe_end' && event.zoneId) {

@@ -72,6 +72,109 @@ function countProjectileMeshes(scene, projectileType) {
   return scene.children.filter((node) => node && node.userData && node.userData.projectileType === projectileType).length;
 }
 
+test('throwables point frag, molotov, and knife at Toon Shooter GLTF assets', async () => {
+  const harness = await loadThrowablesHarness();
+  const expectedFiles = {
+    frag: 'frag-grenade.gltf',
+    molotov: 'molotov-grenade.gltf',
+    knife: 'throwing-knife.gltf'
+  };
+
+  for (const [type, fileName] of Object.entries(expectedFiles)) {
+    const spec = harness.GameThrowables.getThrowableAssetSpec(type);
+    assert.ok(spec, type + ' should expose a throwable visual asset spec');
+    assert.equal(spec.url, '/assets/weapons/toon-shooter/' + fileName);
+    assert.ok(Number(spec.fitSize) > 0);
+    await fs.access(new URL('../../public' + spec.url, import.meta.url));
+  }
+
+  assert.equal(harness.GameThrowables.getThrowableAssetSpec('knife').fitAxis, 'z');
+  assert.equal(harness.GameThrowables.getThrowableAssetSpec('knife').fitSize, 1.16);
+});
+
+test('throwing knife rolls around its forward axis while in flight', async () => {
+  const harness = await loadThrowablesHarness();
+  const { GameThrowables, scene } = harness;
+
+  assert.equal(GameThrowables.throwPredicted('knife', {}, 'cthrow_knife_spin', {
+    origin: { x: 0, y: 1, z: 0 },
+    direction: { x: 0, y: 0, z: -1 }
+  }), true);
+
+  const mesh = scene.children.find((node) => node && node.userData && node.userData.projectileType === 'knife');
+  assert.ok(mesh);
+  const startUp = new THREE.Vector3(0, 1, 0).applyQuaternion(mesh.quaternion);
+
+  GameThrowables.update(0.125, function () {});
+  const laterUp = new THREE.Vector3(0, 1, 0).applyQuaternion(mesh.quaternion);
+
+  assert.ok(startUp.distanceTo(laterUp) > 0.75);
+});
+
+test('frag grenades reflect off local world collider normals', async () => {
+  const wall = new THREE.Mesh(
+    new THREE.BoxGeometry(0.18, 3, 3),
+    new THREE.MeshBasicMaterial()
+  );
+  wall.position.set(1.35, 1, 0);
+  wall.updateMatrixWorld(true);
+
+  const audioCalls = [];
+  const harness = await loadThrowablesHarness(gameplayTuning, {
+    GameWorld: {
+      getCollidables() { return [wall]; },
+      getGroundHeightAt() { return -50; }
+    },
+    GameAudio: {
+      play(cueId, options) {
+        audioCalls.push({ cueId, options });
+      }
+    }
+  });
+  const { GameThrowables, scene } = harness;
+
+  assert.equal(GameThrowables.throwPredicted('frag', {}, 'cthrow_frag_bounce', {
+    origin: { x: 0, y: 1, z: 0 },
+    direction: { x: 1, y: 0, z: 0 }
+  }), true);
+
+  const mesh = scene.children.find((node) => node && node.userData && node.userData.projectileType === 'frag');
+  assert.ok(mesh);
+  GameThrowables.update(0.08, function () {});
+  const impactX = mesh.position.x;
+  GameThrowables.update(0.08, function () {});
+
+  assert.ok(mesh.position.x < impactX, 'frag should move away after reflecting off the wall');
+  assert.ok(audioCalls.some((call) => call.cueId === 'throwable_impact' && call.options.throwable === 'frag'));
+});
+
+test('frag explosions spawn layered blast visuals', async () => {
+  const tuning = JSON.parse(JSON.stringify(gameplayTuning));
+  tuning.throwables.frag.fuse = 0.05;
+  const audioCalls = [];
+  const harness = await loadThrowablesHarness(tuning, {
+    GameAudio: {
+      play(cueId, options) {
+        audioCalls.push({ cueId, options });
+      }
+    }
+  });
+  const { GameThrowables, scene } = harness;
+
+  assert.equal(GameThrowables.throwPredicted('frag', {}, 'cthrow_frag_explode', {
+    origin: { x: 0, y: 1, z: 0 },
+    direction: { x: 0, y: 0, z: -1 }
+  }), true);
+
+  GameThrowables.update(0.06, function () {});
+
+  assert.equal(countProjectileMeshes(scene, 'frag'), 0);
+  assert.ok(scene.children.length >= 4, 'explosion should leave more than the old two flash spheres');
+  assert.ok(scene.children.some((node) => node && node.geometry && node.geometry.type === 'TorusGeometry'));
+  assert.equal(audioCalls[0].cueId, 'explosion');
+  assert.equal(audioCalls[0].options.throwable, 'frag');
+});
+
 test('throwables runtime clears predicted knives once the authoritative impact event arrives', async () => {
   const harness = await loadThrowablesHarness();
   const { GameThrowables, scene } = harness;

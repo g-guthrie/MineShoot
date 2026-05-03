@@ -665,6 +665,17 @@
         return !!(avatarRigApi && avatarRigApi.isMovementAnimationLocked && avatarRigApi.isMovementAnimationLocked());
     }
 
+    function cancelStopRecoveryForFire() {
+        var rigApi = avatarRigApi || (actorVisual && actorVisual.rigApi) || null;
+        if (rigApi && rigApi.cancelStopRecoveryForFire) {
+            return !!rigApi.cancelStopRecoveryForFire();
+        }
+        if (actorVisual && actorVisual.cancelStopRecoveryForFire) {
+            return !!actorVisual.cancelStopRecoveryForFire();
+        }
+        return false;
+    }
+
     function isMovementLocked(now) {
         var helper = statusBridgeRuntimeApi();
         return helper && helper.isMovementLocked
@@ -1917,6 +1928,7 @@
     function triggerAvatarAction(action, options) {
         var kind = String(action || '').toLowerCase();
         if (kind === 'fire') {
+            cancelStopRecoveryForFire();
             triggerFireAction(viewHelper());
             return true;
         }
@@ -1929,6 +1941,14 @@
 
     GamePlayer.triggerAction = function (action, options) {
         return triggerAvatarAction(action, options);
+    };
+
+    GamePlayer.prepareWeaponFire = function () {
+        return cancelStopRecoveryForFire();
+    };
+
+    GamePlayer.cancelStopRecoveryForFire = function () {
+        return cancelStopRecoveryForFire();
     };
 
     GamePlayer.tryRoll = function () {

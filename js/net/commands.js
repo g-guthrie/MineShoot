@@ -22,9 +22,9 @@
                     t: opts.enterMatchMessageType || 'enter_match'
                 });
             },
-            sendFire: function (weaponId, shotToken) {
+            sendFire: function (weaponId, shotToken, shotSample) {
                 if (!buildFirePayload) return false;
-                var payload = buildFirePayload(opts.fireMessageType || 'fire', weaponId, shotToken);
+                var payload = buildFirePayload(opts.fireMessageType || 'fire', weaponId, shotToken, shotSample);
                 if (!payload) return false;
                 return wsSend(payload);
             },

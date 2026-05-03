@@ -6,9 +6,7 @@ import {
   applyWeaponArmLayer,
   createIdleArmSampler,
   createWeaponArmLayerState,
-  resolveWeaponArmLayerProfile,
-  setWeaponArmLayerEnabled,
-  toggleWeaponArmLayerEnabled
+  resolveWeaponArmLayerProfile
 } from '../../js/actors/boxman-weapon-arm-layer.js';
 
 function bone(x = 1, y = 2, z = 3) {
@@ -61,17 +59,14 @@ function strafeState() {
   };
 }
 
-test('weapon arm layer toggles an explicit per-rig state', () => {
+test('weapon arm layer state is always active posture state', () => {
   const state = createWeaponArmLayerState();
-  assert.equal(state.enabled, false);
-
-  assert.equal(setWeaponArmLayerEnabled(state, true), true);
-  assert.equal(state.enabled, true);
-  assert.equal(toggleWeaponArmLayerEnabled(state), false);
-  assert.equal(state.enabled, false);
+  assert.equal(Object.prototype.hasOwnProperty.call(state, 'enabled'), false);
+  assert.equal(state.applied, false);
+  assert.equal(state.profileName, '');
 });
 
-test('weapon arm layer profiles idle capture, start-forward, and pure forward run only', () => {
+test('weapon arm layer profiles idle capture, forward movement, and stop settle only', () => {
   assert.equal(resolveWeaponArmLayerProfile({
     activeClipName: 'run',
     directionalState: strafeState()
@@ -93,27 +88,28 @@ test('weapon arm layer profiles idle capture, start-forward, and pure forward ru
     directionalState: idleState()
   }).name, 'idle_capture');
   assert.equal(resolveWeaponArmLayerProfile({
+    activeClipName: 'stop',
+    directionalState: idleState(),
+    stopDirectionalState: pureForwardState(),
+    stopSettleWeight: 0.5
+  }).name, 'forward_carry_lock');
+  assert.equal(resolveWeaponArmLayerProfile({
+    activeClipName: 'stop',
+    directionalState: idleState(),
+    stopDirectionalState: strafeState(),
+    stopSettleWeight: 0.5
+  }).name, 'forward_carry_lock');
+  assert.equal(resolveWeaponArmLayerProfile({
     activeClipName: 'sprint',
     directionalState: pureForwardState()
   }), null);
 });
 
-test('weapon arm layer leaves current pose untouched when disabled or unprofiled', () => {
-  const disabledRig = makeRig();
-  const disabledState = createWeaponArmLayerState({ enabled: false });
-  const disabledBefore = JSON.parse(JSON.stringify(disabledRig));
-
-  assert.deepEqual(applyWeaponArmLayer(disabledRig, {
-    state: disabledState,
-    activeClipName: 'run',
-    directionalState: pureForwardState()
-  }), { applied: false, profileName: '' });
-  assert.deepEqual(disabledRig, disabledBefore);
-
+test('weapon arm layer leaves current pose untouched when unprofiled', () => {
   const strafeRig = makeRig();
   const strafeBefore = JSON.parse(JSON.stringify(strafeRig));
   assert.deepEqual(applyWeaponArmLayer(strafeRig, {
-    state: createWeaponArmLayerState({ enabled: true }),
+    state: createWeaponArmLayerState(),
     activeClipName: 'run',
     directionalState: strafeState()
   }), { applied: false, profileName: '' });
@@ -125,7 +121,7 @@ test('weapon arm layer reuses the captured idle arm baseline for forward movemen
   idleRig.armUpperR.rotation = { x: 0.2, y: 0.3, z: 0.4 };
   idleRig.armLowerR.rotation = { x: -0.5, y: -0.1, z: 0.05 };
   const runRig = makeRig();
-  const state = createWeaponArmLayerState({ enabled: true });
+  const state = createWeaponArmLayerState();
   const idleBefore = JSON.parse(JSON.stringify(idleRig));
   const idleResult = applyWeaponArmLayer(idleRig, {
     state,
@@ -168,7 +164,6 @@ test('weapon arm layer samples the idle right-arm animation during pure forward 
     )
   ]);
   const state = createWeaponArmLayerState({
-    enabled: true,
     animations: [idleClip]
   });
   const idleRig = makeObjectRig();
@@ -203,7 +198,7 @@ test('weapon arm layer does not invent a carry pose before idle has been sampled
   const rig = makeRig();
   const before = JSON.parse(JSON.stringify(rig));
   const result = applyWeaponArmLayer(rig, {
-    state: createWeaponArmLayerState({ enabled: true }),
+    state: createWeaponArmLayerState(),
     activeClipName: 'run',
     directionalState: pureForwardState()
   });
@@ -216,11 +211,61 @@ test('weapon arm layer leaves sprint to the authored sprint animation', () => {
   const rig = makeRig();
   const before = JSON.parse(JSON.stringify(rig));
   const result = applyWeaponArmLayer(rig, {
-    state: createWeaponArmLayerState({ enabled: true }),
+    state: createWeaponArmLayerState(),
     activeClipName: 'sprint',
     directionalState: pureForwardState()
   });
 
   assert.deepEqual(result, { applied: false, profileName: '' });
   assert.deepEqual(rig, before);
+});
+
+test('weapon arm layer keeps pure-forward stop settle on the captured carry pose', () => {
+  const state = createWeaponArmLayerState();
+  const idleRig = makeRig();
+  idleRig.armUpperR.rotation = { x: 0.2, y: 0.3, z: 0.4 };
+  idleRig.armLowerR.rotation = { x: -0.5, y: -0.1, z: 0.05 };
+  applyWeaponArmLayer(idleRig, {
+    state,
+    activeClipName: 'idle',
+    directionalState: idleState()
+  });
+
+  const stopRig = makeRig();
+  const result = applyWeaponArmLayer(stopRig, {
+    state,
+    activeClipName: 'stop',
+    directionalState: idleState(),
+    stopDirectionalState: pureForwardState(),
+    stopSettleWeight: 0.6
+  });
+
+  assert.deepEqual(result, { applied: true, profileName: 'forward_carry_lock' });
+  assert.deepEqual(stopRig.armUpperR.rotation, idleRig.armUpperR.rotation);
+  assert.deepEqual(stopRig.armLowerR.rotation, idleRig.armLowerR.rotation);
+});
+
+test('weapon arm layer keeps pure-strafe stop settle on the captured carry pose', () => {
+  const state = createWeaponArmLayerState();
+  const idleRig = makeRig();
+  idleRig.armUpperR.rotation = { x: 0.22, y: 0.32, z: 0.42 };
+  idleRig.armLowerR.rotation = { x: -0.52, y: -0.12, z: 0.08 };
+  applyWeaponArmLayer(idleRig, {
+    state,
+    activeClipName: 'idle',
+    directionalState: idleState()
+  });
+
+  const stopRig = makeRig();
+  const result = applyWeaponArmLayer(stopRig, {
+    state,
+    activeClipName: 'stop',
+    directionalState: idleState(),
+    stopDirectionalState: strafeState(),
+    stopSettleWeight: 0.6
+  });
+
+  assert.deepEqual(result, { applied: true, profileName: 'forward_carry_lock' });
+  assert.deepEqual(stopRig.armUpperR.rotation, idleRig.armUpperR.rotation);
+  assert.deepEqual(stopRig.armLowerR.rotation, idleRig.armLowerR.rotation);
 });

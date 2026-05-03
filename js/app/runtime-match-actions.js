@@ -11,8 +11,13 @@
     GameRuntimeMatchActions.create = function (opts) {
         opts = opts || {};
 
+        var SPRINT_FIRE_RAISE_DELAY_MIN_MS = 90;
+        var SPRINT_FIRE_RAISE_DELAY_MAX_MS = 145;
+        var STOP_RECOVERY_FIRE_DELAY_MIN_MS = 70;
+        var STOP_RECOVERY_FIRE_DELAY_MAX_MS = 120;
         var debugVisualsOn = false;
         var netShotCounter = 0;
+        var firePoseRetryTimer = 0;
         var worldCollisionDebugRoot = null;
 
         function gameUiApi() {
@@ -61,6 +66,16 @@
 
         function currentSelfCombatApi() {
             return opts.getCurrentSelfCombatApi ? opts.getCurrentSelfCombatApi() : null;
+        }
+
+        function scheduleFirePoseRetry(delayMs, retryOptions) {
+            if (firePoseRetryTimer) return true;
+            if (typeof setTimeout !== 'function') return false;
+            firePoseRetryTimer = setTimeout(function () {
+                firePoseRetryTimer = 0;
+                tryPlayerFire(retryOptions || null);
+            }, Math.max(1, Number(delayMs || 0)));
+            return true;
         }
 
         function currentMatchCommandApi() {
@@ -311,7 +326,8 @@
             }
         }
 
-        function tryPlayerFire() {
+        function tryPlayerFire(options) {
+            options = options || {};
             if (!canUseLocalAction('weapon')) return;
             var player = gamePlayerApi();
             if (player && player.isRolling && player.isRolling()) return;
@@ -339,23 +355,45 @@
             }
             var sprintRequested = !!(player && player.getNetworkInputState && player.getNetworkInputState().sprint);
             var sprintKeyHeld = !!(player && player.isSprintKeyHeld && player.isSprintKeyHeld());
-            if ((sprintRequested || sprintKeyHeld || (player && player.isSprinting && player.isSprinting())) &&
+            var sprinting = !!(player && player.isSprinting && player.isSprinting());
+            var sprintPoseActive = !!(sprintRequested || sprinting);
+            if ((sprintRequested || sprintKeyHeld || sprinting) &&
                 (!player || !(
                     (player.cancelSprintTemporarily && player.cancelSprintTemporarily(fireSprintCancelMs)) ||
                     (player.cancelSprintUntilRelease && player.cancelSprintUntilRelease())
                 ))) {
                 return;
             }
+            if (sprintPoseActive && !options.fromSprintRaiseDelay) {
+                var raiseDelayMs = Math.max(
+                    SPRINT_FIRE_RAISE_DELAY_MIN_MS,
+                    Math.min(SPRINT_FIRE_RAISE_DELAY_MAX_MS, fireSprintCancelMs * 0.42)
+                );
+                if (scheduleFirePoseRetry(raiseDelayMs, { fromSprintRaiseDelay: true })) return;
+            }
+            if (player && player.prepareWeaponFire && !options.fromStopRecoveryDelay) {
+                var canceledStopRecovery = !!player.prepareWeaponFire();
+                if (canceledStopRecovery) {
+                    var stopRecoveryDelayMs = Math.max(
+                        STOP_RECOVERY_FIRE_DELAY_MIN_MS,
+                        Math.min(STOP_RECOVERY_FIRE_DELAY_MAX_MS, fireSprintCancelMs * 0.28)
+                    );
+                    if (scheduleFirePoseRetry(stopRecoveryDelayMs, { fromStopRecoveryDelay: true })) return;
+                }
+            }
             netShotCounter = (netShotCounter + 1) % 1000000;
             var shotToken = 's' + Date.now().toString(36) + '-' + netShotCounter.toString(36);
             if (!hitscanApi || !hitscanApi.fire) return;
+            var shotSample = hitscanApi.captureShotSample
+                ? hitscanApi.captureShotSample(currentCamera, shotToken)
+                : null;
             var fired = hitscanApi.fire(
                 currentCamera,
                 function (hitboxMesh, hitPoint, distance, hitType, damage, weapon, pelletIndex) {
                     if (multiplayerMode() && hitboxMesh && hitboxMesh.userData && hitboxMesh.userData.ownerType === 'net') {
                         var canPredictNetworkHit = !!(netApi && netApi.isConnected && netApi.isConnected());
                         var shouldPredictNetHit = canPredictNetworkHit && (!hitscanApi.shouldPredictNetHit ||
-                            hitscanApi.shouldPredictNetHit(currentCamera, hitboxMesh, shotToken, pelletIndex));
+                            hitscanApi.shouldPredictNetHit(currentCamera, hitboxMesh, shotToken, pelletIndex, shotSample));
                         if (shouldPredictNetHit && feedbackApi && feedbackApi.emitPredictedLocalDamageFeedback) {
                             feedbackApi.emitPredictedLocalDamageFeedback({
                                 weaponId: weapon && weapon.id ? weapon.id : '',
@@ -379,7 +417,8 @@
                     handleEnemyHit(hitPoint, damage, hitType, result, localTargetId);
                 },
                 function () {},
-                shotToken
+                shotToken,
+                shotSample
             );
 
             if (fired) {
@@ -390,7 +429,7 @@
                     netCommands &&
                     netCommands.sendFire
                 ) {
-                    netCommands.sendFire(activeWeapon.id, shotToken);
+                    netCommands.sendFire(activeWeapon.id, shotToken, shotSample);
                 }
 
                 if (player && player.triggerAction) {

@@ -191,3 +191,94 @@ test('remote sync preserves fast backpedal in the presented transform', async ()
     Date.now = originalNow;
   }
 });
+
+test('remote sync leaves hitscan fire recoil to shot-effect presentation', async () => {
+  const muzzleStates = [];
+  const actions = [];
+  const remoteSync = await loadRemoteSyncHarness({
+    GameShared: {
+      getNetworkTuning() {
+        return {
+          remoteInterpolation: {
+            minDelayMs: 1,
+            maxDelayMs: 160,
+            intervalDelayScale: 1.6,
+            jitterDelayScale: 1.4,
+            fallbackCatchupRemainingPerSecond: 0.001,
+            muzzleFlashPresentationMs: 70
+          }
+        };
+      },
+      getMovementTuning() {
+        return { gravity: 18, runSpeed: 11 };
+      },
+      getWeaponStats() {
+        return { primitiveType: 'hitscan_single', moveSpeedMultiplier: 1 };
+      }
+    }
+  });
+  const render = createRender({
+    weaponId: 'rifle',
+    _muzzleVisible: false,
+    snapshotHistory: [
+      {
+        serverTime: 1000,
+        receivedAt: 1000,
+        x: 0,
+        footY: 0,
+        z: 0,
+        yaw: 0,
+        pitch: 0,
+        moveSpeedNorm: 0,
+        sprinting: false,
+        movingForward: false,
+        movingBackward: false,
+        movingLeft: false,
+        movingRight: false,
+        isGrounded: true,
+        velocityY: 0,
+        muzzleFlashUntil: 1200
+      },
+      {
+        serverTime: 1100,
+        receivedAt: 1100,
+        x: 0,
+        footY: 0,
+        z: 0,
+        yaw: 0,
+        pitch: 0,
+        moveSpeedNorm: 0,
+        sprinting: false,
+        movingForward: false,
+        movingBackward: false,
+        movingLeft: false,
+        movingRight: false,
+        isGrounded: true,
+        velocityY: 0,
+        muzzleFlashUntil: 1200
+      }
+    ],
+    rigApi: {},
+    actorVisual: {
+      setWorldTransform() {},
+      setWeapon() {},
+      setMuzzleVisible(visible) {
+        muzzleStates.push(!!visible);
+      },
+      triggerAction(action) {
+        actions.push(String(action || ''));
+      }
+    }
+  });
+  const renderMap = new Map([[render.id, render]]);
+  const originalNow = Date.now;
+  Date.now = () => 1100;
+  try {
+    remoteSync.updateRemoteEntities(1 / 60, renderMap);
+  } finally {
+    Date.now = originalNow;
+  }
+
+  assert.deepEqual(muzzleStates, [true]);
+  assert.deepEqual(actions, []);
+});

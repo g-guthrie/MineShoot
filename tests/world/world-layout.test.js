@@ -44,14 +44,14 @@ test('world layout expands to a 3x3 biome grid', () => {
     DEFAULT_QUADRANT_MAP.map((entry) => entry.biome),
     [
       BIOME_ARCTIC,
-      BIOME_VOLCANO,
+      'whoville',
       BIOME_DESERT,
       BIOME_JUNGLE,
       'pirate-cove',
       BIOME_NUCLEAR,
       BIOME_QUARRY,
       BIOME_RIVER_ARCHES,
-      'whoville'
+      BIOME_VOLCANO
     ]
   );
 });
@@ -396,6 +396,38 @@ test('nuclear simpsons biome blocks intended spaces while keeping the gate gap a
     block.userData.collisionAuthoring === true
   );
   assert.ok(colliderSlices.every((block) => block.kind === 'block'));
+});
+
+test('whoville keeps Mount Crumpit against the north outer wall on the desert side', async () => {
+  const runtime = ensureHeadlessWorldRuntime();
+  await import('../../js/world/quadrant-whoville.js');
+  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.whoville;
+  assert.equal(typeof builder, 'function');
+
+  const rawBounds = quadrantBounds('r0c1');
+  const recorder = createGeometryRecorder();
+  const stats = builder(rawBounds, recorder.place, {
+    ...recorder.ctx,
+    biomeEntry: { biome: 'whoville' },
+    rawBounds
+  });
+
+  assert.ok(stats);
+  const centerX = (rawBounds.minX + rawBounds.maxX) * 0.5;
+  const centerZ = (rawBounds.minZ + rawBounds.maxZ) * 0.5;
+  const mountainBase = recorder.blocks.find((block) =>
+    block.userData &&
+    block.userData.role === 'crumpit' &&
+    block.userData.part === 'base-1'
+  );
+
+  assert.ok(mountainBase);
+  assert.equal(mountainBase.x, centerX + 20);
+  assert.equal(mountainBase.z, centerZ - 18);
+  assert.ok(mountainBase.x > centerX, 'Mount Crumpit should be on the desert/east side of Whoville');
+  assert.ok(mountainBase.z < centerZ, 'Mount Crumpit should be on the north outer-wall side of Whoville');
+  assert.ok(mountainBase.x + (mountainBase.w * 0.5) >= rawBounds.maxX - 0.01);
+  assert.ok(mountainBase.z - (mountainBase.d * 0.5) <= rawBounds.minZ + 2.01);
 });
 
 test('river arches keeps authored water, cliffs, and collision inside the biome bounds', () => {

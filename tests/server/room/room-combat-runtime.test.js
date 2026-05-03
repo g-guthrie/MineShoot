@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { logicalHitscanOriginFromEye, logicalMuzzleOriginFromEye } from '../../../shared/entity-points.js';
+import { broadcastRoomShotEffect, buildShotEffectPayload } from '../../../cloudflare/server/room/RoomBroadcast.js';
 
 import {
   beginWeaponReload,
@@ -1053,6 +1054,197 @@ test('combat runtime broadcasts authoritative shot effects for world-space trace
       hitType: 'miss'
     }]
   }]);
+});
+
+test('combat runtime uses a validated client muzzle origin for remote tracer visuals only', () => {
+  const player = {
+    id: 'p1',
+    alive: true,
+    x: 0,
+    y: 1.7,
+    z: 0,
+    yaw: 0,
+    pitch: 0,
+    lastShotAt: {},
+    weaponId: 'rifle'
+  };
+  let shotRequest = null;
+  const shotEffects = [];
+  const authoritativeOrigin = logicalMuzzleOriginFromEye({ x: 0, y: 1.7, z: 0 }, { x: 0, y: 0, z: -1 });
+  const clientMuzzleOrigin = { x: 0.42, y: 1.62, z: -0.24 };
+  const room = {
+    canEntityUseWeapon() { return true; },
+    syncWeaponAmmoState() { return { ammoInMag: 10, reloadUntil: 0, reloadedFlashUntil: 0 }; },
+    reloadRemainingForWeapon() { return 0; },
+    beginWeaponReload() { throw new Error('should not reload'); },
+    consumeWeaponAmmo() {},
+    entityForward() { return { x: 0, y: 0, z: -1 }; },
+    getAliveEntities() { return []; },
+    canTargetEntity(entity, sourceId) { return !!entity && entity.id !== sourceId; },
+    worldCollidables() { return []; }
+  };
+
+  handleFire(room, player, {
+    weaponId: 'rifle',
+    shotToken: 'visual-origin',
+    aimOrigin: clientMuzzleOrigin,
+    aimForward: { x: 0, y: 0, z: -1 }
+  }, {
+    nowMs: () => 300,
+    weaponStats: {
+      rifle: {
+        cooldownMs: 100,
+        magazineSize: 10,
+        pellets: 1
+      }
+    },
+    weaponFalloff: { rifle: [] },
+    resolveHitscanShot(options) {
+      shotRequest = options;
+      return [];
+    },
+    resolveHitscanTrace() {
+      return [{
+        hit: false,
+        hitType: 'miss',
+        pelletIndex: 0,
+        point: { x: 0, y: 1.7, z: -40 }
+      }];
+    },
+    applyDamageFromSource() { return null; },
+    broadcastShotEffect(_room, effect) { shotEffects.push(effect); },
+    broadcastDamageEvent() {},
+    broadcastDeathRespawn() {},
+    canEquipWeaponId() { return true; },
+    authoritativeHitscanOrigin() {
+      return authoritativeOrigin;
+    },
+    playerEyeHeight: 1.7,
+    remoteMuzzleFlashHoldMs: 90
+  });
+
+  assert.deepEqual(shotRequest.aimOrigin, authoritativeOrigin);
+  assert.equal(shotEffects.length, 1);
+  assert.deepEqual(shotEffects[0].origin, clientMuzzleOrigin);
+});
+
+test('combat runtime broadcasts every shotgun pellet trace for authoritative world-space tracers', () => {
+  const player = {
+    id: 'p1',
+    alive: true,
+    x: 0,
+    y: 1.7,
+    z: 0,
+    yaw: 0,
+    pitch: 0,
+    lastShotAt: {},
+    weaponId: 'shotgun'
+  };
+  const shotEffects = [];
+  const room = {
+    canEntityUseWeapon() { return true; },
+    syncWeaponAmmoState() { return { ammoInMag: 6, reloadUntil: 0, reloadedFlashUntil: 0 }; },
+    reloadRemainingForWeapon() { return 0; },
+    beginWeaponReload() { throw new Error('should not reload'); },
+    consumeWeaponAmmo() {},
+    entityForward() { return { x: 0, y: 0, z: -1 }; },
+    getAliveEntities() { return []; },
+    canTargetEntity(entity, sourceId) { return !!entity && entity.id !== sourceId; },
+    worldCollidables() { return []; }
+  };
+
+  handleFire(room, player, {
+    weaponId: 'shotgun',
+    shotToken: 'sg-traces'
+  }, {
+    nowMs: () => 500,
+    weaponStats: {
+      shotgun: {
+        cooldownMs: 100,
+        magazineSize: 6,
+        pellets: 12
+      }
+    },
+    weaponFalloff: { shotgun: [] },
+    resolveHitscanShot() { return []; },
+    resolveHitscanTrace() {
+      return Array.from({ length: 12 }, (_value, pelletIndex) => ({
+        hit: false,
+        hitType: 'miss',
+        pelletIndex,
+        point: { x: pelletIndex, y: 1.7, z: -10 - pelletIndex }
+      }));
+    },
+    applyDamageFromSource() { return null; },
+    broadcastShotEffect(_room, effect) { shotEffects.push(effect); },
+    broadcastDamageEvent() {},
+    broadcastDeathRespawn() {},
+    canEquipWeaponId() { return true; },
+    playerEyeHeight: 1.7,
+    remoteMuzzleFlashHoldMs: 90
+  });
+
+  assert.equal(shotEffects.length, 1);
+  assert.equal(shotEffects[0].traces.length, 12);
+  assert.deepEqual(shotEffects[0].traces.map((trace) => trace.pelletIndex), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+});
+
+test('shot effect payload preserves the full current shotgun pellet tracer set', () => {
+  const payload = buildShotEffectPayload({
+    sourceId: 'p1',
+    weaponId: 'shotgun',
+    shotToken: 'payload-traces',
+    origin: { x: 1, y: 2, z: 3 },
+    traces: Array.from({ length: 12 }, (_value, pelletIndex) => ({
+      x: pelletIndex,
+      y: 2,
+      z: -pelletIndex,
+      pelletIndex,
+      hitType: 'miss'
+    }))
+  }, 'shot_effect');
+
+  assert.equal(payload.traces.length, 12);
+  assert.deepEqual(payload.traces.map((trace) => trace.pelletIndex), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+});
+
+test('shot effect broadcasts reach the shooter and the other active players', () => {
+  const sentByUser = new Map();
+  function socketFor(userId) {
+    return {
+      send(payload) {
+        const list = sentByUser.get(userId) || [];
+        list.push(JSON.parse(payload));
+        sentByUser.set(userId, list);
+      }
+    };
+  }
+
+  const shooterSocket = socketFor('p1');
+  const remoteSocket = socketFor('p2');
+  const room = {
+    clients: new Map([
+      [shooterSocket, { userId: 'p1' }],
+      [remoteSocket, { userId: 'p2' }]
+    ]),
+    activeSocketByUserId: new Map([
+      ['p1', shooterSocket],
+      ['p2', remoteSocket]
+    ])
+  };
+
+  broadcastRoomShotEffect(room, {
+    sourceId: 'p1',
+    weaponId: 'rifle',
+    shotToken: 'all-players',
+    origin: { x: 1, y: 2, z: 3 },
+    traces: [{ x: 4, y: 5, z: 6, pelletIndex: 0, hitType: 'miss' }]
+  }, 'shot_effect');
+
+  assert.equal(sentByUser.get('p1').length, 1);
+  assert.equal(sentByUser.get('p2').length, 1);
+  assert.deepEqual(sentByUser.get('p1')[0], sentByUser.get('p2')[0]);
+  assert.equal(sentByUser.get('p1')[0].sourceId, 'p1');
 });
 
 test('spawnProjectile uses the full aim vector so trajectory changes with pitch', () => {

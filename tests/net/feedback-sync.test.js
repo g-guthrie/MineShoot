@@ -765,7 +765,7 @@ test('feedback sync still shows authoritative kill feedback even after a predict
   }
 });
 
-test('feedback sync spawns a remote world tracer from replicated shot effects', async () => {
+test('feedback sync spawns a remote world tracer from authoritative replicated shot effects', async () => {
   const queue = [{
     sourceId: 'usr_remote',
     weaponId: 'rifle',
@@ -795,7 +795,74 @@ test('feedback sync spawns a remote world tracer from replicated shot effects', 
   harness.syncGameplayFeedback({ camera: {}, selfState: { id: 'usr_self' } });
 
   assert.deepEqual(harness.tracerCalls, [{
-    origin: { x: 1, y: 2, z: 3 },
+    origin: { x: 8, y: 9, z: 10 },
     end: { x: 11, y: 12, z: 13 }
   }]);
+});
+
+test('feedback sync drives remote fire presentation from shot effects', async () => {
+  const queue = [{
+    sourceId: 'usr_remote',
+    weaponId: 'rifle',
+    shotToken: 'remote-fire-pose',
+    origin: { x: 8, y: 9, z: 10 },
+    traces: [{ x: 11, y: 12, z: 13, pelletIndex: 0, hitType: 'body' }]
+  }];
+  const actions = [];
+  const muzzleVisible = [];
+  const render = {
+    actorVisual: {
+      getMuzzleWorldPosition() {
+        return { x: 1, y: 2, z: 3 };
+      },
+      setMuzzleVisible(visible) {
+        muzzleVisible.push(!!visible);
+      },
+      triggerAction(action, options) {
+        actions.push({ action: String(action || ''), options: { ...(options || {}) } });
+      }
+    }
+  };
+  const harness = await loadFeedbackSyncHarness({
+    GameNet: {
+      view: {
+        consumeShotEffect() { return queue.shift() || null; }
+      },
+      remoteEntities: {
+        getRenderMap() {
+          return new Map([['usr_remote', render]]);
+        }
+      }
+    }
+  });
+
+  harness.syncGameplayFeedback({ camera: {}, selfState: { id: 'usr_self' } });
+
+  assert.deepEqual(muzzleVisible, [true]);
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].action, 'fire');
+  assert.equal(actions[0].options.shotToken, 'remote-fire-pose');
+  assert.equal(render._muzzleVisible, true);
+  assert.ok(Number(render._localMuzzleFlashUntilMs || 0) >= Date.now());
+});
+
+test('feedback sync ignores local shooter shot-effect echoes because the tracer is predicted locally', async () => {
+  const queue = [{
+    sourceId: 'usr_self',
+    weaponId: 'rifle',
+    shotToken: 'self-shot',
+    origin: { x: 4, y: 5, z: 6 },
+    traces: [{ x: 7, y: 8, z: 9, pelletIndex: 0, hitType: 'miss' }]
+  }];
+  const harness = await loadFeedbackSyncHarness({
+    GameNet: {
+      view: {
+        consumeShotEffect() { return queue.shift() || null; }
+      }
+    }
+  });
+
+  harness.syncGameplayFeedback({ camera: {}, selfState: { id: 'usr_self' } });
+
+  assert.deepEqual(harness.tracerCalls, []);
 });

@@ -29,9 +29,9 @@ async function loadTransportHarness() {
     __MAYHEM_RUNTIME: {},
     globalThis: null,
     WebSocket: FakeSocket,
-    setTimeout(fn) {
+    setTimeout(fn, delayMs = 0) {
       const id = nextTimerId++;
-      timers.push({ id, fn });
+      timers.push({ id, fn, delayMs });
       return id;
     },
     clearTimeout(id) {
@@ -45,6 +45,7 @@ async function loadTransportHarness() {
   return {
     create: sandbox.__MAYHEM_RUNTIME.GameNetTransport.create,
     sockets,
+    timers,
     flushTimers() {
       while (timers.length) {
         const next = timers.shift();
@@ -128,4 +129,34 @@ test('transport ignores late messages from a replaced socket after reconnect', a
   secondSocket.emit('message', { data: 'from-new' });
 
   assert.deepEqual(messages, ['from-new']);
+});
+
+test('transport backs off reconnects and stops after the configured attempt limit', async () => {
+  const harness = await loadTransportHarness();
+  let permanentCloseCount = 0;
+  const transport = harness.create({
+    endpoint() { return 'wss://example.test'; },
+    isActive() { return true; },
+    reconnectMs: 100,
+    maxReconnectMs: 250,
+    maxReconnectAttempts: 2,
+    reconnectJitterMs: 0,
+    onPermanentClose() {
+      permanentCloseCount += 1;
+    }
+  });
+
+  transport.connect();
+  harness.sockets[0].emit('close', { code: 1006 });
+  assert.equal(harness.timers[0].delayMs, 100);
+  harness.flushTimers();
+
+  harness.sockets[1].emit('close', { code: 1006 });
+  assert.equal(harness.timers[0].delayMs, 200);
+  harness.flushTimers();
+
+  harness.sockets[2].emit('close', { code: 1006 });
+  assert.equal(harness.timers.length, 0);
+  assert.equal(permanentCloseCount, 1);
+  assert.equal(harness.sockets.length, 3);
 });

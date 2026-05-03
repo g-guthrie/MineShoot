@@ -142,7 +142,7 @@ npm run build
 Run the targeted tests you care about, or at minimum the current smoke path:
 
 ```bash
-node --experimental-default-type=module --test tests/app/menu-click-paths.test.js
+npm run test:smoke
 ```
 
 For a local Cloudflare-style run before shipping:

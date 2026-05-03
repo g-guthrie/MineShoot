@@ -19,6 +19,7 @@ function getGameNetRuntimeScriptUrls() {
     new URL('../../js/net/network-snapshot-apply.js', import.meta.url),
     new URL('../../js/net/state-view.js', import.meta.url),
     new URL('../../js/net/effects.js', import.meta.url),
+    new URL('../../js/net/snapshots.js', import.meta.url),
     new URL('../../js/net/network.js', import.meta.url)
   ];
 }
@@ -34,6 +35,7 @@ async function createNetHarness(options = {}) {
   let runtimeState = null;
   let runtimeCoreOpts = null;
   const updateCalls = [];
+  const removedVisualIds = [];
   const renderMap = options.renderMap instanceof Map ? options.renderMap : new Map();
 
   class FakeDate extends Date {
@@ -135,8 +137,12 @@ async function createNetHarness(options = {}) {
               snapshotMeta: JSON.parse(JSON.stringify(snapshotMeta || {})),
               at: nowMs
             });
+            renderMap.set(String(entity.id || ''), {});
           },
-          removeRemoteVisual() {},
+          removeRemoteVisual(id) {
+            removedVisualIds.push(String(id || ''));
+            renderMap.delete(String(id || ''));
+          },
           init() {},
           cleanup() {},
           setHitboxVisibility() {}
@@ -190,6 +196,9 @@ async function createNetHarness(options = {}) {
     },
     getUpdateCalls() {
       return updateCalls.slice();
+    },
+    getRemovedVisualIds() {
+      return removedVisualIds.slice();
     },
     init() {
       sandbox.globalThis.__MAYHEM_RUNTIME.GameNet.init({});
@@ -351,6 +360,7 @@ test('GameNet remote jitter buffer drains snapshots only when due and honors add
   harness.update();
   assert.deepEqual(harness.getUpdateCalls().map((entry) => entry.entity.id), ['usr_plain']);
 
+  renderMap.set('usr_padded', { lossDelayPaddingMs: 30 });
   harness.setNow(1070);
   harness.dispatch({
     t: 'snapshot',
@@ -428,4 +438,132 @@ test('GameNet remote jitter buffer drains snapshots only when due and honors add
   harness.update();
   assert.deepEqual(harness.getUpdateCalls().map((entry) => entry.entity.id), ['usr_plain', 'usr_padded', 'usr_late']);
   assert.equal(harness.getRuntimeState().getRemoteFrameQueue().length, 0);
+});
+
+test('GameNet remote jitter buffer does not let a delayed stale frame block a newer ready frame', async () => {
+  const renderMap = new Map([
+    ['usr_padded', { lossDelayPaddingMs: 120 }]
+  ]);
+  const harness = await createNetHarness({
+    nowMs: 1000,
+    networkFlags: { remoteReceiveJitterBuffer: true },
+    renderMap
+  });
+  harness.init();
+
+  harness.dispatch({
+    t: 'snapshot',
+    snapshotSeq: 1,
+    serverTime: 1000,
+    entities: [{
+      id: 'usr_padded',
+      username: 'PADDED',
+      alive: true,
+      x: 1,
+      y: 1.6,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      velocityY: 0,
+      jumpHoldTimer: 0,
+      moveSpeedNorm: 0,
+      isGrounded: true,
+      jumpHeldLast: false,
+      sprinting: false,
+      fastBackpedal: false,
+      weaponId: 'rifle'
+    }],
+    projectiles: [],
+    fireZones: []
+  });
+
+  harness.setNow(1010);
+  harness.dispatch({
+    t: 'snapshot',
+    snapshotSeq: 2,
+    serverTime: 1010,
+    entities: [{
+      id: 'usr_newer',
+      username: 'NEWER',
+      alive: true,
+      x: 2,
+      y: 1.6,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      velocityY: 0,
+      jumpHoldTimer: 0,
+      moveSpeedNorm: 0,
+      isGrounded: true,
+      jumpHeldLast: false,
+      sprinting: false,
+      fastBackpedal: false,
+      weaponId: 'rifle'
+    }],
+    projectiles: [],
+    fireZones: []
+  });
+
+  const queuedFrames = harness.getRuntimeState().getRemoteFrameQueue();
+  assert.equal(queuedFrames.length, 2);
+  assert.equal(queuedFrames[0].snapshotSeq, 2);
+  assert.equal(queuedFrames[1].snapshotSeq, 1);
+  const newerReadyAt = Math.ceil(Number(queuedFrames[0].readyAt || 0));
+  const staleReadyAt = Math.ceil(Number(queuedFrames[1].readyAt || 0));
+
+  harness.setNow(newerReadyAt);
+  harness.update();
+  assert.deepEqual(harness.getUpdateCalls().map((entry) => entry.entity.id), ['usr_newer']);
+
+  harness.setNow(staleReadyAt);
+  harness.update();
+  assert.deepEqual(harness.getUpdateCalls().map((entry) => entry.entity.id), ['usr_newer']);
+  assert.equal(harness.getRuntimeState().getRemoteFrameQueue().length, 0);
+});
+
+test('GameNet jitter-buffered full snapshots prune stale remote visuals when the frame applies', async () => {
+  const renderMap = new Map([
+    ['usr_stale', {}]
+  ]);
+  const harness = await createNetHarness({
+    nowMs: 1000,
+    networkFlags: { remoteReceiveJitterBuffer: true },
+    renderMap
+  });
+  harness.init();
+
+  harness.dispatch({
+    t: 'snapshot',
+    snapshotSeq: 1,
+    serverTime: 1000,
+    delta: false,
+    entities: [{
+      id: 'usr_live',
+      username: 'LIVE',
+      alive: true,
+      x: 1,
+      y: 1.6,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      velocityY: 0,
+      jumpHoldTimer: 0,
+      moveSpeedNorm: 0,
+      isGrounded: true,
+      jumpHeldLast: false,
+      sprinting: false,
+      fastBackpedal: false,
+      weaponId: 'rifle'
+    }],
+    projectiles: [],
+    fireZones: []
+  });
+
+  assert.deepEqual(harness.getRemovedVisualIds(), []);
+  const readyAt = Number(harness.getRuntimeState().peekRemoteFrame().readyAt || 0);
+  harness.setNow(Math.ceil(readyAt));
+  harness.update();
+
+  assert.deepEqual(harness.getUpdateCalls().map((entry) => entry.entity.id), ['usr_live']);
+  assert.deepEqual(harness.getRemovedVisualIds(), ['usr_stale']);
 });

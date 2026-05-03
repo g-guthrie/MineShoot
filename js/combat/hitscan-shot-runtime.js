@@ -34,6 +34,25 @@
 
         var TRACER_ORIGIN_FORWARD_OFFSET = 0;
 
+        function plainVec3(value) {
+            if (!value || typeof value !== 'object') return null;
+            var x = Number(value.x);
+            var y = Number(value.y);
+            var z = Number(value.z);
+            if (!isFinite(x) || !isFinite(y) || !isFinite(z)) return null;
+            return { x: x, y: y, z: z };
+        }
+
+        function applyPlainVec3(out, value) {
+            var plain = plainVec3(value);
+            if (!plain || !out || !out.set) return null;
+            return out.set(plain.x, plain.y, plain.z);
+        }
+
+        function freezePlainObject(value) {
+            return Object.freeze ? Object.freeze(value) : value;
+        }
+
         function runtime() {
             return globalThis.__MAYHEM_RUNTIME || {};
         }
@@ -379,8 +398,33 @@
             return null;
         }
 
-        function buildLocalShotContext(camera, weapon, shotToken) {
-            if (!camera || !weapon) return null;
+        function shotSampleMatches(shotSample, weapon, shotToken) {
+            if (!shotSample || typeof shotSample !== 'object' || !weapon) return false;
+            var sampleWeaponId = String(shotSample.weaponId || '');
+            if (sampleWeaponId && sampleWeaponId !== String(weapon.id || '')) return false;
+            var sampleToken = String(shotSample.shotToken || '');
+            var token = String(shotToken || '');
+            if (sampleToken && token && sampleToken !== token) return false;
+            return !!(plainVec3(shotSample.aimOrigin) && plainVec3(shotSample.aimForward));
+        }
+
+        function capturedArray(value) {
+            return Array.isArray(value) ? value.slice() : null;
+        }
+
+        function capturedFalloffBands(value) {
+            if (Array.isArray(value)) return value.slice();
+            if (value && typeof value === 'object') {
+                var out = {};
+                for (var key in value) {
+                    if (Object.prototype.hasOwnProperty.call(value, key)) out[key] = value[key];
+                }
+                return out;
+            }
+            return value || null;
+        }
+
+        function buildTargetList() {
             var lockTargets = getLockTargets() || [];
             var targets = [];
             for (var i = 0; i < lockTargets.length; i++) {
@@ -389,14 +433,26 @@
                 var plain = authorityTargetFromLockTarget(target);
                 if (plain) targets.push(plain);
             }
-            var tracerOrigin = resolvePlasmaMuzzle(camera);
-            var aimOrigin = tracerOrigin ? {
-                x: Number(tracerOrigin.x || 0),
-                y: Number(tracerOrigin.y || 0),
-                z: Number(tracerOrigin.z || 0)
-            } : localAimOrigin(camera);
+            return targets;
+        }
+
+        function buildLocalShotContext(camera, weapon, shotToken, shotSample) {
+            if (!camera || !weapon) return null;
+            var sample = shotSampleMatches(shotSample, weapon, shotToken) ? shotSample : null;
+            var tracerOrigin = sample ? plainVec3(sample.tracerOrigin) : null;
+            if (!tracerOrigin) {
+                var muzzle = resolvePlasmaMuzzle(camera);
+                tracerOrigin = muzzle ? plainVec3(muzzle) : null;
+            }
+            var aimOrigin = sample ? plainVec3(sample.aimOrigin) : null;
+            if (!aimOrigin) {
+                aimOrigin = tracerOrigin ? plainVec3(tracerOrigin) : localAimOrigin(camera);
+            }
             if (!aimOrigin) return null;
-            var aimForward = localAimForward(camera, aimOrigin, weaponRuntime.getEffectiveMaxRange(weapon));
+            var aimForward = sample ? plainVec3(sample.aimForward) : null;
+            if (!aimForward) {
+                aimForward = localAimForward(camera, aimOrigin, weaponRuntime.getEffectiveMaxRange(weapon));
+            }
             if (!aimForward) {
                 camera.getWorldDirection(plasmaForward);
                 aimForward = {
@@ -405,22 +461,45 @@
                     z: plasmaForward.z
                 };
             }
+            var targets = sample && capturedArray(sample.targets);
+            if (!targets) targets = buildTargetList();
+            var worldBoxes = sample && capturedArray(sample.worldBoxes);
+            if (!worldBoxes) worldBoxes = worldCollisionBoxes();
+            var falloffBands = sample && capturedFalloffBands(sample.falloffBands);
+            if (!falloffBands) {
+                falloffBands = weaponRuntime.getWeaponFalloffBands ? weaponRuntime.getWeaponFalloffBands(weapon.id) : [];
+            }
             return {
                 aimOrigin: aimOrigin,
                 aimForward: aimForward,
-                tracerOrigin: tracerOrigin ? {
-                    x: tracerOrigin.x,
-                    y: tracerOrigin.y,
-                    z: tracerOrigin.z
-                } : null,
+                tracerOrigin: tracerOrigin,
                 weaponStats: weapon,
-                falloffBands: weaponRuntime.getWeaponFalloffBands ? weaponRuntime.getWeaponFalloffBands(weapon.id) : [],
+                falloffBands: falloffBands,
                 adsActive: weaponRuntime.isAdsActiveForWeapon(weapon.id),
                 viewFovDeg: weaponRuntime.getViewFovDeg(),
                 shotToken: String(shotToken || ''),
                 targets: targets,
-                worldBoxes: worldCollisionBoxes()
+                worldBoxes: worldBoxes
             };
+        }
+
+        function captureShotSample(camera, shotToken) {
+            var weapon = weaponRuntime.getCurrentWeaponData();
+            if (!camera || !weapon) return null;
+            var shotContext = buildLocalShotContext(camera, weapon, shotToken, null);
+            if (!shotContext) return null;
+            return freezePlainObject({
+                weaponId: String(weapon.id || ''),
+                shotToken: String(shotToken || ''),
+                aimOrigin: freezePlainObject(plainVec3(shotContext.aimOrigin)),
+                aimForward: freezePlainObject(plainVec3(shotContext.aimForward)),
+                tracerOrigin: shotContext.tracerOrigin ? freezePlainObject(plainVec3(shotContext.tracerOrigin)) : null,
+                adsActive: !!shotContext.adsActive,
+                viewFovDeg: Number(shotContext.viewFovDeg || 0),
+                targets: Object.freeze ? Object.freeze(shotContext.targets.slice()) : shotContext.targets.slice(),
+                worldBoxes: Object.freeze ? Object.freeze(shotContext.worldBoxes.slice()) : shotContext.worldBoxes.slice(),
+                falloffBands: freezePlainObject(capturedFalloffBands(shotContext.falloffBands) || [])
+            });
         }
 
         function resolveAutoLockPreview(camera, weapon) {
@@ -437,14 +516,14 @@
             return authority.resolveHitscanShot(shotContext);
         }
 
-        function shouldPredictNetHit(camera, hitboxMesh, shotToken, pelletIndex) {
+        function shouldPredictNetHit(camera, hitboxMesh, shotToken, pelletIndex, shotSample) {
             if (!camera || !hitboxMesh || !hitboxMesh.userData || hitboxMesh.userData.ownerType !== 'net') return true;
             if (!isNetCombatReady()) return false;
             var authority = sharedHitscanAuthority();
             if (!authority || !authority.resolveHitscanShot) return true;
             var weapon = weaponRuntime.getCurrentWeaponData();
             if (!weapon) return true;
-            var shotContext = buildLocalShotContext(camera, weapon, shotToken);
+            var shotContext = buildLocalShotContext(camera, weapon, shotToken, shotSample);
             if (!shotContext) return false;
             var predicted = authority.resolveHitscanShot(shotContext);
             if (!Array.isArray(predicted) || predicted.length === 0) return false;
@@ -635,12 +714,12 @@
             return true;
         }
 
-        function fireHitscanPattern(camera, weapon, onHit, onMiss, shotToken) {
+        function fireHitscanPattern(camera, weapon, onHit, onMiss, shotToken, shotSample) {
             var pellets = weapon.pellets || 1;
             var anyHit = false;
             var drawTracersForShot = shouldDrawTracerForShot(weapon);
-            var shotgunTracerCap = 8;
-            var tracerOrigin = resolvePlasmaMuzzle(camera);
+            var shotgunTracerCap = Math.min(pellets, 32);
+            var tracerOrigin = shotSample && shotSample.tracerOrigin ? shotSample.tracerOrigin : resolvePlasmaMuzzle(camera);
             for (var i = 0; i < pellets; i++) {
                 var shouldTraceThisPellet = drawTracersForShot && (weapon.id !== 'shotgun' || i < shotgunTracerCap);
                 var hit = fireSinglePellet(
@@ -659,12 +738,15 @@
             return true;
         }
 
-        function autoLockMissPoint(camera, weapon) {
+        function autoLockMissPoint(camera, weapon, shotContext) {
             if (!camera || !weapon) return null;
             var effectiveRange = weaponRuntime.getEffectiveMaxRange(weapon);
-            var muzzle = resolvePlasmaMuzzle(camera);
+            var muzzle = applyPlainVec3(plasmaMuzzle, shotContext && (shotContext.tracerOrigin || shotContext.aimOrigin)) ||
+                resolvePlasmaMuzzle(camera);
             if (!muzzle) return null;
-            camera.getWorldDirection(plasmaForward);
+            if (!applyPlainVec3(plasmaForward, shotContext && shotContext.aimForward)) {
+                camera.getWorldDirection(plasmaForward);
+            }
             losRaycaster.set(muzzle, plasmaForward);
             losRaycaster.far = effectiveRange;
             var world = worldApi();
@@ -674,13 +756,14 @@
             return muzzle.clone().addScaledVector(plasmaForward, effectiveRange);
         }
 
-        function fireAutoLockShot(camera, weapon, onHit, onMiss, shotToken) {
-            var shotContext = buildLocalShotContext(camera, weapon, shotToken);
+        function fireAutoLockShot(camera, weapon, onHit, onMiss, shotToken, shotSample) {
+            var shotContext = buildLocalShotContext(camera, weapon, shotToken, shotSample);
             var shots = resolveAutoLockShotFromContext(shotContext);
             var tracerOrigin = shotContext && shotContext.tracerOrigin ? shotContext.tracerOrigin : resolvePlasmaMuzzle(camera);
+            var drawTracersForShot = shouldDrawTracerForShot(weapon);
             if (!shots || shots.length === 0) {
-                var missPoint = autoLockMissPoint(camera, weapon);
-                if (missPoint) spawnTracer(camera, weapon, missPoint, tracerOrigin);
+                var missPoint = autoLockMissPoint(camera, weapon, shotContext);
+                if (drawTracersForShot && missPoint) spawnTracer(camera, weapon, missPoint, tracerOrigin);
                 if (onMiss) onMiss();
                 return true;
             }
@@ -693,7 +776,7 @@
                     : (target.bodyHitbox || target.hitbox || target.headHitbox || null))
                 : null;
 
-            if (shot.point) {
+            if (drawTracersForShot && shot.point) {
                 spawnTracer(
                     camera,
                     weapon,
@@ -745,7 +828,7 @@
             return null;
         }
 
-        function fire(camera, onHit, onMiss, shotToken, timing) {
+        function fire(camera, onHit, onMiss, shotToken, timing, shotSample) {
             var weapon = weaponRuntime.getCurrentWeaponData();
             if (!weapon) return false;
             var ammoInMag = weapon.magazineSize > 0 ? weaponRuntime.getAmmoInMag(weapon, timing) : 0;
@@ -763,9 +846,12 @@
             }
 
             weaponRuntime.markLocalShotFired(timing);
+            var capturedShotSample = shotSampleMatches(shotSample, weapon, shotToken)
+                ? shotSample
+                : captureShotSample(camera, shotToken);
             var fired = weaponRuntime.getAutoLockConfig(weapon)
-                ? fireAutoLockShot(camera, weapon, onHit, onMiss, shotToken)
-                : fireHitscanPattern(camera, weapon, onHit, onMiss, shotToken);
+                ? fireAutoLockShot(camera, weapon, onHit, onMiss, shotToken, capturedShotSample)
+                : fireHitscanPattern(camera, weapon, onHit, onMiss, shotToken, capturedShotSample);
             if (fired) {
                 weaponRuntime.consumeAmmoForShot(weapon, timing);
             }
@@ -840,12 +926,12 @@
             };
         }
 
-        function buildNetworkFireIntent(shotToken) {
+        function buildNetworkFireIntent(shotToken, shotSample) {
             var player = playerApi();
             var camera = player && player.getCamera ? player.getCamera() : null;
             var weapon = weaponRuntime.getCurrentWeaponData();
             if (!camera || !weapon) return null;
-            var shotContext = buildLocalShotContext(camera, weapon, shotToken);
+            var shotContext = buildLocalShotContext(camera, weapon, shotToken, shotSample);
             if (!shotContext) return null;
             return {
                 weaponId: weapon.id,
@@ -902,6 +988,7 @@
                 };
             },
             shouldPredictNetHit: shouldPredictNetHit,
+            captureShotSample: captureShotSample,
             buildNetworkFireIntent: buildNetworkFireIntent,
             localNowMs: localNowMs,
             wallNowMs: wallNowMs

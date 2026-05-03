@@ -117,7 +117,11 @@ test('throwables fire zones deal base damage in the zone and lingering damage af
 
   harness.api.createFireZone(new THREE.Vector3(0, 0, 0));
   assert.equal(harness.scene.children.length, 1);
-  assert.deepEqual(harness.audioCalls, ['fireIgnite', 'fireBurning']);
+  const zoneParts = harness.scene.children[0].userData.zoneParts;
+  assert.ok(Array.isArray(zoneParts.flameJets));
+  assert.equal(zoneParts.flameJets.length, 8);
+  assert.ok(zoneParts.scorch);
+  assert.deepEqual(harness.audioCalls, ['molotov_ignite', 'fireBurning']);
   assert.equal(harness.burstCalls.length, 1);
   assert.equal(harness.burstCalls[0].radius, gameplayTuning.throwables.molotov.fireRadius);
 

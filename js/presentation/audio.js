@@ -14,8 +14,19 @@
         'playerHit',
         'fireIgnite',
         'fireBurning',
+        'molotov_ignite',
         'explosion',
+        'explosion_frag',
+        'explosion_plasma',
+        'explosion_molotov',
         'throw',
+        'throw_frag',
+        'throw_molotov',
+        'throw_knife',
+        'throw_plasma',
+        'throwable_impact',
+        'knife_impact',
+        'plasma_stick',
         'reload',
         'footstep',
         'jump',
@@ -40,7 +51,7 @@
     var movementSampleDefs = {
         footstepWalk: {
             url: '/assets/audio/movement/footstep-concrete.ogg',
-            gain: 0.0675,
+            gain: 0.03375,
             playbackRateMin: 1.0,
             playbackRateMax: 1.0,
             filterType: 'lowpass',
@@ -49,7 +60,7 @@
         },
         footstepRun: {
             url: '/assets/audio/movement/footstep-concrete.ogg',
-            gain: 0.10125,
+            gain: 0.050625,
             playbackRateMin: 1.06,
             playbackRateMax: 1.06,
             filterType: 'lowpass',
@@ -624,7 +635,7 @@
         if (playConfiguredSample(c, sampleDef)) return;
         playNoiseBurst(c, {
             duration: running ? 0.035 : 0.03,
-            vol: running ? 0.00975 : 0.00675,
+            vol: running ? 0.004875 : 0.003375,
             frequency: running ? 980 : 760,
             q: 0.8,
             filterType: 'bandpass'
@@ -821,6 +832,123 @@
         playOscBurst(c, { type: 'triangle', startFreq: 96, endFreq: 74, duration: 0.18, vol: 0.012, delay: 0.01 });
     }
 
+    function normalizeThrowableAudioType(options) {
+        options = options || {};
+        var id = String(options.throwable || options.throwableId || options.projectileType || options.type || '').toLowerCase();
+        if (id === 'grenade') return 'frag';
+        if (id === 'firegrenade' || id === 'fire_grenade') return 'molotov';
+        if (id === 'plasma_stream') return 'plasma';
+        return id;
+    }
+
+    function cueOptions(options, throwableType) {
+        options = options || {};
+        var result = {};
+        for (var key in options) {
+            if (Object.prototype.hasOwnProperty.call(options, key)) result[key] = options[key];
+        }
+        if (throwableType) {
+            result.throwable = throwableType;
+            result.projectileType = throwableType;
+        }
+        return result;
+    }
+
+    function playThrowableThrow(c, options) {
+        var type = normalizeThrowableAudioType(options);
+        if (type === 'knife') {
+            playNoiseBurst(c, { duration: 0.055, vol: 0.026, frequency: 3600, q: 2.8, filterType: 'highpass' });
+            playNoiseBurst(c, { duration: 0.036, vol: 0.014, frequency: 1700, q: 1.9, filterType: 'bandpass', delay: 0.004 });
+            playOscBurst(c, { type: 'sine', startFreq: 520, endFreq: 260, duration: 0.045, vol: 0.018, delay: 0.002 });
+            return;
+        }
+        if (type === 'molotov') {
+            playNoiseBurst(c, { duration: 0.06, vol: 0.028, frequency: 2400, q: 2.2, filterType: 'highpass' });
+            playNoiseBurst(c, { duration: 0.07, vol: 0.017, frequency: 720, q: 0.8, filterType: 'bandpass', delay: 0.006 });
+            playOscBurst(c, { type: 'triangle', startFreq: 210, endFreq: 118, duration: 0.09, vol: 0.018, delay: 0.002 });
+            return;
+        }
+        if (type === 'plasma') {
+            playOscBurst(c, { type: 'sawtooth', startFreq: 320, endFreq: 760, duration: 0.055, vol: 0.035 });
+            playOscBurst(c, { type: 'triangle', startFreq: 900, endFreq: 360, duration: 0.115, vol: 0.028, delay: 0.012 });
+            playNoiseBurst(c, { duration: 0.052, vol: 0.018, frequency: 3100, q: 2.4, filterType: 'bandpass', delay: 0.004 });
+            return;
+        }
+        playNoiseBurst(c, { duration: 0.055, vol: 0.02, frequency: 1120, q: 1.05, filterType: 'bandpass' });
+        playOscBurst(c, { type: 'triangle', startFreq: 190, endFreq: 110, duration: 0.08, vol: 0.02, delay: 0.002 });
+    }
+
+    function playKnifeImpact(c, options) {
+        var impact = String((options && (options.impactType || options.hitType)) || 'world').toLowerCase();
+        var head = impact === 'head';
+        var body = head || impact === 'body' || impact === 'enemy';
+        if (body) {
+            playNoiseBurst(c, { duration: 0.048, vol: head ? 0.034 : 0.03, frequency: head ? 2600 : 1500, q: head ? 2.2 : 1.15, filterType: 'bandpass' });
+            playNoiseBurst(c, { duration: 0.03, vol: head ? 0.024 : 0.014, frequency: head ? 5200 : 3300, q: 2.6, filterType: 'highpass', delay: 0.004 });
+            playOscBurst(c, { type: head ? 'square' : 'triangle', startFreq: head ? 760 : 230, endFreq: head ? 360 : 105, duration: head ? 0.06 : 0.08, vol: head ? 0.024 : 0.022, delay: 0.001 });
+            return;
+        }
+        playNoiseBurst(c, { duration: 0.028, vol: 0.03, frequency: 5200, q: 3.0, filterType: 'highpass' });
+        playNoiseBurst(c, { duration: 0.05, vol: 0.018, frequency: 1700, q: 1.6, filterType: 'bandpass', delay: 0.002 });
+        playOscBurst(c, { type: 'square', startFreq: 1180, endFreq: 640, duration: 0.045, vol: 0.016, delay: 0.002 });
+        playOscBurst(c, { type: 'triangle', startFreq: 260, endFreq: 128, duration: 0.075, vol: 0.015, delay: 0.005 });
+    }
+
+    function playPlasmaStick(c) {
+        playNoiseBurst(c, { duration: 0.06, vol: 0.025, frequency: 3300, q: 2.5, filterType: 'bandpass' });
+        playOscBurst(c, { type: 'sine', startFreq: 360, endFreq: 1120, duration: 0.07, vol: 0.03, delay: 0.001 });
+        playOscBurst(c, { type: 'triangle', startFreq: 1120, endFreq: 580, duration: 0.09, vol: 0.018, delay: 0.045 });
+    }
+
+    function playMolotovIgnite(c) {
+        playNoiseBurst(c, { duration: 0.024, vol: 0.03, frequency: 5400, q: 3.1, filterType: 'highpass' });
+        playNoiseBurst(c, { duration: 0.04, vol: 0.018, frequency: 1900, q: 2.0, filterType: 'bandpass', delay: 0.004 });
+        playFireIgnite(c);
+    }
+
+    function playThrowableImpact(c, options) {
+        var type = normalizeThrowableAudioType(options);
+        if (type === 'knife') {
+            playKnifeImpact(c, options);
+            return;
+        }
+        if (type === 'plasma') {
+            playPlasmaStick(c);
+            return;
+        }
+        if (type === 'molotov') {
+            playMolotovIgnite(c);
+            return;
+        }
+        playNoiseBurst(c, { duration: 0.04, vol: 0.018, frequency: 1500, q: 1.0, filterType: 'bandpass' });
+        playOscBurst(c, { type: 'triangle', startFreq: 180, endFreq: 95, duration: 0.055, vol: 0.012, delay: 0.002 });
+    }
+
+    function playThrowableExplosion(c, options) {
+        var type = normalizeThrowableAudioType(options);
+        if (type === 'plasma') {
+            playNoiseBurst(c, { duration: 0.04, vol: 0.07, frequency: 4400, q: 2.0, filterType: 'bandpass' });
+            playNoiseBurst(c, { duration: 0.18, vol: 0.052, frequency: 1450, q: 1.0, filterType: 'bandpass', delay: 0.004 });
+            playOscBurst(c, { type: 'sawtooth', startFreq: 720, endFreq: 180, duration: 0.15, vol: 0.075 });
+            playOscBurst(c, { type: 'sine', startFreq: 128, endFreq: 58, duration: 0.22, vol: 0.058, delay: 0.006 });
+            return;
+        }
+        if (type === 'molotov') {
+            playMolotovIgnite(c);
+            return;
+        }
+        if (type === 'missile') {
+            playNoiseBurst(c, { duration: 0.035, vol: 0.09, frequency: 3900, q: 1.6, filterType: 'highpass' });
+            playNoiseBurst(c, { duration: 0.26, vol: 0.09, frequency: 720, q: 0.65, filterType: 'lowpass', delay: 0.002 });
+            playOscBurst(c, { type: 'sawtooth', startFreq: 150, endFreq: 44, duration: 0.28, vol: 0.13 });
+            return;
+        }
+        playNoiseBurst(c, { duration: 0.028, vol: 0.075, frequency: 4200, q: 1.8, filterType: 'highpass' });
+        playNoiseBurst(c, { duration: 0.16, vol: 0.076, frequency: 960, q: 0.8, filterType: 'bandpass', delay: 0.002 });
+        playNoiseBurst(c, { duration: 0.24, vol: 0.054, frequency: 420, q: 0.55, filterType: 'lowpass', delay: 0.006 });
+        playOscBurst(c, { type: 'sawtooth', startFreq: 128, endFreq: 42, duration: 0.24, vol: 0.12, delay: 0.001 });
+    }
+
     GameAudio.play = function (soundId, options) {
         if (muted) return;
         options = options || {};
@@ -845,12 +973,44 @@
                 case 'fireBurning':
                     playFireBurning(c);
                     break;
+                case 'molotov_ignite':
+                    playMolotovIgnite(c);
+                    break;
                 case 'explosion':
-                    playNoiseBurst(c, { duration: 0.25, vol: 0.11, frequency: 640, q: 0.55, filterType: 'lowpass' });
-                    playOscBurst(c, { type: 'sawtooth', startFreq: 110, endFreq: 42, duration: 0.22, vol: 0.12 });
+                    playThrowableExplosion(c, options);
+                    break;
+                case 'explosion_frag':
+                    playThrowableExplosion(c, cueOptions(options, 'frag'));
+                    break;
+                case 'explosion_plasma':
+                    playThrowableExplosion(c, cueOptions(options, 'plasma'));
+                    break;
+                case 'explosion_molotov':
+                    playThrowableExplosion(c, cueOptions(options, 'molotov'));
                     break;
                 case 'throw':
-                    playOscBurst(c, { type: 'sine', startFreq: 240, endFreq: 160, duration: 0.06, vol: 0.05 });
+                    playThrowableThrow(c, options);
+                    break;
+                case 'throw_frag':
+                    playThrowableThrow(c, cueOptions(options, 'frag'));
+                    break;
+                case 'throw_molotov':
+                    playThrowableThrow(c, cueOptions(options, 'molotov'));
+                    break;
+                case 'throw_knife':
+                    playThrowableThrow(c, cueOptions(options, 'knife'));
+                    break;
+                case 'throw_plasma':
+                    playThrowableThrow(c, cueOptions(options, 'plasma'));
+                    break;
+                case 'throwable_impact':
+                    playThrowableImpact(c, options);
+                    break;
+                case 'knife_impact':
+                    playKnifeImpact(c, options);
+                    break;
+                case 'plasma_stick':
+                    playPlasmaStick(c);
                     break;
                 case 'reload':
                     playReloadCue(c, options.weapon || 'rifle', options.cue || 'start', options.cueId || '');

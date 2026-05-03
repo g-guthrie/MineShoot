@@ -17,6 +17,7 @@
         var trajVel = new THREE.Vector3();
         var trajStart = new THREE.Vector3();
         var trajEnd = new THREE.Vector3();
+        var previewBounceNormal = new THREE.Vector3();
         var trajectoryPreview = {
             dotsNear: null,
             dotsFar: null,
@@ -75,6 +76,51 @@
             var maxLife = Number(def && def.maxLife);
             if (isFinite(maxLife) && maxLife > 0) return maxLife;
             return Math.max(0.2, Number(def && def.fuse || 2.2));
+        }
+
+        function finiteNumber(value, fallback) {
+            var number = Number(value);
+            return isFinite(number) ? number : Number(fallback || 0);
+        }
+
+        function fragBounceTuning(def, tuning) {
+            var projectileDef = def || {};
+            var mechanics = tuning || {};
+            return {
+                maxCount: Math.max(0, Math.round(finiteNumber(
+                    projectileDef.bounceMaxCount != null ? projectileDef.bounceMaxCount : mechanics.fragBounceMaxCount,
+                    2
+                ))),
+                velocityDamping: Math.max(0, finiteNumber(
+                    projectileDef.bounceVelocityDamping != null ? projectileDef.bounceVelocityDamping : mechanics.fragBounceVelocityDamping,
+                    0.4
+                )),
+                verticalDamping: Math.max(0, finiteNumber(
+                    projectileDef.bounceVerticalDamping != null ? projectileDef.bounceVerticalDamping : mechanics.fragBounceVerticalDamping,
+                    0.42
+                )),
+                stopSpeedSq: Math.max(0, finiteNumber(
+                    projectileDef.bounceStopSpeedSq != null ? projectileDef.bounceStopSpeedSq : mechanics.fragBounceStopSpeedSq,
+                    2.5
+                ))
+            };
+        }
+
+        function reflectPreviewVelocity(velocity, normal, bounce) {
+            if (!velocity || !normal) return;
+            previewBounceNormal.copy(normal);
+            if (previewBounceNormal.lengthSq() <= 0.00001) {
+                velocity.multiplyScalar(bounce.velocityDamping);
+                return;
+            }
+            previewBounceNormal.normalize();
+            var dot = velocity.dot(previewBounceNormal);
+            if (dot < 0) {
+                velocity.addScaledVector(previewBounceNormal, -2 * dot);
+            }
+            velocity.x *= bounce.velocityDamping;
+            velocity.z *= bounce.velocityDamping;
+            velocity.y *= Math.abs(previewBounceNormal.y) > 0.5 ? bounce.verticalDamping : bounce.velocityDamping;
         }
 
         function recordIntent(intent) {
@@ -396,12 +442,11 @@
                     points.push(hit.point.clone());
 
                     if (type === 'frag' && hit.kind === 'world') {
-                        trajPos.copy(hit.point);
-                        trajVel.multiplyScalar(tuning.fragBounceVelocityDamping || 0.4);
-                        trajVel.y = Math.abs(trajVel.y) * (tuning.fragBounceVerticalDamping || 0.42);
+                        trajPos.copy(hit.settlePoint || hit.point);
+                        var bounce = fragBounceTuning(def, tuning);
+                        reflectPreviewVelocity(trajVel, hit.normal || previewBounceNormal.set(0, 1, 0), bounce);
                         bounces++;
-                        if (bounces > (tuning.fragBounceMaxCount || 2) ||
-                            trajVel.lengthSq() < (tuning.fragBounceStopSpeedSq || 2.5)) {
+                        if (bounces > bounce.maxCount || trajVel.lengthSq() < bounce.stopSpeedSq) {
                             trajVel.set(0, 0, 0);
                         }
                         age += dt;

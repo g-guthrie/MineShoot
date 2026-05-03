@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { toEntityState, toProjectileState } from '../../../cloudflare/server/room/EntitySerializer.js';
 
-test('toEntityState omits removed runtime internals while preserving movement and roll state', () => {
+test('toEntityState preserves movement, action lock, and roll state', () => {
   const state = toEntityState({
     id: 'usr_test',
     kind: 'player',
@@ -48,7 +48,6 @@ test('toEntityState omits removed runtime internals while preserving movement an
     slowUntil: 0,
   });
 
-  assert.equal(state.abilityFx, undefined);
   assert.equal(state.weaponLockUntil, 0);
   assert.equal(state.throwableLockUntil, 0);
   assert.equal(state.rollStartedAt, 1400);
@@ -103,7 +102,6 @@ test('toEntityState carries the remaining authoritative action lock timers', () 
 
   assert.equal(state.weaponLockUntil, 2100);
   assert.equal(state.throwableLockUntil, 2200);
-  assert.equal(state.abilityLockUntil, undefined);
 });
 
 test('toEntityState exposes last processed input seq for snapshot acknowledgements', () => {

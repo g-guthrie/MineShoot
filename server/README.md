@@ -16,6 +16,8 @@ Rules:
 
 Validation:
 
-- Run `npm run test:networking` for the stable smoke path that combines real-worker networking and measured correction scenarios.
-- Run `npm run test:networking:full` for the broader live-worker and measured correction suites.
+- Run `npm run test:networking` for the explicit Node networking guardrail.
+- Run `npm run test:networking:smoke` for the Node guardrail plus the live browser/Worker integration proof.
+- Run `npm run test:networking:full` for broader networking-adjacent support coverage.
+- Run `npm run test:smoke` for build plus the behavior-first networking smoke gate.
 - Keep room-runtime, snapshot, serializer, and transport tests green alongside the smoke command.

@@ -216,14 +216,11 @@ async function loadControlsHarness(options = {}) {
     rollMessages: [],
     movementInputs: [],
     transientDebug: [],
-    weaponArmLayerToggles: [],
     toggleWeaponCalls: [],
     appliedWeapons: [],
     localStorageWrites: [],
     inspectToggles: []
   };
-  let weaponArmLayerEnabled = false;
-
   const runtime = {
     GameThrowables: {
       getSelectedThrowable() { return 'plasma'; },
@@ -304,13 +301,6 @@ async function loadControlsHarness(options = {}) {
           sprint: !!(nextState && nextState.sprint)
         });
         return nextState || {};
-      }
-    },
-    GameBoxmanRig: {
-      toggleWeaponArmLayer() {
-        weaponArmLayerEnabled = !weaponArmLayerEnabled;
-        calls.weaponArmLayerToggles.push(weaponArmLayerEnabled);
-        return weaponArmLayerEnabled;
       }
     },
     GameAbilities: {
@@ -786,7 +776,7 @@ test('gameplay controls honor remapped throwable, roll, debug, and manual keys w
   assert.equal(harness.calls.docsToggle, 0);
 });
 
-test('gameplay controls toggle the experimental weapon arm layer on Y', async () => {
+test('gameplay controls no longer bind Y to the canonical weapon arm posture', async () => {
   const harness = await loadControlsHarness();
   const events = [];
 
@@ -797,25 +787,8 @@ test('gameplay controls toggle the experimental weapon arm layer on Y', async ()
     stopPropagation() { events.push('stopPropagation'); }
   });
 
-  assert.deepEqual(harness.calls.weaponArmLayerToggles, [true]);
-  assert.deepEqual(events, ['preventDefault', 'stopPropagation']);
-  assert.deepEqual(harness.calls.transientDebug.at(-1), {
-    text: 'Weapon arm layer: ON',
-    ms: 1100
-  });
-
-  harness.documentObj.dispatch('keydown', {
-    code: 'KeyY',
-    repeat: false,
-    preventDefault() {},
-    stopPropagation() {}
-  });
-
-  assert.deepEqual(harness.calls.weaponArmLayerToggles, [true, false]);
-  assert.deepEqual(harness.calls.transientDebug.at(-1), {
-    text: 'Weapon arm layer: OFF',
-    ms: 1100
-  });
+  assert.deepEqual(events, []);
+  assert.equal(harness.calls.transientDebug.some((entry) => entry.text.indexOf('Weapon arm layer') >= 0), false);
 });
 
 test('gameplay controls send roll direction to the network in multiplayer', async () => {

@@ -716,9 +716,12 @@
             }
         }
 
-        function triggerLocalThrowFeedback() {
+        function triggerLocalThrowFeedback(type) {
             if (runtime.GameAudio && runtime.GameAudio.play) {
-                runtime.GameAudio.play('throw');
+                runtime.GameAudio.play('throw', {
+                    throwable: type,
+                    projectileType: type
+                });
             }
         }
 
@@ -747,7 +750,7 @@
                     throwablesApi.throwPredicted(type, camera, clientThrowId, throwIntent);
                 }
                 commandsApi.sendThrow(type, clientThrowId, throwIntent);
-                triggerLocalThrowFeedback();
+                triggerLocalThrowFeedback(type);
                 setTransientDebug('Throw sent: ' + type, 650);
                 return { ok: true, sent: true };
             }
@@ -755,7 +758,7 @@
             var outcome = throwablesApi.throw(type, camera, throwIntent);
             runtime.GameUI.updateThrowableInfo(outcome.state);
             if (outcome.ok) {
-                triggerLocalThrowFeedback();
+                triggerLocalThrowFeedback(type);
             }
             if (!outcome.ok && outcome.reason === 'cooldown') {
                 setTransientDebug(type + ' is recharging.', 600);
@@ -1058,16 +1061,6 @@
             listen(document, 'keydown', function (e) {
                 if (e.repeat) return;
                 if (domUtils && domUtils.isEditableTarget && domUtils.isEditableTarget(e.target)) return;
-                if (e.code === 'KeyY') {
-                    if (!hasInputCapture()) return;
-                    var boxmanRig = runtime.GameBoxmanRig || null;
-                    if (!boxmanRig || !boxmanRig.toggleWeaponArmLayer) return;
-                    if (e.preventDefault) e.preventDefault();
-                    if (e.stopPropagation) e.stopPropagation();
-                    var weaponArmLayerEnabledNow = !!boxmanRig.toggleWeaponArmLayer();
-                    setTransientDebug(weaponArmLayerEnabledNow ? 'Weapon arm layer: ON' : 'Weapon arm layer: OFF', 1100);
-                    return;
-                }
                 if (!matchesBinding('toggle_debug', e, 'KeyH')) return;
                 var enabled = opts.toggleDebugVisuals ? !!opts.toggleDebugVisuals() : false;
                 setTransientDebug(enabled ? 'Dev visuals: ON' : 'Dev visuals: OFF', 1100);

@@ -400,17 +400,9 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var ox = (bounds.minX + bounds.maxX) / 2;
         var oz = (bounds.minZ + bounds.maxZ) / 2;
 
-        // 90° CW rotation proxy — rotates entire biome around (ox, oz)
-        var place = {
-            addBlock: function (x, y, z, w, h, d, mat, solid) {
-                var dx = x - ox, dz = z - oz;
-                return realPlace.addBlock(ox - dz, y, oz + dx, d, h, w, mat, solid);
-            },
-            addDecor: function (x, y, z, geo, mat, ry, rx, rz) {
-                var dx = x - ox, dz = z - oz;
-                return realPlace.addDecor(ox - dz, y, oz + dx, geo, mat, (ry || 0) + Math.PI / 2, rx || 0, rz || 0);
-            }
-        };
+        // Authored orientation keeps Mount Crumpit in the north-east corner:
+        // north outer wall plus east/desert side in the current grid.
+        var place = realPlace;
 
         /* ── Mount Crumpit — NE corner ── */
         buildMountCrumpit(ox, oz, place, mats);

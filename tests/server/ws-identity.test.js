@@ -27,7 +27,7 @@ test('gameplay websocket identity keeps authenticated player ids server-owned', 
   assert.equal(identity.playerName, 'REQUESTED');
   assert.equal(identity.playerClassId, 'sniper');
   assert.equal(identity.actorId, 'usr_alpha');
-  assert.equal(identity.actorName, 'REQUEST_ACTOR');
+  assert.equal(identity.actorName, 'Alpha Prime');
 });
 
 test('gameplay websocket identity preserves valid guest pid values', () => {
@@ -80,5 +80,5 @@ test('lobby websocket identity uses the authenticated actor id over the query ac
   });
 
   assert.equal(identity.actorId, 'usr_lobby_alpha');
-  assert.equal(identity.actorName, 'REQUESTED');
+  assert.equal(identity.actorName, 'ALPHA');
 });

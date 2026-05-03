@@ -18,7 +18,7 @@ async function loadJoinStateFactory() {
   return sandbox.globalThis.__MAYHEM_RUNTIME.GameNetJoinState;
 }
 
-test('GameNetJoinState times out even when callers forget to mark transport connect start', async () => {
+test('GameNetJoinState starts its timeout when transport connect begins', async () => {
   const GameNetJoinState = await loadJoinStateFactory();
   const joinState = GameNetJoinState.create({
     sanitizeRoomId(value) {
@@ -29,8 +29,15 @@ test('GameNetJoinState times out even when callers forget to mark transport conn
     }
   });
 
+  const joinPromise = joinState.beginJoinAttempt({ expectedRoomId: 'FFA-01', timeoutMs: 5 });
+  let settled = false;
+  joinPromise.then(() => { settled = true; }, () => { settled = true; });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(settled, false);
+
+  joinState.markJoinConnectStart();
   await assert.rejects(
-    joinState.beginJoinAttempt({ expectedRoomId: 'FFA-01', timeoutMs: 5 }),
+    joinPromise,
     /Timed out joining room FFA-01\./
   );
   assert.equal(joinState.hasJoinAttempt(), false);

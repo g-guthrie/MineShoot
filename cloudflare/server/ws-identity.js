@@ -44,10 +44,12 @@ export function resolveWsActorIdentity({ session, url }) {
   const isAuthenticated = !!(session && session.userId);
   const accountUserId = isAuthenticated ? String(session.userId || '') : '';
   const actorId = isAuthenticated ? normalizeOpaqueId(accountUserId) : requestedActorId;
-  const actorName = firstValidUsername([
-    requestedActorName,
-    isAuthenticated ? String(session.displayName || session.username || '') : ''
-  ]);
+  const actorName = isAuthenticated
+    ? firstValidUsername([
+      String(session.displayName || session.username || ''),
+      requestedActorName
+    ])
+    : firstValidUsername([requestedActorName]);
   return {
     isAuthenticated,
     accountUserId,

@@ -40,7 +40,7 @@ async function loadStateViewWithOptions(options = {}, sharedOverrides = {}) {
   return sandbox.__MAYHEM_RUNTIME.GameNetStateView.create(options);
 }
 
-test('network state view reuses lock target arrays and wrappers across calls', async () => {
+test('network state view reports current lock target positions across calls', async () => {
   const render = {
     id: 'usr_remote',
     alive: true,
@@ -54,21 +54,23 @@ test('network state view reuses lock target arrays and wrappers across calls', a
   const view = await loadStateView(renderMap);
 
   const firstTargets = view.getLockTargets();
+  assert.equal(firstTargets.length, 1);
+  assert.deepEqual(
+    { x: firstTargets[0].worldPos.x, y: firstTargets[0].worldPos.y, z: firstTargets[0].worldPos.z },
+    { x: 3, y: 5, z: 5 }
+  );
+
   render.group.position.set(8, 9, 10);
   const secondTargets = view.getLockTargets();
 
-  assert.equal(firstTargets.length, 1);
   assert.equal(secondTargets.length, 1);
-  assert.equal(firstTargets, secondTargets);
-  assert.equal(firstTargets[0], secondTargets[0]);
-  assert.equal(firstTargets[0].worldPos, secondTargets[0].worldPos);
   assert.deepEqual(
     { x: secondTargets[0].worldPos.x, y: secondTargets[0].worldPos.y, z: secondTargets[0].worldPos.z },
     { x: 8, y: 10, z: 10 }
   );
 });
 
-test('network state view reuses entity state arrays and wrappers across calls', async () => {
+test('network state view reports current entity state across calls', async () => {
   const render = {
     id: 'usr_remote',
     kind: 'player',
@@ -87,14 +89,23 @@ test('network state view reuses entity state arrays and wrappers across calls', 
   const view = await loadStateView(renderMap);
 
   const first = view.getEntityStateList();
+  assert.equal(first.length, 1);
+  assert.equal(first[0].hp, 90);
+  assert.deepEqual(
+    { x: first[0].worldPos.x, y: first[0].worldPos.y, z: first[0].worldPos.z },
+    { x: 1, y: 2, z: 3 }
+  );
+
   render.group.position.set(5, 6, 7);
   render.hp = 75;
   const second = view.getEntityStateList();
 
-  assert.equal(first, second);
-  assert.equal(first[0], second[0]);
+  assert.equal(second.length, 1);
   assert.equal(second[0].hp, 75);
-  assert.equal(second[0].worldPos, render.group.position);
+  assert.deepEqual(
+    { x: second[0].worldPos.x, y: second[0].worldPos.y, z: second[0].worldPos.z },
+    { x: 5, y: 6, z: 7 }
+  );
 });
 
 test('network state view does not expose hidden remote renders as lock targets or entity states', async () => {

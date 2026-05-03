@@ -117,10 +117,20 @@ function movementIntent(context) {
   };
 }
 
+function stopSettleIntent(context) {
+  const weight = Math.max(0, finite(context && context.stopSettleWeight, 0));
+  if (!(weight > 0)) return null;
+  const directional = context && (context.stopDirectionalState || context.stopDirectionalSnapshot);
+  return directional && directional.intent ? directional.intent : null;
+}
+
+function stopSettleUsesCarryProfile(intent) {
+  return !!(intent && (intent.pureForward || intent.pureStrafe));
+}
+
 export function createWeaponArmLayerState(options = {}) {
   const idleArmSampler = options.idleArmSampler || createIdleArmSampler(options.animations);
   return {
-    enabled: !!options.enabled,
     applied: false,
     profileName: '',
     idleBasePose: null,
@@ -129,19 +139,18 @@ export function createWeaponArmLayerState(options = {}) {
   };
 }
 
-export function setWeaponArmLayerEnabled(state, enabled) {
-  if (!state) return !!enabled;
-  state.enabled = !!enabled;
-  return state.enabled;
-}
-
-export function toggleWeaponArmLayerEnabled(state) {
-  return setWeaponArmLayerEnabled(state, !(state && state.enabled));
-}
-
 export function resolveWeaponArmLayerProfile(context = {}) {
   const activeClipName = String(context.activeClipName || '');
   const intent = movementIntent(context);
+  const stopIntent = stopSettleIntent(context);
+  if (
+    stopIntent &&
+    !intent.moving &&
+    stopSettleUsesCarryProfile(stopIntent) &&
+    (activeClipName === 'idle' || activeClipName === 'stop')
+  ) {
+    return cloneProfile(WEAPON_CARRY_PROFILE);
+  }
   if (!intent.moving && activeClipName === 'idle') return cloneProfile(IDLE_CAPTURE_PROFILE);
   if (intent.pureForward && (activeClipName === 'start_forward' || activeClipName === 'run')) {
     return cloneProfile(WEAPON_CARRY_PROFILE);
@@ -238,12 +247,6 @@ function applyIdleBasePose(state, rig) {
 
 export function applyWeaponArmLayer(rig, context = {}) {
   const layerState = context.state || null;
-  if (layerState && !layerState.enabled) {
-    layerState.applied = false;
-    layerState.profileName = '';
-    return { applied: false, profileName: '' };
-  }
-
   const profile = resolveWeaponArmLayerProfile(context);
   if (!profile || !rig) {
     if (layerState) {

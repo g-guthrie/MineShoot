@@ -49,6 +49,9 @@
                         endpoint: opts.wsEndpoint,
                         isActive: opts.isActive,
                         reconnectMs: 1200,
+                        maxReconnectMs: 10000,
+                        maxReconnectAttempts: 8,
+                        reconnectJitterMs: 250,
                         onOpen: function (socket) {
                             opts.setWs(socket);
                             opts.setConnected(true);
@@ -69,6 +72,11 @@
                         onError: function () {
                             opts.setConnected(false);
                             if (opts.onTransportError) opts.onTransportError();
+                        },
+                        onPermanentClose: function () {
+                            opts.setConnected(false);
+                            opts.setWs(null);
+                            if (opts.onTransportPermanentClose) opts.onTransportPermanentClose();
                         }
                     }));
                     opts.getTransport().connect();

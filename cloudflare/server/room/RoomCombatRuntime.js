@@ -39,6 +39,33 @@ function clampNumber(value, min, max, fallback = 0) {
   return Math.max(min, Math.min(max, parsed));
 }
 
+function normalizeFiniteVec3(value) {
+  if (!value || typeof value !== 'object') return null;
+  const x = Number(value.x);
+  const y = Number(value.y);
+  const z = Number(value.z);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return null;
+  return { x, y, z };
+}
+
+function distanceSqVec3(a, b) {
+  if (!a || !b) return Infinity;
+  const dx = Number(a.x || 0) - Number(b.x || 0);
+  const dy = Number(a.y || 0) - Number(b.y || 0);
+  const dz = Number(a.z || 0) - Number(b.z || 0);
+  return (dx * dx) + (dy * dy) + (dz * dz);
+}
+
+function validatedVisualShotOrigin(rawOrigin, fallbackOrigin, maxOffset) {
+  const fallback = normalizeFiniteVec3(fallbackOrigin);
+  const origin = normalizeFiniteVec3(rawOrigin);
+  if (!origin) return fallback;
+  if (!fallback) return origin;
+  const limit = Math.max(0, Number(maxOffset || 0));
+  if (!(limit > 0)) return fallback;
+  return distanceSqVec3(origin, fallback) <= (limit * limit) ? origin : fallback;
+}
+
 const FORWARD_ROLL_ACTION_DURATION_MS = 360;
 const BACKWARD_ROLL_ACTION_DURATION_MS = 520;
 const STANDARD_AUTO_RELOAD_DELAY_MS = 3000;
@@ -768,6 +795,10 @@ export function handleFire(room, player, msg, deps) {
   const playerEyeHeight = Number(deps.playerEyeHeight || 0);
   const remoteMuzzleFlashHoldMs = Number(deps.remoteMuzzleFlashHoldMs || 0);
   const shotTokenDamageAggregation = deps.shotTokenDamageAggregation === true;
+  const hitscanVisualOriginMaxOffset = Math.max(
+    hitscanAimOriginMaxOffset,
+    Number(deps.hitscanVisualOriginMaxOffset || 1.25)
+  );
 
   if (!player || !player.alive) return;
   if (!room.canEntityUseWeapon(player)) return;
@@ -842,6 +873,7 @@ export function handleFire(room, player, msg, deps) {
         z: Number(player.z || 0)
       };
   const aimOrigin = fallbackAimOrigin;
+  const visualOrigin = validatedVisualShotOrigin(msg && msg.aimOrigin, aimOrigin, hitscanVisualOriginMaxOffset) || aimOrigin;
   const targets = room.getAliveEntities()
     .filter((entity) => room.canTargetEntity(entity, player.id))
     .map((entity) => {
@@ -868,7 +900,7 @@ export function handleFire(room, player, msg, deps) {
       ? resolveHitscanTrace({ ...shotContext, includeMisses: true })
       : shots;
     if (Array.isArray(traces) && traces.length > 0) {
-      const maxVisualTraces = weaponId === 'shotgun' ? 8 : 1;
+      const maxVisualTraces = Math.min(traces.length, 32);
       const visualTraces = [];
       for (let i = 0; i < traces.length; i++) {
         const trace = traces[i];
@@ -888,9 +920,9 @@ export function handleFire(room, player, msg, deps) {
           weaponId,
           shotToken,
           origin: {
-            x: Number(aimOrigin.x || 0),
-            y: Number(aimOrigin.y || 0),
-            z: Number(aimOrigin.z || 0)
+            x: Number(visualOrigin.x || 0),
+            y: Number(visualOrigin.y || 0),
+            z: Number(visualOrigin.z || 0)
           },
           traces: visualTraces
         });

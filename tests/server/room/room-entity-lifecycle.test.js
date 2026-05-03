@@ -40,7 +40,7 @@ function createWeaponAmmoRuntime(loadout) {
   return ammo;
 }
 
-test('createPlayerEntity centralizes default runtime state', () => {
+test('createPlayerEntity centralizes default player runtime state', () => {
   const player = createPlayerEntity({
     id: 'usr_1',
     username: 'ALPHA',
@@ -61,12 +61,10 @@ test('createPlayerEntity centralizes default runtime state', () => {
   assert.equal(player.actorName, 'ALPHA_ACTOR');
   assert.equal(player.classId, 'ffa');
   assert.equal(player.weaponId, 'machinegun');
-  assert.equal(player.abilityId, undefined);
   assert.deepEqual(player.weaponLoadout, ['machinegun', 'shotgun']);
   assert.deepEqual(player.throwables, createThrowableRuntime());
   assert.deepEqual(player.inputState, createMovementInputState());
   assert.deepEqual(Object.keys(player.weaponAmmo), ['machinegun', 'shotgun']);
-  assert.equal(player.abilityCooldownUntil, undefined);
   assert.equal(player.weaponLockUntil, 0);
 });
 

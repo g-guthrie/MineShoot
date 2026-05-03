@@ -600,7 +600,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
          *
          *  Gate on WEST wall. Towers hard against EAST wall.
          *  North = minZ (toward radar/arctic)
-         *  South = maxZ (toward whoville)
+         *  South = maxZ (toward volcano)
          */
 
         var ctr = pt(rawBounds, 0.5, 0.5);

@@ -423,6 +423,13 @@
             return false;
         }
 
+        function cancelStopRecoveryForFire() {
+            if (rigApi && rigApi.cancelStopRecoveryForFire) {
+                return !!rigApi.cancelStopRecoveryForFire();
+            }
+            return false;
+        }
+
         function getMuzzleWorldPosition(outVec3) {
             return rigApi && rigApi.getMuzzleWorldPosition ? rigApi.getMuzzleWorldPosition(outVec3) : null;
         }
@@ -456,6 +463,7 @@
             updateAnimation: updateAnimation,
             setMuzzleVisible: setMuzzleVisible,
             triggerAction: triggerAction,
+            cancelStopRecoveryForFire: cancelStopRecoveryForFire,
             destroy: destroy,
             getCoreWorldPosition: getCoreWorldPosition,
             getMuzzleWorldPosition: getMuzzleWorldPosition,

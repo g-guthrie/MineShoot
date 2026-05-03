@@ -35,12 +35,7 @@ export function createRigMotionState() {
         idleAimCurrentYaw: 0,
         manualRollActive: false,
         manualRollReverse: false,
-        manualRollFacingYaw: 0,
-        manualRollPending: false,
-        manualRollAlignElapsed: 0,
-        manualRollAlignDuration: 0,
-        manualRollAlignStartYaw: 0,
-        manualRollAlignTargetYaw: 0
+        manualRollFacingYaw: 0
     };
 }
 
@@ -48,9 +43,22 @@ export function clearManualRollState(motionState) {
     motionState.manualRollActive = false;
     motionState.manualRollReverse = false;
     motionState.manualRollFacingYaw = 0;
-    motionState.manualRollPending = false;
-    motionState.manualRollAlignElapsed = 0;
-    motionState.manualRollAlignDuration = 0;
-    motionState.manualRollAlignStartYaw = 0;
-    motionState.manualRollAlignTargetYaw = 0;
+}
+
+export function clearStopRecoveryState(motionState) {
+    if (!motionState) return false;
+    var hadStopRecovery = (
+        (motionState.lockName === 'stop' && Number(motionState.lockRemaining || 0) > 0) ||
+        Number(motionState.stopSettleRemaining || 0) > 0 ||
+        !!motionState.stopDirectionalSnapshot
+    );
+    if (!hadStopRecovery) return false;
+    if (motionState.lockName === 'stop') {
+        motionState.lockName = '';
+        motionState.lockRemaining = 0;
+    }
+    motionState.stopLockDuration = 0;
+    motionState.stopSettleRemaining = 0;
+    motionState.stopDirectionalSnapshot = null;
+    return true;
 }

@@ -21,14 +21,14 @@ export const BIOME_GRID_COLS = 3;
 export const BIOME_GRID_ROWS = 3;
 export const DEFAULT_BIOME_CELL_LABELS = [
   BIOME_ARCTIC,
-  BIOME_VOLCANO,
+  'whoville',
   BIOME_DESERT,
   BIOME_JUNGLE,
   'pirate-cove',
   BIOME_NUCLEAR,
   BIOME_QUARRY,
   BIOME_RIVER_ARCHES,
-  'whoville'
+  BIOME_VOLCANO
 ];
 
 const CELL_WIDTH = WORLD_PLAYABLE_SPAN / BIOME_GRID_COLS;

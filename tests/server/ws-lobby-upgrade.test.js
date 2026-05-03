@@ -124,7 +124,7 @@ test('ws lobby upgrade uses the authenticated actor id and display name when pre
   assert.equal(response.status, 101);
   assert.equal(seen.length, 1);
   assert.match(seen[0], new RegExp(`actorId=${encodeURIComponent(userId)}`));
-  assert.match(seen[0], /actorName=REQUESTED/);
+  assert.match(seen[0], /actorName=Alpha\+Prime/);
 });
 
 test('ws lobby upgrade rejects requests without any actor identity', async () => {

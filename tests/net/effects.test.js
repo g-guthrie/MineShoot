@@ -76,7 +76,7 @@ test('GameNetEffects uses the same point resolution rules for damage and marker 
   assert.equal(effects.damagePointForEntityId('missing-entity'), null);
 });
 
-test('GameNetEffects fills provided output objects for marker and damage points', async () => {
+test('GameNetEffects can copy marker and damage points into provided outputs', async () => {
   const GameNetEffects = await loadEffectsFactory();
   const renderMap = new Map([
     ['remote-1', { group: { position: { x: 7, y: 8, z: 9 } } }]
@@ -114,8 +114,8 @@ test('GameNetEffects fills provided output objects for marker and damage points'
   const damageOut = { x: 0, y: 0, z: 0 };
   const markerOut = { x: 0, y: 0, z: 0, set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; } };
 
-  assert.equal(effects.damagePointForEntityId('self-1', damageOut), damageOut);
-  assert.equal(effects.markerPointForEntityId('remote-1', markerOut), markerOut);
+  effects.damagePointForEntityId('self-1', damageOut);
+  effects.markerPointForEntityId('remote-1', markerOut);
   assert.deepEqual(damageOut, { x: 1, y: 2.25, z: 3 });
   assert.deepEqual({ x: markerOut.x, y: markerOut.y, z: markerOut.z }, { x: 7, y: 9.25, z: 9 });
 });

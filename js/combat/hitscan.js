@@ -50,9 +50,9 @@
         };
     }
 
-    GameHitscan.fire = function (camera, onHit, onMiss, shotToken) {
+    GameHitscan.fire = function (camera, onHit, onMiss, shotToken, shotSample) {
         ensureRuntime();
-        return shotRuntime.fire(camera, onHit, onMiss, shotToken, timingSnapshot());
+        return shotRuntime.fire(camera, onHit, onMiss, shotToken, timingSnapshot(), shotSample);
     };
 
     GameHitscan.getCurrentWeapon = function () {
@@ -197,14 +197,19 @@
         return weaponRuntime.getSpreadMetrics(weaponId);
     };
 
-    GameHitscan.shouldPredictNetHit = function (camera, hitboxMesh, shotToken, pelletIndex) {
+    GameHitscan.shouldPredictNetHit = function (camera, hitboxMesh, shotToken, pelletIndex, shotSample) {
         ensureRuntime();
-        return shotRuntime.shouldPredictNetHit(camera, hitboxMesh, shotToken, pelletIndex);
+        return shotRuntime.shouldPredictNetHit(camera, hitboxMesh, shotToken, pelletIndex, shotSample);
     };
 
-    GameHitscan.buildNetworkFireIntent = function (shotToken) {
+    GameHitscan.captureShotSample = function (camera, shotToken) {
         ensureRuntime();
-        return shotRuntime.buildNetworkFireIntent(shotToken);
+        return shotRuntime.captureShotSample(camera, shotToken);
+    };
+
+    GameHitscan.buildNetworkFireIntent = function (shotToken, shotSample) {
+        ensureRuntime();
+        return shotRuntime.buildNetworkFireIntent(shotToken, shotSample);
     };
 
     GameHitscan.reset = function () {

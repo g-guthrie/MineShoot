@@ -297,7 +297,7 @@ test('runtime coordinator seeds network room ids through GameNet before multipla
   assert.deepEqual(localMatchCalls, []);
 });
 
-test('runtime coordinator breaks sprint and still fires on the same click', async () => {
+test('runtime coordinator breaks sprint and fires after the weapon raise delay', async () => {
   const [matchViewCode, actionsCode, hostCode, accessCode, uiCode, code] = await readCoordinatorModules();
   let capturedStartOptions = null;
   let sprinting = true;
@@ -305,12 +305,16 @@ test('runtime coordinator breaks sprint and still fires on the same click', asyn
   let cancelSprintCalls = 0;
   let tempCancelCalls = 0;
   let fireCalls = 0;
+  const timers = [];
   const playerActions = [];
 
   const sandbox = {
     console,
-    setTimeout,
-    clearTimeout,
+    setTimeout(callback, delayMs) {
+      timers.push({ callback, delayMs: Number(delayMs || 0) });
+      return timers.length;
+    },
+    clearTimeout() {},
     requestAnimationFrame() {},
     document: {
       pointerLockElement: null,
@@ -471,6 +475,14 @@ test('runtime coordinator breaks sprint and still fires on the same click', asyn
 
   assert.equal(tempCancelCalls, 1);
   assert.equal(cancelSprintCalls, 0);
+  assert.equal(fireCalls, 0);
+  assert.deepEqual(playerActions, []);
+  assert.equal(timers.length, 1);
+  assert.ok(timers[0].delayMs >= 90);
+
+  timers.shift().callback();
+
+  assert.equal(tempCancelCalls, 1);
   assert.equal(fireCalls, 1);
   assert.deepEqual(playerActions, ['fire']);
 });

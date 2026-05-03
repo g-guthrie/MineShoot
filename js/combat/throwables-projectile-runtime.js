@@ -5,6 +5,31 @@
 (function () {
     'use strict';
 
+    var THROWABLE_ASSET_SPECS = {
+        frag: {
+            url: '/assets/weapons/toon-shooter/frag-grenade.gltf',
+            fitSize: 0.34,
+            fitAxis: 'max',
+            rotation: [0, 0, 0]
+        },
+        molotov: {
+            url: '/assets/weapons/toon-shooter/molotov-grenade.gltf',
+            fitSize: 0.38,
+            fitAxis: 'max',
+            rotation: [0, 0, 0]
+        },
+        knife: {
+            url: '/assets/weapons/toon-shooter/throwing-knife.gltf',
+            fitSize: 1.16,
+            fitAxis: 'z',
+            rotation: [-Math.PI * 0.5, 0, 0]
+        }
+    };
+    var KNIFE_ROLL_TRAVEL_PER_REV = 3.8;
+    var KNIFE_ROLL_SPIN_UP_SECONDS = 0.12;
+    var KNIFE_ROLL_MIN_RAD_PER_SECOND = Math.PI * 8;
+    var KNIFE_ROLL_MAX_RAD_PER_SECOND = Math.PI * 18;
+
     function create(opts) {
         opts = opts || {};
 
@@ -12,6 +37,10 @@
         var impactFlashes = [];
         var netProjectileMap = {};
         var predictedByClientId = {};
+        var throwableAssetTemplateMap = {};
+        var throwableAssetPromiseMap = {};
+        var throwableGltfLoaderPromise = null;
+        var throwableAssetsPreloadPromise = null;
         var localThrowSeq = 1;
 
         var raycaster = new THREE.Raycaster();
@@ -35,6 +64,11 @@
         var tmpBox = new THREE.Box3();
         var tmpPlayerPos = new THREE.Vector3();
         var tmpMuzzlePos = new THREE.Vector3();
+        var tmpAssetBounds = new THREE.Box3();
+        var tmpAssetSize = new THREE.Vector3();
+        var tmpAssetCenter = new THREE.Vector3();
+        var tmpHitNormal = new THREE.Vector3();
+        var tmpBounceNormal = new THREE.Vector3();
 
         function scene() {
             return opts.getScene ? opts.getScene() : null;
@@ -75,6 +109,26 @@
         function audioRuntimeApi() {
             var deps = runtimeDeps();
             return deps.getAudioApi ? deps.getAudioApi() : ((globalThis.__MAYHEM_RUNTIME || {}).GameAudio || null);
+        }
+
+        function playAudioCue(cueId, options) {
+            var audioApi = audioRuntimeApi();
+            if (audioApi && audioApi.play) {
+                audioApi.play(cueId, options || {});
+            }
+        }
+
+        function playProjectileImpactAudio(projectileType, impactType, hitType) {
+            var type = String(projectileType || '');
+            var cueId = type === 'knife'
+                ? 'knife_impact'
+                : (type === 'plasma' ? 'plasma_stick' : 'throwable_impact');
+            playAudioCue(cueId, {
+                throwable: type,
+                projectileType: type,
+                impactType: impactType || hitType || 'world',
+                hitType: hitType || impactType || ''
+            });
         }
 
         function netRuntimeApi() {
@@ -147,7 +201,274 @@
             if (opts.createFireZone) opts.createFireZone(position);
         }
 
+        function finiteNumber(value, fallback) {
+            var number = Number(value);
+            return isFinite(number) ? number : Number(fallback || 0);
+        }
+
+        function fragBounceTuning(def, tuning) {
+            var projectileDef = def || {};
+            var mechanics = tuning || {};
+            return {
+                maxCount: Math.max(0, Math.round(finiteNumber(
+                    projectileDef.bounceMaxCount != null ? projectileDef.bounceMaxCount : mechanics.fragBounceMaxCount,
+                    2
+                ))),
+                velocityDamping: Math.max(0, finiteNumber(
+                    projectileDef.bounceVelocityDamping != null ? projectileDef.bounceVelocityDamping : mechanics.fragBounceVelocityDamping,
+                    0.4
+                )),
+                verticalDamping: Math.max(0, finiteNumber(
+                    projectileDef.bounceVerticalDamping != null ? projectileDef.bounceVerticalDamping : mechanics.fragBounceVerticalDamping,
+                    0.42
+                )),
+                stopSpeedSq: Math.max(0, finiteNumber(
+                    projectileDef.bounceStopSpeedSq != null ? projectileDef.bounceStopSpeedSq : mechanics.fragBounceStopSpeedSq,
+                    2.5
+                ))
+            };
+        }
+
+        function knifeForwardRollAngle(age, forwardSpeed) {
+            var t = Math.max(0, finiteNumber(age, 0));
+            var speed = Math.max(0, finiteNumber(forwardSpeed, 0));
+            var omega = speed * ((Math.PI * 2) / KNIFE_ROLL_TRAVEL_PER_REV);
+            omega = Math.max(KNIFE_ROLL_MIN_RAD_PER_SECOND, Math.min(KNIFE_ROLL_MAX_RAD_PER_SECOND, omega));
+            var tau = KNIFE_ROLL_SPIN_UP_SECONDS;
+            var spinUp = 1 - Math.exp(-t / tau);
+            var integratedSpinUp = t - (tau * (1 - spinUp));
+            var roll = omega * Math.max(0, integratedSpinUp);
+            return roll + (Math.sin(t * 24) * 0.045 * spinUp);
+        }
+
+        function reflectVelocityAgainstNormal(velocity, normal, bounce) {
+            if (!velocity || !normal) return;
+            tmpBounceNormal.copy(normal);
+            if (tmpBounceNormal.lengthSq() <= 0.00001) {
+                velocity.multiplyScalar(bounce.velocityDamping);
+                return;
+            }
+            tmpBounceNormal.normalize();
+            var dot = velocity.dot(tmpBounceNormal);
+            if (dot < 0) {
+                velocity.addScaledVector(tmpBounceNormal, -2 * dot);
+            }
+            velocity.x *= bounce.velocityDamping;
+            velocity.z *= bounce.velocityDamping;
+            velocity.y *= Math.abs(tmpBounceNormal.y) > 0.5 ? bounce.verticalDamping : bounce.velocityDamping;
+        }
+
+        function applyFragBounce(projectile, hit, def, tuning) {
+            if (!projectile || !hit) return false;
+            var bounce = fragBounceTuning(def, tuning);
+            var settlePoint = hit.settlePoint || hit.point;
+            if (settlePoint) projectile.mesh.position.copy(settlePoint);
+            reflectVelocityAgainstNormal(projectile.velocity, hit.normal || tmpBounceNormal.set(0, 1, 0), bounce);
+            projectile.bounces++;
+            playProjectileImpactAudio(projectile.type, 'bounce', 'world');
+            if (projectile.bounces > bounce.maxCount || projectile.velocity.lengthSq() < bounce.stopSpeedSq) {
+                projectile.velocity.set(0, 0, 0);
+            }
+            return true;
+        }
+
+        function isBrowserRuntime() {
+            return typeof window !== 'undefined' && typeof document !== 'undefined';
+        }
+
+        function getThrowableAssetSpec(type) {
+            var spec = THROWABLE_ASSET_SPECS[String(type || '')] || null;
+            if (!spec) return null;
+            return {
+                url: spec.url,
+                fitSize: spec.fitSize,
+                fitAxis: spec.fitAxis,
+                rotation: spec.rotation.slice()
+            };
+        }
+
+        function getThrowableGltfLoader() {
+            if (!isBrowserRuntime()) return Promise.resolve(null);
+            if (!throwableGltfLoaderPromise) {
+                throwableGltfLoaderPromise = import('three/examples/jsm/loaders/GLTFLoader.js')
+                    .then(function (module) {
+                        var LoaderCtor = module && module.GLTFLoader;
+                        return LoaderCtor ? new LoaderCtor() : null;
+                    })
+                    .catch(function (err) {
+                        throwableGltfLoaderPromise = null;
+                        throw err;
+                    });
+            }
+            return throwableGltfLoaderPromise;
+        }
+
+        function configureThrowableAsset(root) {
+            if (!root || !root.traverse) return root;
+            root.traverse(function (node) {
+                if (!node || !node.isMesh) return;
+                node.visible = true;
+                node.frustumCulled = false;
+                node.castShadow = true;
+                node.receiveShadow = true;
+                var materials = node.material
+                    ? (Array.isArray(node.material) ? node.material : [node.material])
+                    : [];
+                for (var i = 0; i < materials.length; i++) {
+                    var material = materials[i];
+                    if (!material) continue;
+                    if (typeof material.roughness === 'number') material.roughness = 0.62;
+                    if (typeof material.metalness === 'number') material.metalness = Math.max(0, Math.min(0.18, Number(material.metalness || 0)));
+                    material.side = THREE.DoubleSide;
+                    material.needsUpdate = true;
+                }
+            });
+            return root;
+        }
+
+        function loadThrowableAsset(type) {
+            var projectileType = String(type || '');
+            var spec = THROWABLE_ASSET_SPECS[projectileType] || null;
+            if (!spec || !isBrowserRuntime()) return Promise.resolve(null);
+            if (throwableAssetTemplateMap[projectileType]) return Promise.resolve(throwableAssetTemplateMap[projectileType]);
+            if (throwableAssetPromiseMap[projectileType]) return throwableAssetPromiseMap[projectileType];
+            throwableAssetPromiseMap[projectileType] = getThrowableGltfLoader()
+                .then(function (loader) {
+                    if (!loader) return null;
+                    return new Promise(function (resolve, reject) {
+                        loader.load(spec.url, resolve, undefined, reject);
+                    });
+                })
+                .then(function (gltf) {
+                    var root = gltf && gltf.scene ? gltf.scene : null;
+                    if (!root) return null;
+                    throwableAssetTemplateMap[projectileType] = configureThrowableAsset(root);
+                    return throwableAssetTemplateMap[projectileType];
+                })
+                .catch(function (err) {
+                    delete throwableAssetPromiseMap[projectileType];
+                    console.warn('[throwables] Failed to load throwable asset', projectileType, err);
+                    return null;
+                });
+            return throwableAssetPromiseMap[projectileType];
+        }
+
+        function preloadThrowableAssets() {
+            if (!isBrowserRuntime()) return Promise.resolve([]);
+            if (!throwableAssetsPreloadPromise) {
+                var loads = Object.keys(THROWABLE_ASSET_SPECS).map(function (type) {
+                    return loadThrowableAsset(type);
+                });
+                throwableAssetsPreloadPromise = Promise.all(loads);
+            }
+            return throwableAssetsPreloadPromise;
+        }
+
+        function cloneLoadedThrowableAsset(root) {
+            if (!root || !root.clone) return null;
+            var clone = root.clone(true);
+            if (!clone || !clone.traverse) return clone;
+            clone.traverse(function (node) {
+                if (!node || !node.isMesh) return;
+                if (node.geometry && node.geometry.clone) node.geometry = node.geometry.clone();
+                if (Array.isArray(node.material)) {
+                    node.material = node.material.map(function (material) {
+                        return material && material.clone ? material.clone() : material;
+                    });
+                } else if (node.material && node.material.clone) {
+                    node.material = node.material.clone();
+                }
+            });
+            return clone;
+        }
+
+        function fitAxisSize(size, axis) {
+            if (axis === 'x') return Math.abs(Number(size.x || 0));
+            if (axis === 'y') return Math.abs(Number(size.y || 0));
+            if (axis === 'z') return Math.abs(Number(size.z || 0));
+            return Math.max(Math.abs(Number(size.x || 0)), Math.abs(Number(size.y || 0)), Math.abs(Number(size.z || 0)));
+        }
+
+        function createLoadedThrowableMesh(type) {
+            var projectileType = String(type || '');
+            var spec = THROWABLE_ASSET_SPECS[projectileType] || null;
+            var template = throwableAssetTemplateMap[projectileType] || null;
+            if (!spec || !template) {
+                if (spec && isBrowserRuntime()) loadThrowableAsset(projectileType);
+                return null;
+            }
+
+            var clone = cloneLoadedThrowableAsset(template);
+            if (!clone) return null;
+            var group = new THREE.Group();
+            var rotation = spec.rotation || [0, 0, 0];
+            clone.rotation.set(Number(rotation[0] || 0), Number(rotation[1] || 0), Number(rotation[2] || 0));
+            group.add(clone);
+
+            clone.updateMatrixWorld(true);
+            tmpAssetBounds.setFromObject(clone);
+            tmpAssetBounds.getSize(tmpAssetSize);
+            var measuredSize = fitAxisSize(tmpAssetSize, spec.fitAxis);
+            if (measuredSize > 0.0001) {
+                clone.scale.multiplyScalar(Math.max(0.001, Number(spec.fitSize || measuredSize)) / measuredSize);
+                clone.updateMatrixWorld(true);
+                tmpAssetBounds.setFromObject(clone);
+            }
+
+            tmpAssetBounds.getCenter(tmpAssetCenter);
+            clone.position.sub(tmpAssetCenter);
+            group.userData.projectileType = projectileType;
+            group.userData.throwableAssetUrl = spec.url;
+            group.userData.throwableAssetSource = 'toon-shooter';
+            return group;
+        }
+
+        function attachMolotovProjectileEffects(root) {
+            if (!root || !root.add || root.userData.molotovEffectsAttached) return root;
+            var assetFactory = assetFactoryApi();
+            var flame = null;
+            var smoke = null;
+            if (assetFactory && assetFactory.createParticleAsset) {
+                flame = assetFactory.createParticleAsset('fire', { color: 0xff7a2e });
+                if (flame) {
+                    flame.position.set(0, 0.02, 0.22);
+                    flame.scale.set(0.32, 0.46, 0.32);
+                    root.add(flame);
+                }
+                smoke = assetFactory.createParticleAsset('smoke', { color: 0x3a302b });
+                if (smoke) {
+                    smoke.position.set(0, 0.08, 0.34);
+                    smoke.scale.set(0.28, 0.34, 0.28);
+                    root.add(smoke);
+                }
+            }
+
+            var glow = new THREE.Mesh(
+                new THREE.SphereGeometry(0.18, 10, 8),
+                new THREE.MeshBasicMaterial({
+                    color: 0xff5a25,
+                    transparent: true,
+                    opacity: 0.28,
+                    depthWrite: false
+                })
+            );
+            glow.position.set(0, 0.02, 0.14);
+            root.add(glow);
+
+            root.userData.molotovEffectsAttached = true;
+            root.userData.flame = flame;
+            root.userData.smoke = smoke;
+            root.userData.glow = glow;
+            return root;
+        }
+
         function createThrowableMesh(type) {
+            var loadedMesh = createLoadedThrowableMesh(type);
+            if (loadedMesh) {
+                if (type === 'molotov') attachMolotovProjectileEffects(loadedMesh);
+                return loadedMesh;
+            }
+
             if (type === 'frag') {
                 return new THREE.Mesh(
                     new THREE.BoxGeometry(0.18, 0.18, 0.18),
@@ -155,10 +476,26 @@
                 );
             }
             if (type === 'plasma') {
-                return new THREE.Mesh(
-                    new THREE.BoxGeometry(0.2, 0.2, 0.2),
-                    new THREE.MeshLambertMaterial({ color: 0x22aabb, emissive: 0x112222 })
+                var plasma = new THREE.Group();
+                var core = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.13, 12, 10),
+                    new THREE.MeshLambertMaterial({ color: 0x22d6ff, emissive: 0x114466 })
                 );
+                plasma.add(core);
+                var halo = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.22, 12, 10),
+                    new THREE.MeshBasicMaterial({
+                        color: 0x66ddff,
+                        transparent: true,
+                        opacity: 0.24,
+                        depthWrite: false
+                    })
+                );
+                plasma.add(halo);
+                plasma.userData.projectileType = 'plasma';
+                plasma.userData.plasmaCore = core;
+                plasma.userData.plasmaHalo = halo;
+                return plasma;
             }
             if (type === 'missile') {
                 var missile = new THREE.Group();
@@ -234,10 +571,10 @@
                     }
                 }
                 group.userData.projectileType = 'molotov';
-                return group;
+                return attachMolotovProjectileEffects(group);
             }
             var knife = new THREE.Mesh(
-                new THREE.BoxGeometry(0.04, 0.04, 0.45),
+                new THREE.BoxGeometry(0.08, 0.08, 0.9),
                 new THREE.MeshLambertMaterial({ color: 0xbfc5ca })
             );
             knife.rotation.x = Math.PI / 2;
@@ -309,6 +646,7 @@
 
         function spawnExplosionBurst(position, color, radius) {
             var blastRadius = Math.max(0.6, Number(radius || 1.2));
+            var hotColor = (typeof color === 'number') ? color : 0xffaa22;
             spawnFlash(position, color, Math.max(0.28, blastRadius * 0.18), 0.18, {
                 endScale: Math.max(0.9, blastRadius * 0.8),
                 opacity: 0.92,
@@ -319,6 +657,56 @@
                 endScale: Math.max(1.4, blastRadius * 2.05),
                 opacity: 0.3,
                 wireframe: true,
+                depthTest: false
+            });
+
+            var shockwave = new THREE.Mesh(
+                new THREE.TorusGeometry(Math.max(0.24, blastRadius * 0.28), 0.018, 6, 36),
+                new THREE.MeshBasicMaterial({
+                    color: hotColor,
+                    transparent: true,
+                    opacity: 0.62,
+                    depthWrite: false,
+                    depthTest: false
+                })
+            );
+            shockwave.rotation.x = Math.PI * 0.5;
+            shockwave.position.y = 0.04;
+            spawnFlashObject(shockwave, position, 1, 0.22, {
+                endScale: Math.max(2.8, blastRadius * 2.8),
+                opacity: 0.78,
+                depthTest: false
+            });
+
+            var blastCore = new THREE.Group();
+            var coreMat = new THREE.MeshBasicMaterial({
+                color: hotColor,
+                transparent: true,
+                opacity: 0.88,
+                depthWrite: false,
+                depthTest: false
+            });
+            var darkSmokeMat = new THREE.MeshBasicMaterial({
+                color: 0x302b28,
+                transparent: true,
+                opacity: 0.36,
+                depthWrite: false,
+                depthTest: false
+            });
+            for (var shardIndex = 0; shardIndex < 14; shardIndex++) {
+                var angle = (shardIndex / 14) * Math.PI * 2;
+                var shard = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.045, 0.32), coreMat.clone());
+                var ringRadius = 0.18 + ((shardIndex % 3) * 0.05);
+                shard.position.set(Math.cos(angle) * ringRadius, 0.04 + ((shardIndex % 4) * 0.035), Math.sin(angle) * ringRadius);
+                shard.rotation.set(0.4 + (shardIndex * 0.13), angle, (shardIndex % 2 ? -0.7 : 0.7));
+                blastCore.add(shard);
+            }
+            var smokePuff = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), darkSmokeMat);
+            smokePuff.position.y = 0.2;
+            blastCore.add(smokePuff);
+            spawnFlashObject(blastCore, position, Math.max(0.8, blastRadius * 0.36), 0.34, {
+                endScale: Math.max(2.0, blastRadius * 1.45),
+                opacity: 0.7,
                 depthTest: false
             });
 
@@ -363,13 +751,50 @@
                 return;
             }
 
+            if (projectileType === 'knife') {
+                mesh.rotateZ(knifeForwardRollAngle(age, velocity.length()));
+                return;
+            }
+
+            if (projectileType === 'frag') {
+                var fragAge = Number(age || 0);
+                mesh.rotateX(fragAge * 4.2);
+                mesh.rotateZ(fragAge * 6.4);
+                return;
+            }
+
+            if (projectileType === 'plasma') {
+                var plasmaPulse = 0.9 + (Math.sin(Number(age || 0) * 18) * 0.14);
+                var plasmaHalo = mesh.userData.plasmaHalo || null;
+                if (plasmaHalo) {
+                    plasmaHalo.scale.set(plasmaPulse, plasmaPulse, plasmaPulse);
+                    if (plasmaHalo.material) plasmaHalo.material.opacity = 0.2 + (plasmaPulse * 0.08);
+                }
+                mesh.rotateZ(Math.sin(Number(age || 0) * 10) * 0.08);
+                return;
+            }
+
             if (projectileType === 'molotov') {
-                mesh.rotateZ(Number(age || 0) * 0.34);
-                mesh.rotateX(0.025 + (Math.sin(Number(age || 0) * 7.2) * 0.012));
+                var molotovAge = Number(age || 0);
+                mesh.rotateZ(molotovAge * 7.4);
+                mesh.rotateX(0.18 + (Math.sin(molotovAge * 8.2) * 0.14));
+                mesh.rotateY(Math.cos(molotovAge * 6.4) * 0.08);
                 var flame = mesh.userData.flame || null;
                 if (flame) {
-                    var flamePulse = 0.92 + (Math.sin(Number(age || 0) * 18) * 0.18);
+                    var flamePulse = 0.92 + (Math.sin(molotovAge * 18) * 0.18);
                     flame.scale.set(0.42 * flamePulse, 0.62 + (Math.sin(Number(age || 0) * 15) * 0.12), 0.42 * flamePulse);
+                }
+                var smoke = mesh.userData.smoke || null;
+                if (smoke) {
+                    var smokePulse = 0.9 + (Math.sin(molotovAge * 9.5) * 0.12);
+                    smoke.scale.set(0.28 * smokePulse, 0.34 + (Math.cos(molotovAge * 8) * 0.04), 0.28 * smokePulse);
+                    if (smoke.material) smoke.material.opacity = 0.42 + (Math.sin(molotovAge * 6) * 0.1);
+                }
+                var glow = mesh.userData.glow || null;
+                if (glow) {
+                    var glowPulse = 0.92 + (Math.sin(molotovAge * 20) * 0.2);
+                    glow.scale.set(glowPulse, glowPulse, glowPulse);
+                    if (glow.material) glow.material.opacity = 0.18 + (glowPulse * 0.1);
                 }
             }
         }
@@ -472,6 +897,8 @@
                             kind: 'world',
                             object: null,
                             point: point,
+                            settlePoint: point.clone().add(new THREE.Vector3(0, 0.03, 0)),
+                            normal: new THREE.Vector3(0, 1, 0),
                             distance: point.distanceTo(start)
                         };
                     }
@@ -493,10 +920,19 @@
                 var hits = raycaster.intersectObjects(allTargets, false);
                 if (hits.length > 0) {
                     var hit = hits[0];
+                    var hitNormal = null;
+                    if (hit.face && hit.face.normal && hit.object && hit.object.matrixWorld) {
+                        hitNormal = tmpHitNormal.copy(hit.face.normal).transformDirection(hit.object.matrixWorld).clone();
+                    }
+                    if (!hitNormal || hitNormal.lengthSq() <= 0.00001) {
+                        hitNormal = new THREE.Vector3(0, 1, 0);
+                    }
                     rayHit = {
                         kind: targets.hitboxes.indexOf(hit.object) !== -1 ? 'enemy' : 'world',
                         object: hit.object,
                         point: hit.point,
+                        settlePoint: hit.point.clone().addScaledVector(hitNormal, 0.03),
+                        normal: hitNormal,
                         distance: Number(hit.distance || 0)
                     };
                 }
@@ -601,16 +1037,18 @@
                 projectile.mesh.position.copy(point);
             }
             spawnFlash(projectile.mesh.position, 0xffb347, 0.08, 0.08);
+            playProjectileImpactAudio('plasma', enemy ? 'enemy' : 'world', enemy ? 'body' : 'world');
         }
 
         function explodeAt(position, radius, maxDamage, source, onEnemyHit) {
             var currentDefs = defs();
             var palette = effectPaletteForProjectileType(source);
             var def = currentDefs[String(source || '')] || {};
-            var audioApi = audioRuntimeApi();
-            if (audioApi && audioApi.play) {
-                audioApi.play('explosion');
-            }
+            playAudioCue('explosion', {
+                throwable: source,
+                projectileType: source,
+                radius: radius
+            });
             spawnExplosionBurst(position, palette.explosion, radius);
 
             var enemyApi = enemyRuntimeApi();
@@ -958,6 +1396,7 @@
 
                         reportHit(onEnemyHit, hit.point, damage, hitType, result, p.type, special);
                         spawnFlash(hit.point, hitType === 'head' ? 0xffd14a : 0xffffff, 0.12, 0.1);
+                        playProjectileImpactAudio(p.type, hitType, hitType);
                         removeProjectile(index);
                         return;
                     }
@@ -998,6 +1437,7 @@
 
                 if (p.type === 'knife') {
                     spawnFlash(hit.point, 0xffffff, 0.08, 0.08);
+                    playProjectileImpactAudio(p.type, 'world', 'world');
                     removeProjectile(index);
                     return;
                 }
@@ -1022,13 +1462,7 @@
                 }
 
                 p.mesh.position.copy(hit.point);
-                p.velocity.multiplyScalar(tuning.fragBounceVelocityDamping || 0.4);
-                p.velocity.y = Math.abs(p.velocity.y) * (tuning.fragBounceVerticalDamping || 0.42);
-                p.bounces++;
-                if (p.bounces > (tuning.fragBounceMaxCount || 2) ||
-                    p.velocity.lengthSq() < (tuning.fragBounceStopSpeedSq || 2.5)) {
-                    p.velocity.set(0, 0, 0);
-                }
+                applyFragBounce(p, hit, def, tuning);
             } else {
                 p.mesh.position.copy(tmpEnd);
             }
@@ -1209,15 +1643,19 @@
             localThrowSeq = 1;
         }
 
+        preloadThrowableAssets();
+
         return {
             buildClientThrowId: buildClientThrowId,
             createThrowableMesh: createThrowableMesh,
             fireAbilityMissile: fireAbilityMissile,
+            getThrowableAssetSpec: getThrowableAssetSpec,
             getNetProjectileMap: function () { return netProjectileMap; },
             getPredictedByClientId: function () { return predictedByClientId; },
             getPredictedCount: function () { return Object.keys(predictedByClientId).length; },
             getProjectiles: function () { return projectiles; },
             orientProjectileVisual: orientProjectileVisual,
+            preloadThrowableAssets: preloadThrowableAssets,
             removeNetProjectileById: removeNetProjectileById,
             removeNetProjectileVisual: removeNetProjectileVisual,
             removePredictedProjectileByAuthoritativeId: removePredictedProjectileByAuthoritativeId,

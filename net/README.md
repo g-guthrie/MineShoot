@@ -18,6 +18,8 @@ Rules:
 
 Validation:
 
-- Run `npm run test:networking` for the stable smoke pass.
-- Run `npm run test:networking:full` for the broader networking suites.
-- See [network-debugging.md](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/docs/network-debugging.md) for the canonical debugging path.
+- Run `npm run test:networking` for the explicit Node networking guardrail.
+- Run `npm run test:networking:smoke` for the Node guardrail plus the live browser/Worker integration proof.
+- Run `npm run test:networking:full` for broader networking-adjacent support coverage.
+- Run `npm run test:smoke` for build plus the behavior-first networking smoke gate.
+- See [network-debugging.md](/Users/gguthrie/Desktop/Folders%20Lately/code%20bs/minecraft-fps/docs/network-debugging.md) for the canonical debugging path.

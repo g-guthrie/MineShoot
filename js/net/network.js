@@ -80,6 +80,8 @@
     var queues = netState.getQueueRefs();
     var snapshotHelper = null;
     var remoteFrameCollector = null;
+    var lastAppliedBufferedSnapshotSeq = 0;
+    var lastAppliedBufferedServerTime = 0;
 
     var cloneWorldFlags = PROTOCOL.cloneWorldFlags;
     var sanitizeRoomId = PROTOCOL.sanitizeRoomId;
@@ -179,14 +181,14 @@
         });
     }
 
-    function buildFirePayload(msgType, weaponId, shotToken) {
+    function buildFirePayload(msgType, weaponId, shotToken, shotSample) {
         var hitscan = hitscanApi();
         return firePayloadApi.buildPayload({
             msgType: msgType,
             weaponId: weaponId,
             shotToken: shotToken,
             fireIntent: hitscan && hitscan.buildNetworkFireIntent
-                ? hitscan.buildNetworkFireIntent(shotToken)
+                ? hitscan.buildNetworkFireIntent(shotToken, shotSample)
                 : null,
             player: playerApi(),
             sharedApi: sharedApi,
@@ -271,11 +273,18 @@
 
     function applyBufferedRemoteFrame(frame) {
         if (!frame) return false;
+        var frameSnapshotSeq = Math.max(0, Number(frame.snapshotSeq || 0));
+        var frameServerTime = Math.max(0, Number(frame.serverTime || 0));
+        if (frameSnapshotSeq > 0) {
+            if (lastAppliedBufferedSnapshotSeq > 0 && frameSnapshotSeq <= lastAppliedBufferedSnapshotSeq) return false;
+        } else if (frameServerTime > 0 && lastAppliedBufferedServerTime > 0 && frameServerTime <= lastAppliedBufferedServerTime) {
+            return false;
+        }
         var snapshotMeta = {
             delta: !!frame.delta,
-            serverTime: Number(frame.serverTime || 0),
+            serverTime: frameServerTime,
             receivedAt: Number(frame.receivedAt || Date.now()),
-            snapshotSeq: Math.max(0, Number(frame.snapshotSeq || 0))
+            snapshotSeq: frameSnapshotSeq
         };
         var entities = Array.isArray(frame.entities) ? frame.entities : [];
         for (var i = 0; i < entities.length; i++) {
@@ -290,6 +299,21 @@
         for (i = 0; i < removedIds.length; i++) {
             GameNetEntities.removeRemoteVisual(removedIds[i]);
         }
+        if (!frame.delta && Array.isArray(frame.fullEntityIds)) {
+            var activeIds = new Map();
+            for (i = 0; i < frame.fullEntityIds.length; i++) {
+                var activeId = String(frame.fullEntityIds[i] || '');
+                if (activeId) activeIds.set(activeId, true);
+            }
+            var renderMap = GameNetEntities.getRenderMap();
+            var staleRenderIds = [];
+            renderMap.forEach(function (_value, id) {
+                if (!activeIds.has(String(id || ''))) staleRenderIds.push(id);
+            });
+            for (i = 0; i < staleRenderIds.length; i++) {
+                GameNetEntities.removeRemoteVisual(staleRenderIds[i]);
+            }
+        }
         if (frame.projectiles !== undefined) {
             netState.setRemoteProjectileState(frame.projectiles);
         }
@@ -299,6 +323,8 @@
         if (netState.pruneRemoteSnapshotTimelines) {
             netState.pruneRemoteSnapshotTimelines(netState.getSnapshotMap());
         }
+        if (frameSnapshotSeq > 0) lastAppliedBufferedSnapshotSeq = frameSnapshotSeq;
+        if (frameServerTime > 0) lastAppliedBufferedServerTime = frameServerTime;
         return true;
     }
 
@@ -367,6 +393,12 @@
             onPrune: function (nextMap) {
                 netState.replaceSnapshotMap(nextMap);
                 if (remoteReceiveJitterBufferEnabled()) {
+                    if (remoteFrameCollector && nextMap && typeof nextMap.forEach === 'function') {
+                        remoteFrameCollector.fullEntityIds = [];
+                        nextMap.forEach(function (_entity, id) {
+                            remoteFrameCollector.fullEntityIds.push(String(id || ''));
+                        });
+                    }
                     return;
                 }
                 var renderMap = GameNetEntities.getRenderMap();
@@ -553,6 +585,12 @@
             var attempt = joinState.getJoinAttempt();
             if (attempt) joinState.failJoin('WebSocket error while joining room ' + attempt.expectedRoomId.toUpperCase() + '.');
         },
+        onTransportPermanentClose: function () {
+            connectionTiming.reset();
+            effects.clearRemoteWorldState();
+            var attempt = joinState.getJoinAttempt();
+            if (attempt) joinState.failJoin('Unable to reconnect to room ' + attempt.expectedRoomId.toUpperCase() + '.');
+        },
         getPendingRespawnInfo: netState.getPendingRespawnInfo,
         setPendingRespawnInfo: netState.setPendingRespawnInfo,
         setPendingSpawnSync: netState.setPendingSpawnSync,
@@ -637,6 +675,8 @@
         GameNetEntities.cleanup();
         snapshotHelper = null;
         remoteFrameCollector = null;
+        lastAppliedBufferedSnapshotSeq = 0;
+        lastAppliedBufferedServerTime = 0;
         netState.reset();
         connectionTiming.reset();
     }
@@ -660,6 +700,8 @@
             if (netState.clearRemoteFrameQueue) netState.clearRemoteFrameQueue();
             if (netState.clearSnapshotBaselines) netState.clearSnapshotBaselines();
             if (netState.setSnapshotAckSeq) netState.setSnapshotAckSeq(0);
+            lastAppliedBufferedSnapshotSeq = 0;
+            lastAppliedBufferedServerTime = 0;
             connectionTiming.reset();
             return nextId;
         },

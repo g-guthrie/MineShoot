@@ -153,11 +153,11 @@ test('movement samples use tuned footstep and jump gains', async () => {
   const context = getContext();
   context.gainEvents.length = 0;
   audio.play('footstep', { mode: 'walk' });
-  closeTo(context.gainEvents[0].value, 0.0675);
+  closeTo(context.gainEvents[0].value, 0.03375);
 
   context.gainEvents.length = 0;
   audio.play('footstep', { mode: 'run' });
-  closeTo(context.gainEvents[0].value, 0.10125);
+  closeTo(context.gainEvents[0].value, 0.050625);
 
   context.gainEvents.length = 0;
   context.playbackRateEvents.length = 0;
@@ -213,14 +213,14 @@ test('movement fallback noise uses tuned walk, run, and jump levels', async () =
   let peaks = getContext().gainEvents
     .filter((event) => event.type === 'exponential' && event.value > 0.001)
     .map((event) => event.value);
-  assert.deepEqual(peaks, [0.00675]);
+  assert.deepEqual(peaks, [0.003375]);
 
   getContext().gainEvents.length = 0;
   audio.play('footstep', { mode: 'run' });
   peaks = getContext().gainEvents
     .filter((event) => event.type === 'exponential' && event.value > 0.001)
     .map((event) => event.value);
-  assert.deepEqual(peaks, [0.00975]);
+  assert.deepEqual(peaks, [0.004875]);
 
   getContext().gainEvents.length = 0;
   audio.play('jump');
@@ -229,4 +229,43 @@ test('movement fallback noise uses tuned walk, run, and jump levels', async () =
     .map((event) => event.value);
   assert.deepEqual(peaks, [0.0135, 0.0140625]);
 
+});
+
+test('throwable cues expose typed throw, impact, and explosion sounds', async () => {
+  const { audio, getContext } = await loadAudioRuntime();
+  const cueIds = audio.getAssetCueIds();
+  for (const cueId of [
+    'throw_frag',
+    'throw_molotov',
+    'throw_knife',
+    'throw_plasma',
+    'knife_impact',
+    'plasma_stick',
+    'molotov_ignite',
+    'explosion_frag',
+    'explosion_plasma',
+    'explosion_molotov'
+  ]) {
+    assert.ok(cueIds.includes(cueId), `${cueId} should be exposed as an audio cue`);
+  }
+
+  audio.play('throw', { throwable: 'knife' });
+  const context = getContext();
+  let peaks = context.gainEvents.filter((event) => event.type === 'exponential' && event.value > 0.001);
+  assert.ok(peaks.length >= 3, 'knife throw should layer a blade whoosh with a pitch sweep');
+
+  context.gainEvents.length = 0;
+  audio.play('knife_impact', { impactType: 'head' });
+  peaks = context.gainEvents.filter((event) => event.type === 'exponential' && event.value > 0.001);
+  assert.ok(peaks.length >= 3, 'knife impact should include body and metal accents');
+
+  context.gainEvents.length = 0;
+  audio.play('explosion', { projectileType: 'plasma' });
+  peaks = context.gainEvents.filter((event) => event.type === 'exponential' && event.value > 0.001);
+  assert.ok(peaks.some((event) => event.value >= 0.07), 'plasma explosion should have a stronger energy pop than a throw cue');
+
+  context.gainEvents.length = 0;
+  audio.play('molotov_ignite');
+  peaks = context.gainEvents.filter((event) => event.type === 'exponential' && event.value > 0.001);
+  assert.ok(peaks.length >= 6, 'molotov ignite should combine glass break and fire ignition layers');
 });

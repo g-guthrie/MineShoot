@@ -12,6 +12,14 @@ async function login(page, username, pin = '1234') {
   await expect(page.locator('#menu-party-id-value')).toContainText('USR_');
 }
 
+async function showSocialTools(page) {
+  const createRoomButton = page.locator('#continue-loadout-btn');
+  if (await createRoomButton.isVisible()) return;
+  await expect(page.locator('#social-tools-toggle-btn')).toBeVisible();
+  await page.locator('#social-tools-toggle-btn').click();
+  await expect(createRoomButton).toBeVisible();
+}
+
 test('social join feedback and private room join work from the current menu selectors', async ({ browser }) => {
   const pageA = await browser.newPage();
   const pageB = await browser.newPage();
@@ -33,10 +41,12 @@ test('social join feedback and private room join work from the current menu sele
   await pageB.locator('#join-friend-btn').click();
   await expect(pageB.locator('#social-hero-status')).toContainText('Joined friend.');
 
+  await showSocialTools(pageA);
   await pageA.locator('#continue-loadout-btn').click();
   await expect(pageA.locator('#private-room-view')).toBeVisible();
   const roomCode = await pageA.locator('#room-share-code').textContent();
 
+  await showSocialTools(pageB);
   await pageB.locator('#room-code-input').fill(String(roomCode || '').trim());
   await pageB.locator('#join-room-btn').click();
   await expect(pageB.locator('#private-room-view')).toBeVisible();
