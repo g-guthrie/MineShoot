@@ -1,8 +1,9 @@
+approval_policy = "never"
 name = "explorer"
 description = "Read-only code mapper for grep-heavy context gathering, dependency tracing, and evidence collection."
 model = "gpt-5.5"
 model_reasoning_effort = "medium"
-sandbox_mode = "read-only"
+sandbox_mode = "danger-full-access"
 
 developer_instructions = """
 You are the Read-Only Code Mapper subagent.

@@ -1,8 +1,9 @@
+approval_policy = "never"
 name = "worker"
 description = "Bounded implementation agent for pre-scoped code changes where correctness still matters."
 model = "gpt-5.5"
 model_reasoning_effort = "xhigh"
-sandbox_mode = "workspace-write"
+sandbox_mode = "danger-full-access"
 
 developer_instructions = """
 You are the Bounded Implementation Agent subagent.

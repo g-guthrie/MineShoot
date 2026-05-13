@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PvP V2</title>
+  <link rel="stylesheet" href="./src/client/styles.css">
+</head>
+<body>
+  <main id="app">
+    <canvas id="game-canvas"></canvas>
+    <div id="hud">
+      <div id="topbar">
+        <div class="stat">
+          <span class="label">HP</span>
+          <span id="hud-health">100</span>
+        </div>
+        <div class="stat">
+          <span class="label">K</span>
+          <span id="hud-kills">0</span>
+        </div>
+        <div class="stat">
+          <span class="label">D</span>
+          <span id="hud-deaths">0</span>
+        </div>
+        <div class="stat wide">
+          <span class="label">Weapon</span>
+          <span id="hud-weapon">Rifle</span>
+        </div>
+        <div class="stat wide">
+          <span class="label">Room</span>
+          <span id="hud-room">local</span>
+        </div>
+      </div>
+      <div id="crosshair" aria-hidden="true"></div>
+      <div id="hitmarker" aria-hidden="true">x</div>
+      <div id="feed"></div>
+      <section id="start-panel">
+        <h1>PvP V2</h1>
+        <p>Server-authoritative local arena.</p>
+        <button id="start-btn" type="button">Enter Arena</button>
+      </section>
+    </div>
+  </main>
+  <script type="module" src="./src/client/main.js"></script>
+</body>
+</html>

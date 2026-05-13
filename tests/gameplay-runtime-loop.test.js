@@ -188,6 +188,52 @@ test('phone reticle auto-fire requires leaving and re-entering a target', async 
   assert.equal(fireCalls, 3);
 });
 
+test('phone reticle auto-fire does not fire while sprinting', async () => {
+  let fireCalls = 0;
+  const harness = await loadGameplayRuntimeLoopHarness({
+    GamePlayer: {
+      update() {},
+      getPosition() { return { x: 0, y: 1.6, z: 0 }; },
+      getRotation() { return { yaw: 0, pitch: 0 }; },
+      getAdsState() { return null; },
+      getAnimNetState() { return { moveSpeedNorm: 1, sprinting: true }; },
+      isSprinting() { return true; },
+      flushDeferredViewSync() {}
+    },
+    GameHitscan: {
+      getCurrentWeapon() { return { id: 'rifle', automatic: false }; },
+      getReticleTargetPreview() {
+        return {
+          currentAimTargetId: 'enemy:one',
+          reticleTarget: {
+            group: 'crosshair',
+            active: true
+          }
+        };
+      },
+      tick() {},
+      updateTracers() {}
+    }
+  });
+  const loop = harness.createLoop({
+    readMatchContext() {
+      return { selfState: { id: 'usr_test', alive: true } };
+    },
+    getCamera() { return {}; },
+    hasInputCapture() { return true; },
+    tryPlayerFire() { fireCalls += 1; },
+    controlsApi: {
+      isPhoneSizedTouchDevice() { return true; },
+      isDesktopAutoFireEnabled() { return false; },
+      hasArmedThrowablePreview() { return false; }
+    }
+  });
+
+  loop.step(0.016);
+
+  assert.equal(fireCalls, 0);
+});
+
 test('desktop reticle auto-fire remains continuous while the target stays active', async () => {
   let fireCalls = 0;
   const harness = await loadGameplayRuntimeLoopHarness({

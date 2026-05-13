@@ -50,15 +50,31 @@
             return String((event && (event.projectileType || event.throwableId)) || '');
         }
 
+        function eventPosition(event) {
+            if (!event) return null;
+            var x = Number(event.x);
+            var y = Number(event.y);
+            var z = Number(event.z);
+            if (!isFinite(x) || !isFinite(y) || !isFinite(z)) return null;
+            return { x: x, y: y, z: z };
+        }
+
         function playNetworkAudio(cueId, event) {
             if (!opts.playAudioCue) return;
             var projectileType = eventProjectileType(event);
-            opts.playAudioCue(cueId, {
+            var payload = {
                 throwable: projectileType,
                 projectileType: projectileType,
                 impactType: event && event.impactType ? event.impactType : '',
-                radius: event && event.radius ? Number(event.radius) : 0
-            });
+                radius: event && event.radius ? Number(event.radius) : 0,
+                sourcePosition: eventPosition(event),
+                listenerPosition: opts.getListenerPosition ? opts.getListenerPosition() : null,
+                nearDistance: cueId === 'explosion' ? 8 : 4,
+                referenceDistance: cueId === 'explosion' ? 15 : 8,
+                distanceRolloff: cueId === 'explosion' ? 1.55 : 1.8,
+                maxDistance: cueId === 'explosion' ? 125 : 80
+            };
+            opts.playAudioCue(cueId, payload);
         }
 
         function playNetworkImpactAudio(event) {

@@ -41,8 +41,8 @@ function ttkMs(weapon, hitType) {
 test('weapon tuning exposes a valid fastest perfect-ttk weapon', () => {
   const shotgun = gameplayTuning.weaponStats.shotgun;
   assert.equal(FULL_HEALTH_DURABILITY, gameplayTuning.survivability.hpMax + gameplayTuning.survivability.armorMax);
-  assert.equal(shotsToKill(shotgun, 'body'), 3);
-  assert.equal(shotsToKill(shotgun, 'head'), 2);
+  assert.equal(shotsToKill(shotgun, 'body'), 5);
+  assert.equal(shotsToKill(shotgun, 'head'), 5);
 
   let fastestWeaponId = null;
   let fastestWeaponTtk = Infinity;

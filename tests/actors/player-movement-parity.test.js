@@ -247,7 +247,10 @@ async function loadPlayerMovementHarness(options = {}) {
             if (!options || !options.camera) return;
             calls.cameraUpdates.push({
               firstPersonView: !!options.firstPersonView,
-              inspectMode: !!options.inspectMode
+              inspectMode: !!options.inspectMode,
+              firstPersonCameraOffset: options.firstPersonCameraOffset
+                ? JSON.parse(JSON.stringify(options.firstPersonCameraOffset))
+                : null
             });
             const scopeActive = options.scopeTargetActive != null ? !!options.scopeTargetActive : !!options.adsActive;
             options.camera.position.set(
@@ -442,12 +445,20 @@ test('player passes the first-person camera toggle into the camera view payload'
       GameGameplayControls: {
         isFirstPersonViewEnabled() {
           return true;
+        },
+        getFirstPersonCameraOffset() {
+          return { x: 0.12, y: -0.03, z: 0.08 };
         }
       }
     }
   });
 
   assert.equal(harness.calls.cameraUpdates.at(-1).firstPersonView, true);
+  assert.deepEqual(harness.calls.cameraUpdates.at(-1).firstPersonCameraOffset, {
+    x: 0.12,
+    y: -0.03,
+    z: 0.08
+  });
 });
 
 test('player inspect mode freezes movement input and uses orbit look without changing aim', async () => {

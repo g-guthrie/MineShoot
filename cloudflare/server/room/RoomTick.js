@@ -21,9 +21,19 @@ export function stopRoomTickIfEmpty(room, deps = {}) {
   if (!room || room.clients && room.clients.size > 0) return false;
   if (room.players instanceof Map) {
     for (const player of room.players.values()) {
-      if (!player || player.fixtureType === 'sim_player') continue;
+      if (!player) continue;
+      if (typeof room.isServerOwnedFixtureEntity === 'function' && room.isServerOwnedFixtureEntity(player)) continue;
+      if (player.fixtureType === 'sim_player') continue;
       return false;
     }
+  }
+  if (typeof room.removePublicMatchBots === 'function') room.removePublicMatchBots();
+  if (
+    typeof room.resetPublicRoomToIdle === 'function' &&
+    typeof room.isPublicMatchRoom === 'function' &&
+    room.isPublicMatchRoom()
+  ) {
+    room.resetPublicRoomToIdle();
   }
   if (room.tickHandle) {
     const clearTimer = deps.clearInterval || clearInterval;

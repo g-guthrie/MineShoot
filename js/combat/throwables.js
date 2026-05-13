@@ -657,6 +657,11 @@
             effectPaletteForProjectileType: effectPaletteForProjectileType,
             spawnFlash: projectileApi.spawnFlash,
             spawnExplosionBurst: projectileApi.spawnExplosionBurst,
+            getListenerPosition: function () {
+                var playerApi = runtime().GamePlayer || null;
+                var camera = playerApi && playerApi.getCamera ? playerApi.getCamera() : null;
+                return camera && camera.position ? camera.position : null;
+            },
             playAudioCue: function (cueId, options) {
                 var audioApi = runtime().GameAudio || null;
                 if (audioApi && audioApi.play) audioApi.play(cueId, options || {});

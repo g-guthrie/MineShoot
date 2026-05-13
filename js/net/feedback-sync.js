@@ -7,6 +7,7 @@
 
     var predictedHitFeedback = [];
     var confirmedShotFeedback = [];
+    var remoteShotAudioLastAtBySource = {};
     var PREDICTED_HIT_MAX = 128;
     var CONFIRMED_SHOT_MAX = 64;
     var feedbackSelfPos = {
@@ -322,6 +323,32 @@
         return null;
     }
 
+    function playRemoteShotAudio(event, origin, camera) {
+        var RT = runtime();
+        if (!RT.GameAudio || !RT.GameAudio.play || !origin || !camera || !camera.position) return;
+        if (typeof document !== 'undefined' && document && typeof document.hasFocus === 'function' && !document.hasFocus()) return;
+        var sourceId = String(event && event.sourceId || '');
+        var weaponId = String(event && event.weaponId || 'rifle') || 'rifle';
+        var now = Date.now();
+        var minInterval = weaponId === 'machinegun' ? 42 : (weaponId === 'shotgun' || weaponId === 'sniper' ? 95 : 58);
+        var key = sourceId + ':' + weaponId;
+        if (remoteShotAudioLastAtBySource[key] && (now - remoteShotAudioLastAtBySource[key]) < minInterval) return;
+        remoteShotAudioLastAtBySource[key] = now;
+        RT.GameAudio.play('fire', {
+            weapon: weaponId,
+            sourcePosition: { x: origin.x, y: origin.y, z: origin.z },
+            listenerPosition: {
+                x: camera.position.x,
+                y: camera.position.y,
+                z: camera.position.z
+            },
+            nearDistance: 5.5,
+            referenceDistance: 10.5,
+            distanceRolloff: 1.8,
+            maxDistance: 105
+        });
+    }
+
     function handleShotEffect(event, camera, selfState) {
         if (!event || !camera) return;
         var sourceId = String(event.sourceId || '');
@@ -334,6 +361,7 @@
         if (!tracerFx || !tracerFx.spawnTracer) return;
         var origin = resolveShotEffectOrigin(sourceId, event.origin);
         if (!origin) return;
+        playRemoteShotAudio(event, origin, camera);
         var weapon = tracerWeaponConfig(event.weaponId || '');
         for (var i = 0; i < traces.length; i++) {
             var trace = traces[i];

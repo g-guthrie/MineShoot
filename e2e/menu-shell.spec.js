@@ -39,6 +39,29 @@ async function expectCleanMenuLayout(page) {
         rect.bottom <= window.innerHeight + 1;
     }
 
+    function nodeLabel(node) {
+      if (!node) return '';
+      return node.id || node.getAttribute('data-screen') || node.getAttribute('aria-controls') || node.className || node.tagName;
+    }
+
+    function hasAncestor(node, maybeAncestor) {
+      let current = node ? node.parentElement : null;
+      while (current) {
+        if (current === maybeAncestor) return true;
+        current = current.parentElement;
+      }
+      return false;
+    }
+
+    function rectOverlap(a, b) {
+      const left = Math.max(a.left, b.left);
+      const right = Math.min(a.right, b.right);
+      const top = Math.max(a.top, b.top);
+      const bottom = Math.min(a.bottom, b.bottom);
+      if (right <= left || bottom <= top) return 0;
+      return (right - left) * (bottom - top);
+    }
+
     const visibleMenuNodes = Array.from(document.querySelectorAll([
       '#menu-shell.menu-shell-v4',
       '#menu-shell.menu-shell-v4 #menu-surface',
@@ -65,6 +88,32 @@ async function expectCleanMenuLayout(page) {
       }))
       .slice(0, 6);
 
+    const visibleInteractiveNodes = Array.from(document.querySelectorAll([
+      '#menu-shell.menu-shell-v4 button',
+      '#menu-shell.menu-shell-v4 input',
+      '#menu-shell.menu-shell-v4 .card',
+      '#menu-shell.menu-shell-v4 .banner',
+      '.modal-overlay:not([hidden]) .modal-card',
+      '.modal-overlay:not([hidden]) button',
+      '.modal-overlay:not([hidden]) input'
+    ].join(','))).filter(isVisible);
+
+    const overlaps = [];
+    for (let i = 0; i < visibleInteractiveNodes.length; i += 1) {
+      for (let j = i + 1; j < visibleInteractiveNodes.length; j += 1) {
+        const a = visibleInteractiveNodes[i];
+        const b = visibleInteractiveNodes[j];
+        if (hasAncestor(a, b) || hasAncestor(b, a)) continue;
+        if (a.parentElement !== b.parentElement) continue;
+        const area = rectOverlap(a.getBoundingClientRect(), b.getBoundingClientRect());
+        if (area > 4) {
+          overlaps.push(`${nodeLabel(a)} / ${nodeLabel(b)}`);
+          if (overlaps.length >= 6) break;
+        }
+      }
+      if (overlaps.length >= 6) break;
+    }
+
     const surface = document.getElementById('menu-surface');
     const utility = document.getElementById('utility-overlay');
     const modalCard = document.querySelector('.modal-overlay:not([hidden]) .modal-card');
@@ -72,6 +121,7 @@ async function expectCleanMenuLayout(page) {
     return {
       viewportOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
       overflowers,
+      overlaps,
       surfaceContained: containedInViewport(surface),
       utilityContained: containedInViewport(utility),
       modalContained: containedInViewport(modalCard)
@@ -80,6 +130,7 @@ async function expectCleanMenuLayout(page) {
 
   expect(metrics.viewportOverflow).toBe(false);
   expect(metrics.overflowers).toEqual([]);
+  expect(metrics.overlaps).toEqual([]);
   expect(metrics.surfaceContained).toBe(true);
   expect(metrics.utilityContained).toBe(true);
   expect(metrics.modalContained).toBe(true);
@@ -624,6 +675,7 @@ test('narrow menu surfaces reflow without overflow', async ({ page }) => {
 
 test('phone touch menu flow keeps main social settings auth and room surfaces contained', async ({ browser }) => {
   for (const size of [
+    { width: 320, height: 568 },
     { width: 390, height: 844 },
     { width: 844, height: 390 }
   ]) {
@@ -750,11 +802,247 @@ test('phone touch launch shows the no-fire-button acknowledgement before input c
     await expect(page.locator('#launch-status')).toHaveText('There is no fire button.');
     await expect(page.locator('#launch-note')).toContainText('re-engage');
     await expect(page.locator('#launch-enter-btn')).toHaveText('I Understand');
+    const launchMetrics = await page.evaluate(() => {
+      function rectFor(selector) {
+        const node = document.querySelector(selector);
+        if (!node) return null;
+        const rect = node.getBoundingClientRect();
+        return {
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height
+        };
+      }
+
+      function contained(rect) {
+        return !!rect &&
+          rect.left >= -1 &&
+          rect.top >= -1 &&
+          rect.right <= window.innerWidth + 1 &&
+          rect.bottom <= window.innerHeight + 1;
+      }
+
+      const card = rectFor('#launch-card');
+      return {
+        cardContained: contained(card),
+        kickerContained: contained(rectFor('#launch-kicker')),
+        enterContained: contained(rectFor('#launch-enter-btn')),
+        cardStartsBelowViewportTop: card ? card.top >= 8 : false,
+        cardFitsHeight: card ? card.height <= window.innerHeight - 16 : false
+      };
+    });
+    expect(launchMetrics.cardContained).toBe(true);
+    expect(launchMetrics.kickerContained).toBe(true);
+    expect(launchMetrics.enterContained).toBe(true);
+    expect(launchMetrics.cardStartsBelowViewportTop).toBe(true);
+    expect(launchMetrics.cardFitsHeight).toBe(true);
 
     await page.locator('#launch-enter-btn').click();
     await expect(page.locator('#launch-flow')).toBeHidden();
     await expect(page.locator('#menu-stage')).toBeVisible();
     await expect(page.locator('#play-btn')).toHaveText(/enter match/i);
+  } finally {
+    await context.close();
+  }
+});
+
+test('phone landscape gameplay HUD and touch controls stay in separate screen zones', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const context = await browser.newContext({
+    viewport: { width: 844, height: 390 },
+    hasTouch: true,
+    isMobile: true,
+    userAgent: IPHONE_SAFARI_UA
+  });
+  const page = await context.newPage();
+  try {
+    await page.goto('/');
+    await expect.poll(() => page.evaluate(() => !!(window.__MAYHEM_IS_PHONE_SIZED_TOUCH_DEVICE && window.__MAYHEM_IS_PHONE_SIZED_TOUCH_DEVICE()))).toBe(true);
+
+    await page.locator('#game-modes-toggle-btn').click();
+    await page.locator('#sandbox-mode-btn').click();
+    await page.locator('#primary-launch-btn').click();
+    await expect(page.locator('#launch-flow')).toBeVisible({ timeout: 45_000 });
+    await page.locator('#launch-enter-btn').click();
+    await expect(page.locator('#active-match-shell')).toBeVisible({ timeout: 15_000 });
+    await page.waitForTimeout(180);
+    await page.locator('#play-btn').click();
+    await expect.poll(() => page.evaluate(() => {
+      const touchControls = document.getElementById('touch-controls');
+      return !!(touchControls && !touchControls.hidden && getComputedStyle(touchControls).display !== 'none');
+    }), { timeout: 20_000 }).toBe(true);
+
+    const metrics = await page.evaluate(() => {
+      const selectors = {
+        stick: '.touch-stick-left',
+        ring: '.touch-stick-ring',
+        actions: '.touch-action-cluster',
+        menu: '.touch-btn-menu',
+        radar: '#combat-radar',
+        kill: '#kill-counter',
+        weapon: '#hud-bottom-right',
+        health: '#health-bar-container',
+        armor: '#armor-bar-container'
+      };
+
+      function rectFor(selector) {
+        const node = document.querySelector(selector);
+        if (!node || node.hidden) return null;
+        const style = getComputedStyle(node);
+        if (style.display === 'none' || style.visibility === 'hidden') return null;
+        const rect = node.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return null;
+        return {
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height
+        };
+      }
+
+      function overlapArea(a, b) {
+        if (!a || !b) return 0;
+        const left = Math.max(a.left, b.left);
+        const right = Math.min(a.right, b.right);
+        const top = Math.max(a.top, b.top);
+        const bottom = Math.min(a.bottom, b.bottom);
+        if (right <= left || bottom <= top) return 0;
+        return (right - left) * (bottom - top);
+      }
+
+      const rects = Object.fromEntries(Object.entries(selectors).map(([key, selector]) => [key, rectFor(selector)]));
+      const checkedPairs = [
+        ['stick', 'radar'],
+        ['stick', 'menu'],
+        ['stick', 'health'],
+        ['stick', 'armor'],
+        ['actions', 'kill'],
+        ['actions', 'weapon'],
+        ['actions', 'health'],
+        ['actions', 'armor'],
+        ['menu', 'radar'],
+        ['menu', 'kill'],
+        ['menu', 'weapon'],
+        ['health', 'weapon'],
+        ['armor', 'weapon']
+      ];
+      const overlaps = checkedPairs
+        .map(([a, b]) => ({ pair: `${a}/${b}`, area: overlapArea(rects[a], rects[b]) }))
+        .filter((item) => item.area > 4);
+
+      return {
+        rects,
+        overlaps,
+        ringNearLeftEdge: rects.ring ? rects.ring.left <= 8 : false,
+        radarNearLeftEdge: rects.radar ? rects.radar.left <= 6 : false,
+        menuOutOfCenter: rects.menu ? rects.menu.left <= 130 : false,
+        healthCompact: rects.health ? rects.health.width <= 310 : false,
+        healthCentered: rects.health ? Math.abs(((rects.health.left + rects.health.right) / 2) - (window.innerWidth / 2)) <= 2 : false,
+        viewportOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+      };
+    });
+
+    expect(metrics.overlaps).toEqual([]);
+    expect(metrics.ringNearLeftEdge).toBe(true);
+    expect(metrics.radarNearLeftEdge).toBe(true);
+    expect(metrics.menuOutOfCenter).toBe(true);
+    expect(metrics.healthCompact).toBe(true);
+    expect(metrics.healthCentered).toBe(true);
+    expect(metrics.viewportOverflow).toBe(false);
+  } finally {
+    await context.close();
+  }
+});
+
+test('phone landscape pause menu exposes resume and leave without touch controls covering it', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const context = await browser.newContext({
+    viewport: { width: 844, height: 390 },
+    hasTouch: true,
+    isMobile: true,
+    userAgent: IPHONE_SAFARI_UA
+  });
+  const page = await context.newPage();
+  try {
+    await page.goto('/');
+    await expect.poll(() => page.evaluate(() => !!(window.__MAYHEM_IS_PHONE_SIZED_TOUCH_DEVICE && window.__MAYHEM_IS_PHONE_SIZED_TOUCH_DEVICE()))).toBe(true);
+
+    await page.locator('#game-modes-toggle-btn').click();
+    await page.locator('#sandbox-mode-btn').click();
+    await page.locator('#primary-launch-btn').click();
+    await expect(page.locator('#launch-flow')).toBeVisible({ timeout: 45_000 });
+    await page.locator('#launch-enter-btn').click();
+    await expect(page.locator('#active-match-shell')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('#play-btn')).toHaveText(/enter match/i);
+
+    await page.waitForTimeout(180);
+    await page.locator('#play-btn').click();
+    await expect.poll(() => page.evaluate(() => {
+      const touchControls = document.getElementById('touch-controls');
+      if (!touchControls || touchControls.hidden) return false;
+      const style = getComputedStyle(touchControls);
+      return style.display !== 'none';
+    }), { timeout: 20_000 }).toBe(true);
+
+    await page.locator('.touch-btn-menu').click();
+    await expect(page.locator('#active-match-shell')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('#play-btn')).toHaveText(/resume match/i);
+    await expect(page.locator('#back-mode-btn')).toHaveText(/leave game/i);
+    await expectCleanMenuLayout(page);
+
+    const metrics = await page.evaluate(() => {
+      function isVisible(node) {
+        if (!node || node.hidden) return false;
+        const style = getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+      }
+
+      function contained(node) {
+        if (!node) return false;
+        const rect = node.getBoundingClientRect();
+        return rect.left >= -1 &&
+          rect.right <= window.innerWidth + 1 &&
+          rect.top >= -1 &&
+          rect.bottom <= window.innerHeight + 1;
+      }
+
+      const touchControls = document.getElementById('touch-controls');
+      const playBtn = document.getElementById('play-btn');
+      const backBtn = document.getElementById('back-mode-btn');
+      const settingsBtn = document.getElementById('utility-toggle-btn');
+      const overlay = document.getElementById('overlay');
+      const playRect = playBtn ? playBtn.getBoundingClientRect() : null;
+      const backRect = backBtn ? backBtn.getBoundingClientRect() : null;
+      const settingsRect = settingsBtn ? settingsBtn.getBoundingClientRect() : null;
+
+      return {
+        overlayContext: overlay ? overlay.getAttribute('data-menu-context') : '',
+        touchControlsVisible: isVisible(touchControls),
+        playContained: contained(playBtn),
+        backContained: contained(backBtn),
+        settingsContained: contained(settingsBtn),
+        settingsCompact: settingsRect ? settingsRect.width <= 130 : false,
+        actionButtonsSameRow: !!(playRect && backRect && Math.abs(playRect.top - backRect.top) <= 1 && Math.abs(playRect.bottom - backRect.bottom) <= 1),
+        actionButtonsSeparated: !!(playRect && backRect && (playRect.right <= backRect.left || backRect.right <= playRect.left)),
+        viewportOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+      };
+    });
+
+    expect(metrics.overlayContext).toBe('active-match');
+    expect(metrics.touchControlsVisible).toBe(false);
+    expect(metrics.playContained).toBe(true);
+    expect(metrics.backContained).toBe(true);
+    expect(metrics.settingsContained).toBe(true);
+    expect(metrics.settingsCompact).toBe(true);
+    expect(metrics.actionButtonsSameRow).toBe(true);
+    expect(metrics.actionButtonsSeparated).toBe(true);
+    expect(metrics.viewportOverflow).toBe(false);
   } finally {
     await context.close();
   }

@@ -77,6 +77,7 @@ body[data-overlay-active="true"] {
     justify-content: center;
     padding: calc(env(safe-area-inset-top, 0px) + 20px) calc(env(safe-area-inset-right, 0px) + 20px) calc(env(safe-area-inset-bottom, 0px) + 20px) calc(env(safe-area-inset-left, 0px) + 20px);
     overflow: auto;
+    -webkit-overflow-scrolling: touch;
     background:
         linear-gradient(180deg, rgba(7, 13, 24, 0.18), rgba(7, 13, 24, 0.36)),
         url("/images/menu_backdrop_6036.jpg") center / cover no-repeat,
@@ -102,6 +103,7 @@ body[data-overlay-active="true"] {
     z-index: 1;
     width: min(1020px, calc(100vw - 40px));
     max-width: calc(100vw - 40px);
+    max-height: calc(100vh - 40px);
     max-height: calc(100dvh - 40px);
     min-width: 0;
 }
@@ -142,6 +144,7 @@ body[data-overlay-active="true"] {
     flex-direction: column;
     gap: var(--gap-shell);
     width: 100%;
+    max-height: calc(100vh - 40px);
     max-height: calc(100dvh - 40px);
     min-width: 0;
     padding: var(--pad-shell);
@@ -541,6 +544,7 @@ body[data-overlay-active="true"] {
     min-height: 0;
     overflow: auto;
     padding-right: 2px;
+    -webkit-overflow-scrolling: touch;
 }
 
 #menu-shell.menu-shell-v4 #menu-body::-webkit-scrollbar,
@@ -1135,8 +1139,10 @@ body[data-overlay-active="true"] {
 .modal-overlay .modal-card {
     width: min(640px, calc(100vw - 40px));
     max-width: calc(100vw - 40px);
+    max-height: calc(100vh - 40px);
     max-height: calc(100dvh - 40px);
     overflow: auto;
+    -webkit-overflow-scrolling: touch;
     padding: var(--pad-shell);
     background: var(--menu-glass-modal);
 }
@@ -1423,10 +1429,12 @@ body[data-overlay-active="true"] {
     #menu-stage {
         width: min(760px, calc(100vw - 40px));
         max-width: calc(100vw - 40px);
+        max-height: calc(100vh - 28px);
         max-height: calc(100dvh - 28px);
     }
 
     #menu-shell.menu-shell-v4 #menu-surface {
+        max-height: calc(100vh - 28px);
         max-height: calc(100dvh - 28px);
         padding: 16px;
     }
@@ -1463,10 +1471,12 @@ body[data-overlay-active="true"] {
     #menu-stage {
         width: calc(100vw - 20px);
         max-width: calc(100vw - 20px);
+        max-height: calc(100vh - 20px);
         max-height: calc(100dvh - 20px);
     }
 
     #menu-shell.menu-shell-v4 #menu-surface {
+        max-height: calc(100vh - 20px);
         max-height: calc(100dvh - 20px);
         padding: 12px;
     }
@@ -1528,6 +1538,7 @@ body[data-overlay-active="true"] {
     .modal-overlay #controls-modal {
         width: calc(100vw - 20px);
         max-width: calc(100vw - 20px);
+        max-height: calc(100vh - 20px);
         max-height: calc(100dvh - 20px);
     }
 
@@ -1550,26 +1561,52 @@ body[data-overlay-active="true"] {
     }
 
     #launch-flow {
-        padding: calc(env(safe-area-inset-top, 0px) + 8px) calc(env(safe-area-inset-right, 0px) + 8px) calc(env(safe-area-inset-bottom, 0px) + 8px) calc(env(safe-area-inset-left, 0px) + 8px);
+        align-items: flex-start;
+        padding: calc(env(safe-area-inset-top, 0px) + 12px) calc(env(safe-area-inset-right, 0px) + 12px) calc(env(safe-area-inset-bottom, 0px) + 12px) calc(env(safe-area-inset-left, 0px) + 12px);
     }
 
     #launch-card {
-        width: min(460px, calc(100vw - 16px));
-        gap: 8px;
-        padding: 12px;
+        width: min(380px, calc(100vw - 24px));
+        max-height: calc(100vh - 24px);
+        max-height: calc(100dvh - 24px);
+        gap: 6px;
+        overflow: auto;
+        padding: 14px 16px;
+        border-radius: 18px;
     }
 
     #launch-title {
-        font-size: 1.25rem;
+        margin-top: 4px;
+        font-size: 1.15rem;
+    }
+
+    #launch-status {
+        margin-top: 4px;
+        font-size: 1.22rem;
+        line-height: 1.08;
+    }
+
+    #launch-room-label {
+        margin-top: 4px;
+        padding: 4px 10px;
+        font-size: 0.72rem;
     }
 
     #launch-note {
-        font-size: 0.92rem;
-        line-height: 1.25;
+        margin-top: 4px;
+        font-size: 0.84rem;
+        line-height: 1.18;
+    }
+
+    #launch-flow #launch-enter-btn {
+        min-height: 38px;
+        margin-top: 6px;
+        padding: 8px 22px;
     }
 
     #menu-stage,
     #menu-shell.menu-shell-v4 #menu-surface {
+        max-height: calc(100vh - 16px);
         max-height: calc(100dvh - 16px);
     }
 
@@ -1584,5 +1621,150 @@ body[data-overlay-active="true"] {
 
     #menu-shell.menu-shell-v4 #mode-screen-title {
         font-size: 1.75rem;
+    }
+}
+
+@media (pointer: coarse) and (max-width: 640px),
+       (pointer: coarse) and (max-height: 500px) {
+    #overlay {
+        padding: calc(env(safe-area-inset-top, 0px) + 8px) calc(env(safe-area-inset-right, 0px) + 8px) calc(env(safe-area-inset-bottom, 0px) + 8px) calc(env(safe-area-inset-left, 0px) + 8px);
+    }
+
+    #menu-stage {
+        width: calc(100vw - 16px);
+        max-width: calc(100vw - 16px);
+        max-height: calc(100vh - 16px);
+        max-height: calc(100dvh - 16px);
+    }
+
+    #menu-shell.menu-shell-v4 #menu-surface {
+        gap: 10px;
+        max-height: calc(100vh - 16px);
+        max-height: calc(100dvh - 16px);
+        padding: 10px;
+        border-radius: 22px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-header {
+        gap: 8px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-header-leading,
+    #menu-shell.menu-shell-v4 #menu-header-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        width: 100%;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-header-leading > *,
+    #menu-shell.menu-shell-v4 #menu-header-actions > * {
+        width: 100%;
+        min-height: 38px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-party-id-btn {
+        grid-template-columns: minmax(0, 1fr);
+        justify-items: center;
+        row-gap: 2px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-home-hero {
+        min-height: 166px;
+    }
+
+    #menu-shell.menu-shell-v4 #mode-screen-title {
+        font-size: 1.75rem;
+    }
+
+    #menu-shell.menu-shell-v4 #play-mode-toolbar,
+    #menu-shell.menu-shell-v4 #play-mode-options {
+        width: 100%;
+    }
+
+    #menu-shell.menu-shell-v4 .card,
+    #menu-shell.menu-shell-v4 .banner,
+    #menu-shell.menu-shell-v4 .menu-card,
+    #menu-shell.menu-shell-v4 .menu-panel-subsection,
+    #menu-shell.menu-shell-v4 #active-match-pill-grid {
+        padding: 14px;
+    }
+
+    #overlay[data-menu-context="active-match"] {
+        align-items: stretch;
+        justify-content: flex-start;
+        padding: calc(env(safe-area-inset-top, 0px) + 6px) calc(env(safe-area-inset-right, 0px) + 6px) calc(env(safe-area-inset-bottom, 0px) + 6px) calc(env(safe-area-inset-left, 0px) + 6px);
+    }
+
+    #overlay[data-menu-context="active-match"] #menu-stage {
+        width: calc(100vw - 12px);
+        max-width: calc(100vw - 12px);
+        max-height: calc(100vh - 12px);
+        max-height: calc(100dvh - 12px);
+    }
+
+    #menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] {
+        gap: 8px;
+        max-height: calc(100vh - 12px);
+        max-height: calc(100dvh - 12px);
+        padding: 8px;
+        border-radius: 18px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] #menu-header {
+        gap: 6px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] #menu-header-main {
+        display: flex;
+        justify-content: flex-end;
+        min-height: 0;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] #menu-header-leading {
+        display: none;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] #menu-header-actions {
+        display: flex;
+        justify-content: flex-end;
+        width: auto;
+        gap: 8px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] #menu-header-actions > * {
+        flex: 0 0 auto;
+        width: auto;
+        min-width: 84px;
+        min-height: 34px;
+        padding: 0 14px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] #active-match-shell {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 8px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] #active-match-pill-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+        padding: 10px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] .match-stat-pill {
+        min-height: 52px;
+        padding: 8px 10px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] #active-match-action-row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        padding: 10px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] #play-btn,
+    #menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] #back-mode-btn {
+        min-height: 48px;
     }
 }

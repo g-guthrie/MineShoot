@@ -39,7 +39,7 @@ const DEFAULT_WEAPON_PRESENTATION = {
 
 export const gameplayTuning = {
   survivability: {
-    hpMax: 400,
+    hpMax: 1000,
     armorMax: 100,
     armorRegenDelaySec: 12.0,
     armorRegenPerSec: 25

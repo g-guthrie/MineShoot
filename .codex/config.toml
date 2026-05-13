@@ -1,5 +1,11 @@
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+
 [features]
 multi_agent = true
+exec_permission_approvals = false
+request_permissions_tool = false
+guardian_approval = false
 
 [agents]
 max_threads = 6

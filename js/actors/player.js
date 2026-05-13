@@ -30,6 +30,19 @@
         return !!(controls && controls.isFirstPersonViewEnabled && controls.isFirstPersonViewEnabled());
     }
 
+    function firstPersonCameraOffset() {
+        var controls = gameplayControlsApi();
+        if (!controls || !controls.getFirstPersonCameraOffset) {
+            return { x: 0, y: 0, z: 0 };
+        }
+        var offset = controls.getFirstPersonCameraOffset() || {};
+        return {
+            x: Number(offset.x || 0),
+            y: Number(offset.y || 0),
+            z: Number(offset.z || 0)
+        };
+    }
+
     function reconciliationRuntimeApi() {
         return runtimeRoot().GamePlayerReconciliation || null;
     }
@@ -976,6 +989,7 @@
             inspectFov: 58,
             inspectSmooth: 18,
             firstPersonView: firstPersonCameraViewEnabled(),
+            firstPersonCameraOffset: firstPersonCameraOffset(),
             sniperMode: isSniperScopeWeapon(),
             adsActive: isSniperScopeReady(),
             scopeTargetActive: isScopeModeActive(),

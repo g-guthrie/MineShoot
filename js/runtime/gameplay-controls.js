@@ -9,6 +9,10 @@
     var domUtils = runtime.GameDomUtils || null;
     var DESKTOP_AUTO_FIRE_STORAGE_KEY = 'mayhem.desktopAutoFireEnabled';
     var CAMERA_VIEW_STORAGE_KEY = 'mayhem.cameraViewMode';
+    var FIRST_PERSON_CAMERA_OFFSET_STORAGE_KEY = 'mayhem.firstPersonCameraOriginOffset.v1';
+    var CAMERA_ORIGIN_TUNE_STEP = 0.05;
+    var CAMERA_ORIGIN_TUNE_FINE_STEP = 0.01;
+    var CAMERA_ORIGIN_TUNE_MAX_ABS = 1.5;
     var activeGameplayControlsInstance = null;
 
     function readStoredFirstPersonViewPreference() {
@@ -23,6 +27,36 @@
 
     function inputLabelsApi() {
         return runtime.GameInputLabels || null;
+    }
+
+    function clampCameraOffsetValue(value) {
+        var n = Number(value || 0);
+        if (!isFinite(n)) n = 0;
+        return Math.max(-CAMERA_ORIGIN_TUNE_MAX_ABS, Math.min(CAMERA_ORIGIN_TUNE_MAX_ABS, n));
+    }
+
+    function normalizeFirstPersonCameraOffset(value) {
+        var source = value && typeof value === 'object' ? value : {};
+        return {
+            x: clampCameraOffsetValue(source.x),
+            y: clampCameraOffsetValue(source.y),
+            z: clampCameraOffsetValue(source.z)
+        };
+    }
+
+    function cloneFirstPersonCameraOffset(value) {
+        return normalizeFirstPersonCameraOffset(value);
+    }
+
+    function readStoredFirstPersonCameraOffset() {
+        try {
+            if (typeof window === 'undefined' || !window.localStorage) return normalizeFirstPersonCameraOffset(null);
+            var raw = window.localStorage.getItem(FIRST_PERSON_CAMERA_OFFSET_STORAGE_KEY);
+            if (!raw) return normalizeFirstPersonCameraOffset(null);
+            return normalizeFirstPersonCameraOffset(JSON.parse(raw));
+        } catch (_err) {
+            return normalizeFirstPersonCameraOffset(null);
+        }
     }
 
     function create(opts) {
@@ -64,6 +98,8 @@
         var touchOrientationState = 'landscape';
         var desktopAutoFireEnabled = false;
         var firstPersonViewEnabled = readStoredFirstPersonViewPreference();
+        var firstPersonCameraOffset = readStoredFirstPersonCameraOffset();
+        var cameraOriginTuneModeEnabled = false;
         var bound = false;
         var listenerRemovers = [];
 
@@ -210,6 +246,14 @@
             return firstPersonViewEnabled;
         }
 
+        function refreshCameraViewToggleButton() {
+            var cameraViewToggleBtn = document.getElementById('camera-view-toggle-btn');
+            if (!cameraViewToggleBtn) return;
+            var enabled = isFirstPersonViewEnabled();
+            cameraViewToggleBtn.textContent = enabled ? 'CAMERA: FPS' : 'CAMERA: OVER SHOULDER';
+            cameraViewToggleBtn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+        }
+
         function isFirstPersonViewEnabled() {
             return !!firstPersonViewEnabled;
         }
@@ -217,11 +261,93 @@
         function setFirstPersonViewEnabled(nextValue) {
             firstPersonViewEnabled = !!nextValue;
             saveFirstPersonViewPreference();
+            refreshCameraViewToggleButton();
             return firstPersonViewEnabled;
         }
 
         function toggleFirstPersonViewEnabled() {
             return setFirstPersonViewEnabled(!firstPersonViewEnabled);
+        }
+
+        function saveFirstPersonCameraOffset() {
+            var store = localStore();
+            if (!store || typeof store.setItem !== 'function') return getFirstPersonCameraOffset();
+            try {
+                store.setItem(FIRST_PERSON_CAMERA_OFFSET_STORAGE_KEY, JSON.stringify(firstPersonCameraOffset));
+            } catch (_err) {
+                // no-op
+            }
+            return getFirstPersonCameraOffset();
+        }
+
+        function getFirstPersonCameraOffset() {
+            return cloneFirstPersonCameraOffset(firstPersonCameraOffset);
+        }
+
+        function setFirstPersonCameraOffset(nextOffset) {
+            firstPersonCameraOffset = normalizeFirstPersonCameraOffset(nextOffset);
+            saveFirstPersonCameraOffset();
+            return getFirstPersonCameraOffset();
+        }
+
+        function adjustFirstPersonCameraOffset(delta) {
+            var source = delta && typeof delta === 'object' ? delta : {};
+            return setFirstPersonCameraOffset({
+                x: firstPersonCameraOffset.x + Number(source.x || 0),
+                y: firstPersonCameraOffset.y + Number(source.y || 0),
+                z: firstPersonCameraOffset.z + Number(source.z || 0)
+            });
+        }
+
+        function formatCameraOffsetValue(value) {
+            var n = Math.round(Number(value || 0) * 1000) / 1000;
+            return (n >= 0 ? '+' : '') + n.toFixed(3);
+        }
+
+        function cameraOriginTuneMessage() {
+            return 'Camera origin tuning: ' + (cameraOriginTuneModeEnabled ? 'ON' : 'OFF') + '\n' +
+                'right ' + formatCameraOffsetValue(firstPersonCameraOffset.x) +
+                '  up ' + formatCameraOffsetValue(firstPersonCameraOffset.y) +
+                '  forward ' + formatCameraOffsetValue(firstPersonCameraOffset.z) + '\n' +
+                'Arrows: forward/back/left/right. PgUp/PgDn: up/down. Home: reset.';
+        }
+
+        function setCameraOriginTuneModeEnabled(enabled) {
+            cameraOriginTuneModeEnabled = !!enabled;
+            if (cameraOriginTuneModeEnabled) setFirstPersonViewEnabled(true);
+            setTransientDebug(cameraOriginTuneMessage(), cameraOriginTuneModeEnabled ? 5000 : 1200);
+            return cameraOriginTuneModeEnabled;
+        }
+
+        function toggleCameraOriginTuneModeEnabled() {
+            return setCameraOriginTuneModeEnabled(!cameraOriginTuneModeEnabled);
+        }
+
+        function handleCameraOriginTuneKey(e) {
+            if (!cameraOriginTuneModeEnabled) return false;
+            if (domUtils && domUtils.isEditableTarget && domUtils.isEditableTarget(e.target)) return false;
+            var step = e && e.shiftKey ? CAMERA_ORIGIN_TUNE_FINE_STEP : CAMERA_ORIGIN_TUNE_STEP;
+            var code = String(e && e.code || '');
+            var delta = null;
+            if (code === 'ArrowUp') delta = { z: step };
+            else if (code === 'ArrowDown') delta = { z: -step };
+            else if (code === 'ArrowLeft') delta = { x: -step };
+            else if (code === 'ArrowRight') delta = { x: step };
+            else if (code === 'PageUp') delta = { y: step };
+            else if (code === 'PageDown') delta = { y: -step };
+            else if (code === 'Home') {
+                setFirstPersonCameraOffset(null);
+                if (e.preventDefault) e.preventDefault();
+                if (e.stopPropagation) e.stopPropagation();
+                setTransientDebug(cameraOriginTuneMessage(), 5000);
+                return true;
+            }
+            if (!delta) return false;
+            adjustFirstPersonCameraOffset(delta);
+            if (e.preventDefault) e.preventDefault();
+            if (e.stopPropagation) e.stopPropagation();
+            setTransientDebug(cameraOriginTuneMessage(), 5000);
+            return true;
         }
 
         function listen(target, type, handler, options) {
@@ -254,22 +380,37 @@
             touchMoveThumb.classList.toggle('sprinting', !!active);
         }
 
-        function touchMoveRadiusPx() {
-            var fallback = 52;
+        function touchMoveRadiiPx() {
+            var fallbackBase = 52;
             var ring = touchMoveThumb && touchMoveThumb.querySelector
                 ? touchMoveThumb.querySelector('.touch-stick-ring')
                 : null;
             if (!ring || !touchMoveKnob ||
+                !touchMoveThumb ||
                 typeof ring.getBoundingClientRect !== 'function' ||
+                typeof touchMoveThumb.getBoundingClientRect !== 'function' ||
                 typeof touchMoveKnob.getBoundingClientRect !== 'function') {
-                return fallback;
+                return {
+                    baseRadius: fallbackBase,
+                    sprintRadius: fallbackBase + 28,
+                    sprintThreshold: fallbackBase + 10
+                };
             }
+            var thumbRect = touchMoveThumb.getBoundingClientRect();
             var ringRect = ring.getBoundingClientRect();
             var knobRect = touchMoveKnob.getBoundingClientRect();
+            var thumbSize = Math.min(Number(thumbRect.width || 0), Number(thumbRect.height || 0));
             var ringSize = Math.min(Number(ringRect.width || 0), Number(ringRect.height || 0));
             var knobSize = Math.max(Number(knobRect.width || 0), Number(knobRect.height || 0));
-            var radius = (ringSize - knobSize) * 0.5;
-            return radius > 0 ? Math.max(24, radius) : fallback;
+            var baseRadius = (ringSize - knobSize) * 0.5;
+            baseRadius = baseRadius > 0 ? Math.max(24, baseRadius) : fallbackBase;
+            var sprintReach = thumbSize > ringSize ? ((thumbSize - ringSize) * 0.5) : 28;
+            sprintReach = Math.max(24, Math.min(96, sprintReach));
+            return {
+                baseRadius: baseRadius,
+                sprintRadius: baseRadius + sprintReach,
+                sprintThreshold: baseRadius + Math.min(18, Math.max(10, sprintReach * 0.26))
+            };
         }
 
         function touchSprintHalfAngleRad() {
@@ -280,11 +421,11 @@
             return 5 * Math.PI / 180;
         }
 
-        function resolveTouchSprintState(dx, dy) {
-            var x = Number(dx || 0);
-            var y = Number(dy || 0);
+        function resolveTouchSprintState(rawX, rawY, sprintThreshold) {
+            var x = Number(rawX || 0);
+            var y = Number(rawY || 0);
             var magnitude = Math.sqrt((x * x) + (y * y));
-            if (!(magnitude >= 0.9)) return false;
+            if (!(magnitude >= Number(sprintThreshold || 0))) return false;
             var forwardAngle = Math.atan2(x, -y);
             var centeredAngle = forwardAngle - touchSprintClockwiseOffsetRad();
             return Math.abs(centeredAngle) <= touchSprintHalfAngleRad();
@@ -344,19 +485,22 @@
 
         function updateMovePointer(event) {
             if (!event || touchMoveState.pointerId !== event.pointerId || !touchLandscapeReady()) return;
-            var moveRadius = touchMoveRadiusPx();
+            var moveRadii = touchMoveRadiiPx();
+            var baseRadius = moveRadii.baseRadius;
             var rawX = Number(event.clientX || 0) - touchMoveState.centerX;
             var rawY = Number(event.clientY || 0) - touchMoveState.centerY;
             var dist = Math.sqrt((rawX * rawX) + (rawY * rawY));
-            var visualScale = dist > moveRadius ? (moveRadius / dist) : 1;
-            var controlScale = dist > moveRadius ? (moveRadius / dist) : 1;
+            var sprinting = resolveTouchSprintState(rawX, rawY, moveRadii.sprintThreshold);
+            var visualRadius = sprinting ? moveRadii.sprintRadius : baseRadius;
+            var visualScale = dist > visualRadius ? (visualRadius / dist) : 1;
+            var controlScale = dist > baseRadius ? (baseRadius / dist) : 1;
             var visualX = rawX * visualScale;
             var visualY = rawY * visualScale;
             var controlX = rawX * controlScale;
             var controlY = rawY * controlScale;
-            touchMoveState.dx = controlX / moveRadius;
-            touchMoveState.dy = controlY / moveRadius;
-            touchMoveState.sprint = resolveTouchSprintState(touchMoveState.dx, touchMoveState.dy);
+            touchMoveState.dx = controlX / baseRadius;
+            touchMoveState.dy = controlY / baseRadius;
+            touchMoveState.sprint = sprinting;
             setTouchMoveVisual(visualX, visualY);
             setTouchSprintVisual(touchMoveState.sprint);
             syncTouchMovementState();
@@ -946,21 +1090,28 @@
             var cameraViewToggleBtn = document.getElementById('camera-view-toggle-btn');
             if (!cameraViewToggleBtn) return;
 
-            function refreshLabel() {
-                var enabled = isFirstPersonViewEnabled();
-                cameraViewToggleBtn.textContent = enabled ? 'CAMERA: FPS' : 'CAMERA: OVER SHOULDER';
-                cameraViewToggleBtn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
-            }
-
             listen(cameraViewToggleBtn, 'click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
                 var enabled = toggleFirstPersonViewEnabled();
-                refreshLabel();
                 setTransientDebug(enabled ? 'Camera: FPS' : 'Camera: over shoulder', 900);
             });
 
-            refreshLabel();
+            refreshCameraViewToggleButton();
+        }
+
+        function bindCameraOriginTuneControls() {
+            listen(document, 'keydown', function (e) {
+                if (e.repeat) return;
+                if (domUtils && domUtils.isEditableTarget && domUtils.isEditableTarget(e.target)) return;
+                if (matchesBinding('camera_origin_tune', e, 'F6')) {
+                    if (e.preventDefault) e.preventDefault();
+                    if (e.stopPropagation) e.stopPropagation();
+                    toggleCameraOriginTuneModeEnabled();
+                    return;
+                }
+                handleCameraOriginTuneKey(e);
+            });
         }
 
         function throwableHasCharges(throwablesApi, type) {
@@ -1086,6 +1237,7 @@
                 activeGameplayControlsInstance = this;
                 bindDocsControls();
                 bindShooting();
+                bindCameraOriginTuneControls();
                 bindWeaponControls();
                 bindReloadControls();
                 bindCameraViewToggleControl();
@@ -1146,6 +1298,18 @@
             },
             toggleFirstPersonViewEnabled: function () {
                 return toggleFirstPersonViewEnabled();
+            },
+            getFirstPersonCameraOffset: function () {
+                return getFirstPersonCameraOffset();
+            },
+            setFirstPersonCameraOffset: function (offset) {
+                return setFirstPersonCameraOffset(offset);
+            },
+            isCameraOriginTuneModeEnabled: function () {
+                return !!cameraOriginTuneModeEnabled;
+            },
+            toggleCameraOriginTuneModeEnabled: function () {
+                return toggleCameraOriginTuneModeEnabled();
             },
             hasVirtualCapture: function () {
                 return !!virtualCapture && touchLandscapeReady();
@@ -1239,6 +1403,39 @@
             return controlsApi.setFirstPersonViewEnabled
                 ? controlsApi.setFirstPersonViewEnabled(!enabled)
                 : !enabled;
+        },
+        getFirstPersonCameraOffset: function () {
+            if (!activeGameplayControlsInstance || !activeGameplayControlsInstance.getFirstPersonCameraOffset) {
+                return readStoredFirstPersonCameraOffset();
+            }
+            return activeGameplayControlsInstance.getFirstPersonCameraOffset();
+        },
+        setFirstPersonCameraOffset: function (offset) {
+            if (!activeGameplayControlsInstance || !activeGameplayControlsInstance.setFirstPersonCameraOffset) {
+                var normalized = normalizeFirstPersonCameraOffset(offset);
+                try {
+                    if (typeof window !== 'undefined' && window.localStorage) {
+                        window.localStorage.setItem(FIRST_PERSON_CAMERA_OFFSET_STORAGE_KEY, JSON.stringify(normalized));
+                    }
+                } catch (_err) {
+                    // no-op
+                }
+                return normalized;
+            }
+            return activeGameplayControlsInstance.setFirstPersonCameraOffset(offset);
+        },
+        isCameraOriginTuneModeEnabled: function () {
+            return !!(
+                activeGameplayControlsInstance &&
+                activeGameplayControlsInstance.isCameraOriginTuneModeEnabled &&
+                activeGameplayControlsInstance.isCameraOriginTuneModeEnabled()
+            );
+        },
+        toggleCameraOriginTuneModeEnabled: function () {
+            if (!activeGameplayControlsInstance || !activeGameplayControlsInstance.toggleCameraOriginTuneModeEnabled) {
+                return false;
+            }
+            return activeGameplayControlsInstance.toggleCameraOriginTuneModeEnabled();
         }
     };
 })();

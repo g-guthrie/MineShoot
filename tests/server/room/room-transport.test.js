@@ -27,6 +27,8 @@ test('room state payload reflects room status without simulation internals leaki
     players: 3,
     connectedPlayers: 2,
     simPlayers: 1,
+    botPlayers: 0,
+    totalPlayers: 4,
     softTarget: 12,
     hardCap: 16
   });

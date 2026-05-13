@@ -40,6 +40,7 @@
     var sampleCache = {};
     var sampleLoaders = {};
     var sampleWarmupStarted = false;
+    var playbackGainScale = 1;
     var movementWindUnlockQueued = false;
     var movementWindRequest = null;
     var movementWindLoop = {
@@ -185,7 +186,7 @@
         osc.type = type;
         osc.frequency.setValueAtTime(freq, c.currentTime);
         gain.gain.setValueAtTime(0, c.currentTime);
-        gain.gain.linearRampToValueAtTime(vol, c.currentTime + attack);
+        gain.gain.linearRampToValueAtTime(scaledGain(vol), c.currentTime + attack);
         gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + duration);
         osc.start(c.currentTime);
         osc.stop(c.currentTime + duration);
@@ -216,6 +217,85 @@
     function randomBetween(min, max) {
         if (max <= min) return min;
         return min + (Math.random() * (max - min));
+    }
+
+    function finiteNumber(value, fallback) {
+        var parsed = Number(value);
+        return isFinite(parsed) ? parsed : (fallback || 0);
+    }
+
+    function scaledGain(value) {
+        return Math.max(0.0001, finiteNumber(value, 0) * Math.max(0, playbackGainScale));
+    }
+
+    function readVec3(value) {
+        if (!value || typeof value !== 'object') return null;
+        var x = Number(value.x);
+        var y = Number(value.y);
+        var z = Number(value.z);
+        if (!isFinite(x) || !isFinite(y) || !isFinite(z)) return null;
+        return { x: x, y: y, z: z };
+    }
+
+    function eventPositionFromOptions(options) {
+        options = options || {};
+        return readVec3(options.sourcePosition) ||
+            readVec3(options.worldPosition) ||
+            readVec3(options.position) ||
+            readVec3(options.origin) ||
+            readVec3(options);
+    }
+
+    function listenerPositionFromOptions(options) {
+        options = options || {};
+        return readVec3(options.listenerPosition) ||
+            readVec3(options.listener) ||
+            readVec3(options.cameraPosition);
+    }
+
+    function distanceBetweenVec3(a, b) {
+        if (!a || !b) return 0;
+        var dx = finiteNumber(a.x, 0) - finiteNumber(b.x, 0);
+        var dy = finiteNumber(a.y, 0) - finiteNumber(b.y, 0);
+        var dz = finiteNumber(a.z, 0) - finiteNumber(b.z, 0);
+        return Math.sqrt((dx * dx) + (dy * dy) + (dz * dz));
+    }
+
+    function distanceGainForOptions(options) {
+        options = options || {};
+        var explicit = Number(options.gainScale !== undefined ? options.gainScale : options.volume);
+        var scale = isFinite(explicit) ? Math.max(0, explicit) : 1;
+        var source = eventPositionFromOptions(options);
+        var listener = listenerPositionFromOptions(options);
+        if (!source || !listener) return Math.min(2, scale);
+
+        var distance = Math.max(0, distanceBetweenVec3(source, listener));
+        var nearDistance = Math.max(0, finiteNumber(options.nearDistance, 5.5));
+        var reference = Math.max(0.001, finiteNumber(options.referenceDistance || options.distanceReference, 11));
+        var rolloff = Math.max(0.5, Math.min(4, finiteNumber(options.distanceRolloff, 1.75)));
+        var maxDistance = Math.max(reference, finiteNumber(options.maxDistance, 105));
+        var minGain = Math.max(0, Math.min(0.25, finiteNumber(options.minGain, 0)));
+        if (distance >= maxDistance) return 0;
+        if (distance <= nearDistance) return Math.min(2, scale);
+
+        var normalized = Math.max(0, (distance - nearDistance) / reference);
+        var attenuated = 1 / (1 + Math.pow(normalized, rolloff));
+        var fadeStart = maxDistance * 0.82;
+        if (distance > fadeStart) {
+            var fade = Math.max(0, Math.min(1, (maxDistance - distance) / Math.max(1, maxDistance - fadeStart)));
+            attenuated *= fade;
+        }
+        return Math.min(2, scale * Math.max(minGain, attenuated));
+    }
+
+    function withPlaybackGain(scale, fn) {
+        var previous = playbackGainScale;
+        playbackGainScale = previous * Math.max(0, finiteNumber(scale, 1));
+        try {
+            return fn();
+        } finally {
+            playbackGainScale = previous;
+        }
     }
 
     function getFetch() {
@@ -318,7 +398,7 @@
             filter.Q.setValueAtTime(Math.max(0.0001, Number(opts.q || 0.7)), start);
             nodes.push(filter);
         }
-        gain.gain.setValueAtTime(opts.gain !== undefined ? opts.gain : 1, start);
+        gain.gain.setValueAtTime(scaledGain(opts.gain !== undefined ? opts.gain : 1), start);
         nodes.push(gain);
         connectNodeChain(source, nodes, c.destination);
         source.start(start);
@@ -468,7 +548,7 @@
         var end = start + duration;
         var startFreq = Math.max(20, Number(opts.startFreq || opts.freq || 220));
         var endFreq = Math.max(20, Number(opts.endFreq || startFreq));
-        var peak = Math.max(0.0001, Number(opts.vol || 0.12));
+        var peak = scaledGain(opts.vol || 0.12);
 
         var osc = c.createOscillator();
         var gain = c.createGain();
@@ -504,7 +584,7 @@
         filter.frequency.setValueAtTime(Math.max(80, Number(opts.frequency || 1200)), start);
         filter.Q.setValueAtTime(Math.max(0.0001, Number(opts.q || 0.8)), start);
         gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, Number(opts.vol || 0.06)), start + Math.max(0.0008, Number(opts.attack || 0.002)));
+        gain.gain.exponentialRampToValueAtTime(scaledGain(opts.vol || 0.06), start + Math.max(0.0008, Number(opts.attack || 0.002)));
         gain.gain.exponentialRampToValueAtTime(0.0001, end);
         connectNodeChain(source, [filter, gain], c.destination);
         source.start(start);
@@ -952,79 +1032,87 @@
     GameAudio.play = function (soundId, options) {
         if (muted) return;
         options = options || {};
+        var gainScale = distanceGainForOptions(options);
+        if (!(gainScale > 0.0005)) return;
         unlock(function (c) {
-            switch (soundId) {
-                case 'fire':
-                    playWeaponFire(c, options.weapon || 'rifle');
-                    break;
-                case 'plasma':
-                    playWeaponFire(c, 'plasma');
-                    break;
-                case 'bulletImpact':
-                case 'enemyHit':
-                    playBulletImpact(c, options);
-                    break;
-                case 'playerHit':
-                    playPlayerHit(c);
-                    break;
-                case 'fireIgnite':
-                    playFireIgnite(c);
-                    break;
-                case 'fireBurning':
-                    playFireBurning(c);
-                    break;
-                case 'molotov_ignite':
-                    playMolotovIgnite(c);
-                    break;
-                case 'explosion':
-                    playThrowableExplosion(c, options);
-                    break;
-                case 'explosion_frag':
-                    playThrowableExplosion(c, cueOptions(options, 'frag'));
-                    break;
-                case 'explosion_plasma':
-                    playThrowableExplosion(c, cueOptions(options, 'plasma'));
-                    break;
-                case 'explosion_molotov':
-                    playThrowableExplosion(c, cueOptions(options, 'molotov'));
-                    break;
-                case 'throw':
-                    playThrowableThrow(c, options);
-                    break;
-                case 'throw_frag':
-                    playThrowableThrow(c, cueOptions(options, 'frag'));
-                    break;
-                case 'throw_molotov':
-                    playThrowableThrow(c, cueOptions(options, 'molotov'));
-                    break;
-                case 'throw_knife':
-                    playThrowableThrow(c, cueOptions(options, 'knife'));
-                    break;
-                case 'throw_plasma':
-                    playThrowableThrow(c, cueOptions(options, 'plasma'));
-                    break;
-                case 'throwable_impact':
-                    playThrowableImpact(c, options);
-                    break;
-                case 'knife_impact':
-                    playKnifeImpact(c, options);
-                    break;
-                case 'plasma_stick':
-                    playPlasmaStick(c);
-                    break;
-                case 'reload':
-                    playReloadCue(c, options.weapon || 'rifle', options.cue || 'start', options.cueId || '');
-                    break;
-                case 'footstep':
-                    playFootstep(c, options);
-                    break;
-                case 'jump':
-                    playJump(c, options);
-                    break;
-                default:
-                    break;
-            }
+            withPlaybackGain(gainScale, function () {
+                switch (soundId) {
+                    case 'fire':
+                        playWeaponFire(c, options.weapon || 'rifle');
+                        break;
+                    case 'plasma':
+                        playWeaponFire(c, 'plasma');
+                        break;
+                    case 'bulletImpact':
+                    case 'enemyHit':
+                        playBulletImpact(c, options);
+                        break;
+                    case 'playerHit':
+                        playPlayerHit(c);
+                        break;
+                    case 'fireIgnite':
+                        playFireIgnite(c);
+                        break;
+                    case 'fireBurning':
+                        playFireBurning(c);
+                        break;
+                    case 'molotov_ignite':
+                        playMolotovIgnite(c);
+                        break;
+                    case 'explosion':
+                        playThrowableExplosion(c, options);
+                        break;
+                    case 'explosion_frag':
+                        playThrowableExplosion(c, cueOptions(options, 'frag'));
+                        break;
+                    case 'explosion_plasma':
+                        playThrowableExplosion(c, cueOptions(options, 'plasma'));
+                        break;
+                    case 'explosion_molotov':
+                        playThrowableExplosion(c, cueOptions(options, 'molotov'));
+                        break;
+                    case 'throw':
+                        playThrowableThrow(c, options);
+                        break;
+                    case 'throw_frag':
+                        playThrowableThrow(c, cueOptions(options, 'frag'));
+                        break;
+                    case 'throw_molotov':
+                        playThrowableThrow(c, cueOptions(options, 'molotov'));
+                        break;
+                    case 'throw_knife':
+                        playThrowableThrow(c, cueOptions(options, 'knife'));
+                        break;
+                    case 'throw_plasma':
+                        playThrowableThrow(c, cueOptions(options, 'plasma'));
+                        break;
+                    case 'throwable_impact':
+                        playThrowableImpact(c, options);
+                        break;
+                    case 'knife_impact':
+                        playKnifeImpact(c, options);
+                        break;
+                    case 'plasma_stick':
+                        playPlasmaStick(c);
+                        break;
+                    case 'reload':
+                        playReloadCue(c, options.weapon || 'rifle', options.cue || 'start', options.cueId || '');
+                        break;
+                    case 'footstep':
+                        playFootstep(c, options);
+                        break;
+                    case 'jump':
+                        playJump(c, options);
+                        break;
+                    default:
+                        break;
+                }
+            });
         });
+    };
+
+    GameAudio.distanceGain = function (options) {
+        return distanceGainForOptions(options || {});
     };
 
     GameAudio.playAssetCue = function (soundId, options) {

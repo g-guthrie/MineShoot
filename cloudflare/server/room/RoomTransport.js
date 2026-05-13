@@ -8,6 +8,8 @@ import { isRegisteredPrivateRoomId } from '../private-rooms.js';
 const ENABLED_RE = /^(1|true|yes|on)$/i;
 
 export function buildRoomStatePayload(room) {
+  const botPlayers = typeof room.publicBotCount === 'function' ? room.publicBotCount() : 0;
+  const simPlayers = room.simulatedPlayerCount();
   return {
     ok: true,
     roomId: room.roomName,
@@ -16,7 +18,9 @@ export function buildRoomStatePayload(room) {
     matchEnded: !!(room.matchState && room.matchState.ended),
     players: room.humanPlayerCount(),
     connectedPlayers: room.connectedHumanCount(),
-    simPlayers: room.simulatedPlayerCount(),
+    simPlayers,
+    botPlayers,
+    totalPlayers: room.humanPlayerCount() + simPlayers + botPlayers,
     softTarget: PUBLIC_ROOM_SOFT_TARGET,
     hardCap: PUBLIC_ROOM_HARD_CAP
   };
@@ -248,6 +252,7 @@ function handleWebSocketRequest(room, request, url) {
   });
   room.activeSocketByUserId.set(userId, server);
   closeDuplicateSockets(room.clients, userId, server);
+  if (typeof room.syncPublicMatchBots === 'function') room.syncPublicMatchBots();
   room.startPublicMatchIfReady();
   room.ensureTick();
 

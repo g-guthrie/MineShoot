@@ -122,6 +122,10 @@ body[data-overlay-active="true"] #tracking-reticle {
     pointer-events: none !important;
 }
 
+body[data-overlay-active="true"] #touch-controls {
+    display: none !important;
+}
+
 canvas {
     display: block;
 }
@@ -134,9 +138,10 @@ canvas {
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
-    --touch-stick-size: 224px;
-    --touch-stick-ring-size: 156px;
-    --touch-stick-ring-margin: 34px;
+    --touch-stick-ring-size: 208px;
+    --touch-stick-sprint-reach: 36px;
+    --touch-stick-size: calc(var(--touch-stick-ring-size) + (var(--touch-stick-sprint-reach) * 2));
+    --touch-stick-ring-margin: var(--touch-stick-sprint-reach);
     --touch-stick-knob-size: 52px;
     --touch-action-width: 104px;
     --touch-jump-size: 104px;
@@ -250,8 +255,8 @@ canvas {
 
 .touch-stick {
     position: absolute;
-    left: max(8px, calc(env(safe-area-inset-left) + 8px));
-    bottom: max(10px, calc(env(safe-area-inset-bottom) + 10px));
+    left: max(4px, calc(env(safe-area-inset-left) + 4px));
+    bottom: max(6px, calc(env(safe-area-inset-bottom) + 6px));
     z-index: 2;
     width: var(--touch-stick-size);
     height: var(--touch-stick-size);
@@ -265,7 +270,15 @@ canvas {
     width: var(--touch-stick-ring-size);
     height: var(--touch-stick-ring-size);
     margin: var(--touch-stick-ring-margin);
-    overflow: hidden;
+    overflow: visible;
+}
+
+.touch-stick-ring::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: 50%;
     border: 1px solid rgba(255, 255, 255, 0.22);
     background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06)),
@@ -280,17 +293,21 @@ canvas {
 
 .touch-stick-sprint-wedge {
     position: absolute;
-    inset: 0;
+    left: calc(var(--touch-stick-sprint-reach) * -1);
+    top: calc(var(--touch-stick-sprint-reach) * -1);
+    width: calc(100% + (var(--touch-stick-sprint-reach) * 2));
+    height: calc(100% + (var(--touch-stick-sprint-reach) * 2));
+    z-index: 0;
     border-radius: 50%;
     pointer-events: none;
-    opacity: 0.42;
+    opacity: 0.36;
     background: conic-gradient(
-        from -40deg,
-        rgba(70, 215, 118, 0.88) 0deg 90deg,
+        from -45deg,
+        rgba(70, 215, 118, 0.9) 0deg 90deg,
         transparent 90deg 360deg
     );
-    -webkit-mask: radial-gradient(circle, transparent 0 68%, #000 68.5% 100%);
-    mask: radial-gradient(circle, transparent 0 68%, #000 68.5% 100%);
+    -webkit-mask: radial-gradient(circle, transparent 0 calc(50% - var(--touch-stick-sprint-reach)), #000 calc(50% - var(--touch-stick-sprint-reach) + 1px) 100%);
+    mask: radial-gradient(circle, transparent 0 calc(50% - var(--touch-stick-sprint-reach)), #000 calc(50% - var(--touch-stick-sprint-reach) + 1px) 100%);
     transition: opacity 120ms ease, filter 120ms ease;
 }
 
@@ -301,6 +318,7 @@ canvas {
 
 .touch-stick-knob {
     position: absolute;
+    z-index: 2;
     left: calc((var(--touch-stick-ring-size) - var(--touch-stick-knob-size)) / 2);
     top: calc((var(--touch-stick-ring-size) - var(--touch-stick-knob-size)) / 2);
     width: var(--touch-stick-knob-size);
@@ -424,6 +442,18 @@ canvas {
 @media (pointer: fine) {
     #touch-controls {
         display: none !important;
+    }
+}
+
+@media (pointer: coarse) and (max-height: 360px) {
+    #touch-controls {
+        --touch-stick-ring-size: 182px;
+        --touch-stick-sprint-reach: 30px;
+        --touch-stick-knob-size: 48px;
+        --touch-action-width: 96px;
+        --touch-jump-size: 94px;
+        --touch-swap-height: 56px;
+        --touch-roll-height: 66px;
     }
 }
 
@@ -2765,20 +2795,26 @@ canvas {
    ------------------------------------------------------------ */
 @media (pointer: coarse) and (orientation: landscape) and (max-height: 520px),
        (pointer: coarse) and (orientation: landscape) and (max-width: 640px) {
+    :root {
+        --phone-touch-ring-size: min(170px, calc(100dvh - 142px));
+        --phone-touch-sprint-reach: clamp(20px, 6dvh, 24px);
+        --phone-action-width: clamp(58px, 7vw, 66px);
+    }
 
     #touch-controls {
-        --touch-stick-size: clamp(168px, 21vw, 188px);
-        --touch-stick-ring-size: clamp(116px, 15vw, 132px);
-        --touch-stick-ring-margin: calc((var(--touch-stick-size) - var(--touch-stick-ring-size)) / 2);
-        --touch-stick-knob-size: clamp(42px, 5.4vw, 48px);
-        --touch-action-width: clamp(78px, 10vw, 88px);
-        --touch-jump-size: clamp(78px, 10vw, 88px);
-        --touch-swap-height: clamp(42px, 5.4vw, 48px);
-        --touch-roll-height: clamp(50px, 6.8vw, 58px);
+        --touch-stick-ring-size: var(--phone-touch-ring-size);
+        --touch-stick-sprint-reach: var(--phone-touch-sprint-reach);
+        --touch-stick-size: calc(var(--touch-stick-ring-size) + (var(--touch-stick-sprint-reach) * 2));
+        --touch-stick-ring-margin: var(--touch-stick-sprint-reach);
+        --touch-stick-knob-size: clamp(42px, 11dvh, 48px);
+        --touch-action-width: var(--phone-action-width);
+        --touch-jump-size: var(--phone-action-width);
+        --touch-swap-height: clamp(34px, 4.6vw, 40px);
+        --touch-roll-height: clamp(40px, 5.4vw, 48px);
         --touch-menu-width: clamp(56px, 7vw, 64px);
         --touch-menu-height: 44px;
         --touch-btn-gap: 2px;
-        --touch-action-gap: 5px;
+        --touch-action-gap: 4px;
         --touch-btn-font-size: clamp(9px, 1.25vw, 10px);
         --touch-btn-title-size: clamp(12px, 1.9vw, 13px);
         --touch-btn-note-size: clamp(7px, 1vw, 8px);
@@ -2786,12 +2822,47 @@ canvas {
         --touch-menu-radius: 999px;
     }
 
+    .touch-stick {
+        left: -16px;
+        bottom: max(-10px, calc(env(safe-area-inset-bottom) - 10px));
+    }
+
+    .touch-action-cluster {
+        right: max(2px, calc(env(safe-area-inset-right) + 2px));
+        bottom: max(6px, calc(env(safe-area-inset-bottom) + 6px));
+    }
+
+    .touch-stick-ring::before {
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.04)),
+            var(--fill-card, rgba(255, 255, 255, 0.32));
+    }
+
+    .touch-stick-sprint-wedge {
+        opacity: 0.26;
+    }
+
+    .touch-topbar {
+        top: max(8px, calc(env(safe-area-inset-top) + 6px));
+        left: 76px;
+        right: auto;
+        width: auto;
+        transform: none;
+        justify-content: flex-start;
+    }
+
+    .touch-btn-menu {
+        min-width: clamp(54px, 8vw, 62px);
+        min-height: 38px;
+        font-size: 10px;
+    }
+
     /* ===== TOP-LEFT ZONE ===== */
 
     #combat-radar {
-        top: max(8px, calc(env(safe-area-inset-top) + 4px));
-        left: max(8px, calc(env(safe-area-inset-left) + 4px));
-        transform: scale(0.65);
+        top: max(4px, calc(env(safe-area-inset-top) + 2px));
+        left: 2px;
+        transform: scale(0.62);
         transform-origin: top left;
     }
 
@@ -2831,7 +2902,7 @@ canvas {
     }
 
     #kill-counter {
-        top: max(36px, calc(env(safe-area-inset-top) + 28px));
+        top: 18px;
         right: max(8px, calc(env(safe-area-inset-right) + 8px));
         gap: 2px;
         max-width: min(172px, calc(100vw - 16px));
@@ -2902,15 +2973,7 @@ canvas {
     /* ===== BOTTOM-CENTER ZONE ===== */
 
     #extra-life-bar-container {
-        top: max(74px, calc(env(safe-area-inset-top) + 66px));
-        right: max(8px, calc(env(safe-area-inset-right) + 8px));
-        left: auto;
-        bottom: auto;
-        transform: none;
-        width: 124px;
-        height: 16px;
-        padding: 0 6px;
-        gap: 4px;
+        display: none;
     }
 
     #extra-life-label { font-size: 6px; letter-spacing: 0.5px; }
@@ -2919,7 +2982,10 @@ canvas {
 
     #health-text {
         bottom: max(28px, calc(env(safe-area-inset-bottom) + 10px));
-        width: clamp(96px, calc(100vw - 352px), 220px);
+        left: 50%;
+        right: auto;
+        width: clamp(190px, 36vw, 300px);
+        transform: translateX(-50%);
         height: 16px;
         display: flex;
         align-items: center;
@@ -2932,20 +2998,26 @@ canvas {
 
     #health-bar-container {
         bottom: max(28px, calc(env(safe-area-inset-bottom) + 10px));
-        width: clamp(96px, calc(100vw - 352px), 220px);
+        left: 50%;
+        right: auto;
+        width: clamp(190px, 36vw, 300px);
+        transform: translateX(-50%);
         height: 16px;
     }
 
     #armor-bar-container {
         bottom: max(16px, calc(env(safe-area-inset-bottom) + 2px));
-        width: clamp(96px, calc(100vw - 352px), 220px);
+        left: 50%;
+        right: auto;
+        width: clamp(190px, 36vw, 300px);
+        transform: translateX(-50%);
         height: 5px;
     }
 
     /* ===== TOP-RIGHT HUD PILL (under kill counter + extra life) ===== */
 
     #hud-bottom-right {
-        top: max(98px, calc(env(safe-area-inset-top) + 90px));
+        top: 64px;
         right: max(8px, calc(env(safe-area-inset-right) + 8px));
         bottom: auto;
         align-items: center;

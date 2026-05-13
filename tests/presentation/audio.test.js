@@ -231,6 +231,46 @@ test('movement fallback noise uses tuned walk, run, and jump levels', async () =
 
 });
 
+test('remote positional cues attenuate by world distance', async () => {
+  const { audio, getContext } = await loadAudioRuntime();
+
+  closeTo(audio.distanceGain({
+    sourcePosition: { x: 0, y: 0, z: 0 },
+    listenerPosition: { x: 0, y: 0, z: 0 }
+  }), 1);
+
+  const farGain = audio.distanceGain({
+    sourcePosition: { x: 0, y: 0, z: 45 },
+    listenerPosition: { x: 0, y: 0, z: 0 },
+    nearDistance: 0,
+    referenceDistance: 10,
+    distanceRolloff: 1.8,
+    maxDistance: 105
+  });
+  assert.ok(farGain > 0 && farGain < 0.08, 'far gunshots should still exist but sit well below local volume');
+
+  audio.play('fire', { weapon: 'rifle' });
+  var localPeak = Math.max.apply(null, getContext().gainEvents
+    .filter((event) => event.type === 'exponential' && event.value > 0.001)
+    .map((event) => event.value));
+
+  getContext().gainEvents.length = 0;
+  audio.play('fire', {
+    weapon: 'rifle',
+    sourcePosition: { x: 0, y: 0, z: 45 },
+    listenerPosition: { x: 0, y: 0, z: 0 },
+    nearDistance: 0,
+    referenceDistance: 10,
+    distanceRolloff: 1.8,
+    maxDistance: 105
+  });
+  const remotePeak = Math.max.apply(null, getContext().gainEvents
+    .filter((event) => event.type === 'exponential' && event.value > 0.001)
+    .map((event) => event.value));
+
+  assert.ok(remotePeak < localPeak * 0.1, 'remote gunshot gain should be distance attenuated');
+});
+
 test('throwable cues expose typed throw, impact, and explosion sounds', async () => {
   const { audio, getContext } = await loadAudioRuntime();
   const cueIds = audio.getAssetCueIds();

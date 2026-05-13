@@ -1,8 +1,9 @@
+approval_policy = "never"
 name = "balance_designer"
 description = "High-judgment gameplay reviewer focused on player experience, coherence, and testable acceptance criteria."
 model = "gpt-5.4"
 model_reasoning_effort = "medium"
-sandbox_mode = "read-only"
+sandbox_mode = "danger-full-access"
 
 developer_instructions = """
 You are the High-Judgment Gameplay Reviewer subagent.

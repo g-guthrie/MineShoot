@@ -42,7 +42,10 @@ import {
   MATCH_RESET_DELAY_MS,
   targetProgressForGameMode
 } from '../../../shared/match-rules.js';
-import { PUBLIC_ROOM_START_THRESHOLD } from '../../../shared/matchmaking-config.js';
+import {
+  PUBLIC_ROOM_START_THRESHOLD,
+  PUBLIC_ROOM_SOFT_TARGET
+} from '../../../shared/matchmaking-config.js';
 
 import {
   createPlayerEntity,
@@ -150,6 +153,14 @@ import {
   normalizeWeaponLoadout as normalizeRoomWeaponLoadout
 } from './RoomLoadout.js';
 import {
+  isPublicBotEntity as isRoomPublicBotEntity,
+  publicBotCount as countRoomPublicBots,
+  publicParticipantCount as countRoomPublicParticipants,
+  removePublicMatchBots as removeRoomPublicMatchBots,
+  syncPublicMatchBots as syncRoomPublicMatchBots,
+  tickPublicMatchBots as tickRoomPublicMatchBots
+} from './RoomBotRuntime.js';
+import {
   applyPlasmaStreamHeat as applyCombatPlasmaStreamHeat,
   applyTimedSlow as applyCombatTimedSlow,
   applyTimedStun as applyCombatTimedStun,
@@ -203,6 +214,9 @@ const WEAPON_FALLOFF = GAMEPLAY_TUNING_WU.weaponFalloff || {};
 const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
 const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
 const SELECTABLE_WEAPON_IDS = getSelectableWeaponIds();
+const THROWABLE_IDS = Array.isArray(THROWABLE_STATS && THROWABLE_STATS.order)
+  ? THROWABLE_STATS.order.slice()
+  : ['frag', 'plasma', 'molotov', 'knife'];
 
 const ROOM_SIM_TICK_MS = 1000 / 60;
 const ROOM_SNAPSHOT_TICK_MS = 1000 / 60;
@@ -461,13 +475,24 @@ export class GlobalArenaRoom extends DurableObject {
     return isPublicMatchRoom(this.roomName);
   }
 
+  isPublicBotEntity(entity) {
+    return isRoomPublicBotEntity(entity);
+  }
+
+  isServerOwnedFixtureEntity(entity) {
+    return !!(
+      entity &&
+      (entity.fixtureType === 'sim_player' || this.isPublicBotEntity(entity))
+    );
+  }
+
   connectedHumanIds() {
     const ids = [];
     const seen = new Set();
     for (const meta of this.clients.values()) {
       if (!meta || !meta.userId) continue;
       const player = this.players.get(meta.userId);
-      if (!player || player.fixtureType === 'sim_player') continue;
+      if (!player || this.isServerOwnedFixtureEntity(player)) continue;
       if (seen.has(player.id)) continue;
       seen.add(player.id);
       ids.push(player.id);
@@ -555,7 +580,7 @@ export class GlobalArenaRoom extends DurableObject {
   humanPlayerCount() {
     let count = 0;
     for (const player of this.players.values()) {
-      if (!player || player.fixtureType === 'sim_player') continue;
+      if (!player || this.isServerOwnedFixtureEntity(player)) continue;
       count++;
     }
     return count;
@@ -571,6 +596,39 @@ export class GlobalArenaRoom extends DurableObject {
       if (player && player.fixtureType === 'sim_player') count++;
     }
     return count;
+  }
+
+  publicBotCount() {
+    return countRoomPublicBots(this);
+  }
+
+  publicParticipantCount() {
+    return countRoomPublicParticipants(this);
+  }
+
+  syncPublicMatchBots() {
+    return syncRoomPublicMatchBots(this, {
+      targetPlayers: PUBLIC_ROOM_SOFT_TARGET,
+      selectableWeaponIds: SELECTABLE_WEAPON_IDS,
+      defaultWeaponLoadout: DEFAULT_WEAPON_LOADOUT,
+      throwableIds: THROWABLE_IDS,
+      nowMs: () => this.currentNowMs()
+    });
+  }
+
+  removePublicMatchBots() {
+    return removeRoomPublicMatchBots(this);
+  }
+
+  tickPublicMatchBots(dtSec) {
+    return tickRoomPublicMatchBots(this, dtSec, {
+      targetPlayers: PUBLIC_ROOM_SOFT_TARGET,
+      selectableWeaponIds: SELECTABLE_WEAPON_IDS,
+      defaultWeaponLoadout: DEFAULT_WEAPON_LOADOUT,
+      throwableIds: THROWABLE_IDS,
+      weaponStats: WEAPON_STATS,
+      nowMs: () => this.currentNowMs()
+    });
   }
 
   spawnEntityRandomly(entity) {
@@ -929,7 +987,7 @@ export class GlobalArenaRoom extends DurableObject {
   isEntityDisconnected(entity) {
     return !!(
       entity &&
-      entity.fixtureType !== 'sim_player' &&
+      !this.isServerOwnedFixtureEntity(entity) &&
       entity.kind === 'player' &&
       Number(entity.disconnectedAt || 0) > 0
     );
@@ -1187,7 +1245,7 @@ export class GlobalArenaRoom extends DurableObject {
   cleanupDisconnectedPlayers(now) {
     const removeIds = [];
     for (const player of this.players.values()) {
-      if (!player || player.fixtureType === 'sim_player') continue;
+      if (!player || this.isServerOwnedFixtureEntity(player)) continue;
       if (!player.disconnectedAt) continue;
       if ((now - player.disconnectedAt) < DISCONNECT_GRACE_MS) continue;
       removeIds.push(player.id);
@@ -1222,6 +1280,7 @@ export class GlobalArenaRoom extends DurableObject {
   }
 
   tickPlayers(dtSec) {
+    this.tickPublicMatchBots(dtSec);
     return tickRoomPlayers(this, dtSec, {});
   }
 

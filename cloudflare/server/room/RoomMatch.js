@@ -191,12 +191,16 @@ export function startPublicMatchIfReady(room, deps) {
   if (!room.isPublicMatchRoom()) return false;
   if (!room.matchState) room.matchState = emptyMatchState ? emptyMatchState(room.gameMode) : {};
   if (room.matchState.started || room.matchState.ended) return false;
+  if (typeof room.syncPublicMatchBots === 'function') room.syncPublicMatchBots();
   const connectedCount = room.connectedHumanCount();
   let activeCount = 0;
   for (const player of room.players.values()) {
     if (!player || player.fixtureType === 'sim_player' || isPendingEntry(room, player)) continue;
     activeCount += 1;
   }
+  const participantCount = typeof room.publicParticipantCount === 'function'
+    ? Math.max(0, Number(room.publicParticipantCount() || 0))
+    : activeCount;
   const startThreshold = publicRoomStartThresholdForMode
     ? Number(publicRoomStartThresholdForMode(room.gameMode))
     : Number(deps.publicRoomStartThreshold || 2);
@@ -216,7 +220,7 @@ export function startPublicMatchIfReady(room, deps) {
   room.matchState.targetProgress = room.gameMode === gameModeTdm
     ? Number(deps.tdmTargetProgress || 10)
     : Number(deps.ffaTargetProgress || 10);
-  room.matchState.matchBaselinePlayerCount = connectedCount;
+  room.matchState.matchBaselinePlayerCount = Math.max(activeCount, participantCount, connectedCount);
   room.matchState.teamIds = room.gameMode === gameModeTdm ? teamIds.slice() : (room.matchState.teamIds || []);
   room.matchState.teamProgress = buildTeamStatMap(teamIds, null);
   room.matchState.teamBaselineSize = buildTeamStatMap(teamIds, null);

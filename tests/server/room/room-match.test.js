@@ -176,6 +176,40 @@ test('public FFA still starts with one human but does not auto-win without a kil
   assert.equal(room.finishPublicMatchCalled, 1);
 });
 
+test('public FFA match baseline includes bot-filled participants', () => {
+  const room = {
+    roomName: 'ffa-01',
+    gameMode: 'ffa',
+    players: new Map([
+      ['u1', { id: 'u1', fixtureType: '', kills: 0, progressScore: 0, eliminated: false, hp: 100, hpMax: 100, armor: 40, armorMax: 40, alive: true }],
+      ['public-bot-01', { id: 'public-bot-01', fixtureType: 'public_bot', kills: 0, progressScore: 0, eliminated: false, hp: 100, hpMax: 100, armor: 40, armorMax: 40, alive: true }],
+      ['public-bot-02', { id: 'public-bot-02', fixtureType: 'public_bot', kills: 0, progressScore: 0, eliminated: false, hp: 100, hpMax: 100, armor: 40, armorMax: 40, alive: true }]
+    ]),
+    matchState: emptyMatchState('ffa'),
+    isPublicMatchRoom() { return true; },
+    connectedHumanCount() { return 1; },
+    publicParticipantCount() { return 3; },
+    syncPublicMatchBotsCalled: 0,
+    syncPublicMatchBots() { this.syncPublicMatchBotsCalled += 1; }
+  };
+
+  assert.equal(startPublicMatchIfReady(room, {
+    emptyMatchState,
+    nowMs: () => 55,
+    publicRoomStartThreshold: 1,
+    ffaTargetProgress: 10,
+    tdmTargetProgress: 10,
+    gameModeFfa: 'ffa',
+    gameModeTdm: 'tdm',
+    teamAlpha: 'alpha',
+    teamBravo: 'bravo'
+  }), true);
+
+  assert.equal(room.syncPublicMatchBotsCalled, 1);
+  assert.equal(room.matchState.aliveCount, 3);
+  assert.equal(room.matchState.matchBaselinePlayerCount, 3);
+});
+
 test('leader, finish, elimination, and reset helpers preserve match outcomes', () => {
   const room = {
     roomName: 'ffa-01',

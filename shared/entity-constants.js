@@ -8,7 +8,7 @@ export var PLAYER_RADIUS = 0.5;
 export var PLAYER_HEIGHT = 2.8;
 export var ROLL_CONTACT_CYLINDER_HEIGHT_SCALE = 0.3;
 
-export var DEFAULT_HP_MAX = 400;
+export var DEFAULT_HP_MAX = 1000;
 export var DEFAULT_ARMOR = 100;
 export var DEFAULT_ARMOR_MAX = 100;
 

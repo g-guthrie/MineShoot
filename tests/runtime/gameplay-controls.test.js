@@ -17,6 +17,7 @@ class FakeElement {
     this.listeners = new Map();
     this.queryResults = new Map();
     this.classTokens = new Set();
+    this.rect = { left: 0, top: 0, width: 104, height: 104 };
     this.classList = {
       toggle: (name, active) => {
         const key = String(name || '');
@@ -75,7 +76,16 @@ class FakeElement {
   }
 
   getBoundingClientRect() {
-    return { left: 0, top: 0, width: 104, height: 104 };
+    return { ...this.rect };
+  }
+
+  setBoundingClientRect(rect) {
+    this.rect = {
+      left: Number(rect && rect.left || 0),
+      top: Number(rect && rect.top || 0),
+      width: Number(rect && rect.width || 0),
+      height: Number(rect && rect.height || 0)
+    };
   }
 
   setPointerCapture() {}
@@ -848,6 +858,59 @@ test('touch jump releases on pointer up so mobile jump height stays graduated', 
   assert.equal(harness.calls.movementInputs.at(-1).jump, false);
 });
 
+test('touch movement sprints only in the outer forward wedge', async () => {
+  const harness = await loadControlsHarness({
+    touchDevice: true,
+    windowSize: { width: 844, height: 390 }
+  });
+
+  assert.equal(harness.controls.activateTouchCapture(), true);
+  const touchRoot = harness.documentObj.body.children.find((child) => child.id === 'touch-controls');
+  const moveStick = touchRoot.children.find((child) => child.className === 'touch-stick touch-stick-left');
+  const ring = moveStick.querySelector('.touch-stick-ring');
+  const knob = moveStick.querySelector('.touch-stick-knob');
+  moveStick.setBoundingClientRect({ left: 0, top: 0, width: 332, height: 332 });
+  ring.setBoundingClientRect({ left: 46, top: 46, width: 240, height: 240 });
+  knob.setBoundingClientRect({ left: 140, top: 140, width: 52, height: 52 });
+
+  moveStick.dispatch('pointerdown', {
+    pointerId: 12,
+    clientX: 166,
+    clientY: 166,
+    preventDefault() {}
+  });
+
+  moveStick.dispatch('pointermove', {
+    pointerId: 12,
+    clientX: 166,
+    clientY: 78,
+    preventDefault() {}
+  });
+  assert.equal(harness.calls.movementInputs.at(-1).forward, true);
+  assert.equal(harness.calls.movementInputs.at(-1).sprint, false);
+  assert.equal(moveStick.classList.contains('sprinting'), false);
+
+  moveStick.dispatch('pointermove', {
+    pointerId: 12,
+    clientX: 166,
+    clientY: 42,
+    preventDefault() {}
+  });
+  assert.equal(harness.calls.movementInputs.at(-1).forward, true);
+  assert.equal(harness.calls.movementInputs.at(-1).sprint, true);
+  assert.equal(moveStick.classList.contains('sprinting'), true);
+
+  moveStick.dispatch('pointermove', {
+    pointerId: 12,
+    clientX: 294,
+    clientY: 166,
+    preventDefault() {}
+  });
+  assert.equal(harness.calls.movementInputs.at(-1).right, true);
+  assert.equal(harness.calls.movementInputs.at(-1).sprint, false);
+  assert.equal(moveStick.classList.contains('sprinting'), false);
+});
+
 test('gameplay controls close the loaded docs runtime on escape', async () => {
   const harness = await loadControlsHarness({
     docsOpen: true
@@ -871,30 +934,103 @@ test('gameplay controls default desktop auto fire to off until the user enables 
   assert.equal(harness.runtime.GameGameplayControls.isDesktopAutoFireEnabled(), false);
 });
 
-test('gameplay controls bind the camera view toggle and persist first-person state', async () => {
+test('gameplay controls default camera view to over shoulder', async () => {
+  const cameraButton = new FakeButton();
+  const harness = await loadControlsHarness({
+    documentElements: {
+      'camera-view-toggle-btn': cameraButton
+    }
+  });
+
+  assert.equal(harness.controls.isFirstPersonViewEnabled(), false);
+  assert.equal(harness.runtime.GameGameplayControls.isFirstPersonViewEnabled(), false);
+  assert.equal(cameraButton.textContent, 'CAMERA: OVER SHOULDER');
+  assert.equal(cameraButton.getAttribute('aria-pressed'), 'false');
+});
+
+test('gameplay controls bind the camera view toggle and persist camera state', async () => {
   const cameraButton = new FakeButton();
   const harness = await loadControlsHarness({
     documentElements: {
       'camera-view-toggle-btn': cameraButton
     },
     localStorageValues: {
-      'mayhem.cameraViewMode': 'fps'
+      'mayhem.cameraViewMode': 'over_shoulder'
     }
   });
-
-  assert.equal(harness.controls.isFirstPersonViewEnabled(), true);
-  assert.equal(harness.runtime.GameGameplayControls.isFirstPersonViewEnabled(), true);
-  assert.equal(cameraButton.textContent, 'CAMERA: FPS');
-  assert.equal(cameraButton.getAttribute('aria-pressed'), 'true');
-
-  cameraButton.click();
 
   assert.equal(harness.controls.isFirstPersonViewEnabled(), false);
   assert.equal(harness.runtime.GameGameplayControls.isFirstPersonViewEnabled(), false);
   assert.equal(cameraButton.textContent, 'CAMERA: OVER SHOULDER');
   assert.equal(cameraButton.getAttribute('aria-pressed'), 'false');
+
+  cameraButton.click();
+
+  assert.equal(harness.controls.isFirstPersonViewEnabled(), true);
+  assert.equal(harness.runtime.GameGameplayControls.isFirstPersonViewEnabled(), true);
+  assert.equal(cameraButton.textContent, 'CAMERA: FPS');
+  assert.equal(cameraButton.getAttribute('aria-pressed'), 'true');
   assert.deepEqual(harness.calls.localStorageWrites.at(-1), {
     key: 'mayhem.cameraViewMode',
-    value: 'over_shoulder'
+    value: 'fps'
   });
+});
+
+test('gameplay controls tune and persist the first-person camera origin from F6 mode', async () => {
+  const events = [];
+  const harness = await loadControlsHarness({
+    localStorageValues: {
+      'mayhem.cameraViewMode': 'over_shoulder'
+    }
+  });
+  const dispatchKey = (code, patch = {}) => harness.documentObj.dispatch('keydown', {
+    code,
+    repeat: false,
+    preventDefault() { events.push(`${code}:preventDefault`); },
+    stopPropagation() { events.push(`${code}:stopPropagation`); },
+    ...patch
+  });
+
+  dispatchKey('F6');
+
+  assert.equal(harness.controls.isCameraOriginTuneModeEnabled(), true);
+  assert.equal(harness.controls.isFirstPersonViewEnabled(), true);
+  assert.equal(harness.runtime.GameGameplayControls.isCameraOriginTuneModeEnabled(), true);
+  assert.deepEqual(harness.calls.localStorageWrites.at(-1), {
+    key: 'mayhem.cameraViewMode',
+    value: 'fps'
+  });
+
+  dispatchKey('ArrowUp');
+  dispatchKey('ArrowRight');
+  dispatchKey('PageUp', { shiftKey: true });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.controls.getFirstPersonCameraOffset())), {
+    x: 0.05,
+    y: 0.01,
+    z: 0.05
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.runtime.GameGameplayControls.getFirstPersonCameraOffset())), {
+    x: 0.05,
+    y: 0.01,
+    z: 0.05
+  });
+  assert.equal(harness.calls.localStorageWrites.at(-1).key, 'mayhem.firstPersonCameraOriginOffset.v1');
+  assert.deepEqual(JSON.parse(harness.calls.localStorageWrites.at(-1).value), {
+    x: 0.05,
+    y: 0.01,
+    z: 0.05
+  });
+
+  dispatchKey('Home');
+
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.controls.getFirstPersonCameraOffset())), {
+    x: 0,
+    y: 0,
+    z: 0
+  });
+  assert.equal(events.includes('F6:preventDefault'), true);
+  assert.equal(events.includes('ArrowUp:preventDefault'), true);
+  assert.equal(events.includes('Home:preventDefault'), true);
+  assert.equal(harness.calls.transientDebug.some((entry) => entry.text.includes('Camera origin tuning: ON')), true);
 });
