@@ -7,8 +7,14 @@ async function loadRuntimeMatchActionsHarness(options = {}) {
   const code = await fs.readFile(new URL('../../js/app/runtime-match-actions.js', import.meta.url), 'utf8');
   const predictedFeedback = [];
   const sentFire = [];
+  const sentEquip = [];
   const triggerActions = [];
   const audioCalls = [];
+  const weaponInfoUpdates = [];
+  const weaponModelUpdates = [];
+  const reticleUpdates = [];
+  const setWeaponCalls = [];
+  const debugMessages = [];
   const cancelSprintTemporarilyCalls = [];
   const fireOrder = [];
   const prepareWeaponFireCalls = [];
@@ -16,6 +22,7 @@ async function loadRuntimeMatchActionsHarness(options = {}) {
   const shotSample = { weaponId: 'rifle', aimOrigin: { x: 1, y: 2, z: 3 } };
   const observedSamples = [];
   let prepareWeaponFireResult = !!options.prepareWeaponFireResult;
+  let sendEquipResult = options.sendEquipResult !== false;
   const playerState = {
     networkSprint: false,
     sprintKeyHeld: false,
@@ -71,6 +78,26 @@ async function loadRuntimeMatchActionsHarness(options = {}) {
         },
         triggerAction(action) {
           triggerActions.push(String(action || ''));
+        },
+        setWeaponModel(weaponId) {
+          weaponModelUpdates.push(String(weaponId || ''));
+        },
+        getAdsState() {
+          return {};
+        }
+      };
+    },
+    getGameUiApi() {
+      return {
+        updateWeaponInfo(weapon) {
+          weaponInfoUpdates.push(JSON.parse(JSON.stringify(weapon || null)));
+        },
+        updateReticle(weapon, spec, adsState) {
+          reticleUpdates.push({
+            weapon: JSON.parse(JSON.stringify(weapon || null)),
+            spec: JSON.parse(JSON.stringify(spec || null)),
+            adsState: JSON.parse(JSON.stringify(adsState || null))
+          });
         }
       };
     },
@@ -83,6 +110,16 @@ async function loadRuntimeMatchActionsHarness(options = {}) {
       return {
         getCurrentWeapon() {
           return { id: 'rifle', cooldownMs: 400 };
+        },
+        getReticleSpec(weaponId) {
+          return { id: String(weaponId || '') + '-reticle' };
+        },
+        setWeapon(weaponId) {
+          setWeaponCalls.push(String(weaponId || ''));
+          return { id: String(weaponId || '') };
+        },
+        canFire() {
+          return options.canFire !== false;
         },
         captureShotSample() {
           fireOrder.push('sample');
@@ -110,7 +147,7 @@ async function loadRuntimeMatchActionsHarness(options = {}) {
     },
     getGameNetApi() {
       return {
-        isConnected() { return true; }
+        isConnected() { return options.netConnected !== false; }
       };
     },
     getGameNetFeedbackSyncApi() {
@@ -121,10 +158,15 @@ async function loadRuntimeMatchActionsHarness(options = {}) {
       };
     },
     getCurrentMatchCommandApi() {
+      if (options.commandApiUnavailable) return null;
       return {
         sendFire(weaponId, shotToken, sample) {
           sentFire.push({ weaponId: String(weaponId || ''), shotToken: String(shotToken || ''), sample });
-          return true;
+          return options.sendFireResult !== false;
+        },
+        sendEquipWeapon(weaponId) {
+          sentEquip.push(String(weaponId || ''));
+          return sendEquipResult;
         }
       };
     },
@@ -134,6 +176,9 @@ async function loadRuntimeMatchActionsHarness(options = {}) {
           audioCalls.push({ name: String(name || ''), payload: JSON.parse(JSON.stringify(payload || {})) });
         }
       };
+    },
+    setTransientDebug(text, ms) {
+      debugMessages.push({ text: String(text || ''), ms: Number(ms || 0) });
     }
   });
 
@@ -141,9 +186,15 @@ async function loadRuntimeMatchActionsHarness(options = {}) {
     actions,
     predictedFeedback,
     sentFire,
+    sentEquip,
     observedSamples,
     triggerActions,
     audioCalls,
+    weaponInfoUpdates,
+    weaponModelUpdates,
+    reticleUpdates,
+    setWeaponCalls,
+    debugMessages,
     cancelSprintTemporarilyCalls,
     fireOrder,
     prepareWeaponFireCalls,
@@ -151,6 +202,9 @@ async function loadRuntimeMatchActionsHarness(options = {}) {
     playerState,
     setPrepareWeaponFireResult(value) {
       prepareWeaponFireResult = !!value;
+    },
+    setSendEquipResult(value) {
+      sendEquipResult = !!value;
     },
     runNextTimer() {
       const timer = timers.shift();
@@ -175,6 +229,58 @@ test('runtime match actions use the real local fire flow for multiplayer predict
   assert.equal(harness.predictedFeedback[0].shotToken, harness.sentFire[0].shotToken);
   assert.equal(harness.sentFire[0].sample, harness.observedSamples[0].sample);
   assert.equal(harness.observedSamples.every((entry) => entry.sample === harness.sentFire[0].sample), true);
+});
+
+test('runtime match actions do not start local fire prediction when fire send fails', async () => {
+  const harness = await loadRuntimeMatchActionsHarness({
+    sendFireResult: false
+  });
+
+  harness.actions.tryPlayerFire();
+
+  assert.equal(harness.sentFire.length, 1);
+  assert.deepEqual(harness.fireOrder, ['prepare', 'sample']);
+  assert.equal(harness.predictedFeedback.length, 0);
+  assert.equal(harness.observedSamples.length, 0);
+  assert.deepEqual(harness.triggerActions, []);
+  assert.deepEqual(harness.audioCalls, []);
+});
+
+test('runtime match actions do not apply multiplayer weapon equip locally when equip send fails', async () => {
+  const harness = await loadRuntimeMatchActionsHarness();
+
+  assert.equal(harness.actions.applyWeapon({ id: 'rifle', name: 'Rifle' }), true);
+  harness.setSendEquipResult(false);
+
+  assert.equal(harness.actions.applyWeapon({ id: 'shotgun', name: 'Shotgun' }), false);
+
+  assert.deepEqual(harness.sentEquip, ['rifle', 'shotgun']);
+  assert.deepEqual(harness.weaponInfoUpdates, [{ id: 'rifle', name: 'Rifle' }]);
+  assert.deepEqual(harness.weaponModelUpdates, ['rifle']);
+  assert.equal(harness.reticleUpdates.length, 1);
+  assert.deepEqual(harness.setWeaponCalls, ['rifle']);
+  assert.deepEqual(harness.debugMessages, [
+    { text: 'Weapon: Rifle', ms: 950 },
+    { text: 'Weapon equip send failed.', ms: 700 }
+  ]);
+});
+
+test('runtime match actions do not apply multiplayer weapon equip locally when equip networking is unavailable', async () => {
+  const harness = await loadRuntimeMatchActionsHarness({
+    commandApiUnavailable: true
+  });
+
+  assert.equal(harness.actions.applyWeapon({ id: 'shotgun', name: 'Shotgun' }), false);
+
+  assert.deepEqual(harness.sentEquip, []);
+  assert.deepEqual(harness.weaponInfoUpdates, []);
+  assert.deepEqual(harness.weaponModelUpdates, []);
+  assert.deepEqual(harness.reticleUpdates, []);
+  assert.deepEqual(harness.setWeaponCalls, []);
+  assert.deepEqual(harness.debugMessages, [{
+    text: 'Weapon equip unavailable.',
+    ms: 700
+  }]);
 });
 
 test('runtime match actions delay sprint-break shots until the weapon raise window', async () => {

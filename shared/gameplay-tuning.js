@@ -131,7 +131,7 @@ export const gameplayTuning = {
       lossHistoryBonus: 10,
       teleportBaseThresholdWu: 8,
       teleportSpeedAllowanceScale: 1.5,
-      hitboxLeadMs: 24
+      hitboxLeadMs: 0
     },
     feedback: {
       predictedHitTtlMs: 900,

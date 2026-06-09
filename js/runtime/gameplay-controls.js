@@ -886,14 +886,21 @@
                 : null);
 
             var commandsApi = netCommands();
-            if (multiplayerMode() && commandsApi && commandsApi.sendThrow) {
+            if (multiplayerMode()) {
+                if (!commandsApi || !commandsApi.sendThrow) {
+                    setTransientDebug('Throw unavailable.', 700);
+                    return { ok: false, reason: 'send_unavailable' };
+                }
                 var clientThrowId = throwablesApi && throwablesApi.buildClientThrowId
                     ? throwablesApi.buildClientThrowId()
                     : ('cthrow-' + Date.now().toString(36));
+                if (!commandsApi.sendThrow(type, clientThrowId, throwIntent)) {
+                    setTransientDebug('Throw send failed.', 700);
+                    return { ok: false, reason: 'send_failed' };
+                }
                 if (throwablesApi && throwablesApi.throwPredicted) {
                     throwablesApi.throwPredicted(type, camera, clientThrowId, throwIntent);
                 }
-                commandsApi.sendThrow(type, clientThrowId, throwIntent);
                 triggerLocalThrowFeedback(type);
                 setTransientDebug('Throw sent: ' + type, 650);
                 return { ok: true, sent: true };
@@ -916,14 +923,20 @@
             var playerApi = runtime.GamePlayer || null;
             if (!playerApi || !playerApi.tryRoll) return false;
             var rollOptions = playerApi.peekRollActionOptions ? playerApi.peekRollActionOptions() : null;
-            var triggered = !!playerApi.tryRoll();
-            if (!triggered) return false;
             if (multiplayerMode()) {
+                if (!rollOptions) return false;
                 var commandsApi = netCommands();
-                if (commandsApi && commandsApi.sendRoll && rollOptions) {
-                    commandsApi.sendRoll(rollOptions);
+                if (!commandsApi || !commandsApi.sendRoll) {
+                    setTransientDebug('Roll unavailable.', 700);
+                    return false;
+                }
+                if (!commandsApi.sendRoll(rollOptions)) {
+                    setTransientDebug('Roll send failed.', 700);
+                    return false;
                 }
             }
+            var triggered = !!playerApi.tryRoll();
+            if (!triggered) return false;
             return true;
         }
 

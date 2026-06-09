@@ -54,6 +54,23 @@ test('room rewind clamps stale shot times to the maximum rewind window', () => {
   assert.equal(clampRewindShotTime(0, 1500), 1500);
 });
 
+test('room rewind honors the firing-player rewind budget for target poses', () => {
+  const entity = createEntity({ x: 0 });
+  recordEntityPoseHistory(entity, 1000);
+  entity.x = 50;
+  recordEntityPoseHistory(entity, 1500);
+
+  const targetWithShortBudget = buildRewoundTargetEntity(entity, 1000, 1500, {
+    maxRewindMs: 250
+  });
+  const targetWithShooterBudget = buildRewoundTargetEntity(entity, 1000, 1500, {
+    maxRewindMs: 500
+  });
+
+  assert.equal(targetWithShortBudget.x, 25);
+  assert.equal(targetWithShooterBudget.x, 0);
+});
+
 test('room rewind computes adaptive max rewind from link quality with hard floor and cap', () => {
   assert.equal(computeAdaptiveMaxRewindMs(0, 0), 250);
   assert.equal(computeAdaptiveMaxRewindMs(150, 20), 250);

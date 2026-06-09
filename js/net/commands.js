@@ -16,6 +16,10 @@
             return opts.wsSend(msg);
         }
 
+        function isPayloadObject(payload) {
+            return !!(payload && typeof payload === 'object');
+        }
+
         return {
             sendEnterMatch: function () {
                 return wsSend({
@@ -24,6 +28,9 @@
             },
             sendFire: function (weaponId, shotToken, shotSample) {
                 if (!buildFirePayload) return false;
+                if (opts.flushInputBeforeFire) {
+                    if (!opts.flushInputBeforeFire(weaponId, shotToken, shotSample)) return false;
+                }
                 var payload = buildFirePayload(opts.fireMessageType || 'fire', weaponId, shotToken, shotSample);
                 if (!payload) return false;
                 return wsSend(payload);
@@ -41,12 +48,14 @@
             },
             sendReload: function (weaponId) {
                 if (!weaponId) return false;
-                return wsSend(opts.normalizeReloadPayload
+                var payload = opts.normalizeReloadPayload
                     ? opts.normalizeReloadPayload(weaponId)
                     : {
                         t: opts.reloadMessageType || 'reload',
                         weaponId: String(weaponId)
-                    });
+                    };
+                if (!isPayloadObject(payload)) return false;
+                return wsSend(payload);
             },
             sendEquipWeapon: function (weaponId) {
                 if (!weaponId) return false;
@@ -57,14 +66,18 @@
             },
             sendWeaponLoadout: function (slot1, slot2) {
                 if (opts.setPendingWeaponLoadout && opts.normalizeWeaponLoadoutPayload) {
-                    opts.setPendingWeaponLoadout(opts.normalizeWeaponLoadoutPayload(slot1, slot2));
+                    var payload = opts.normalizeWeaponLoadoutPayload(slot1, slot2);
+                    if (!isPayloadObject(payload)) return false;
+                    opts.setPendingWeaponLoadout(payload);
                 }
                 return opts.flushPendingWeaponLoadout ? opts.flushPendingWeaponLoadout() : false;
             },
             sendThrow: function (throwableId, clientThrowId, throwIntent) {
-                return wsSend(opts.normalizeThrowPayload
+                var payload = opts.normalizeThrowPayload
                     ? opts.normalizeThrowPayload(throwableId, clientThrowId, throwIntent)
-                    : null);
+                    : null;
+                if (!isPayloadObject(payload)) return false;
+                return wsSend(payload);
             }
         };
     }

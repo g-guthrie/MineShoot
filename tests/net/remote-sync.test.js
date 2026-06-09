@@ -137,6 +137,57 @@ test('remote sync advances the presented transform over frames using buffered hi
   }
 });
 
+test('remote sync keeps combat hitboxes on the presented transform', async () => {
+  const hitboxPositions = [];
+  const remoteSync = await loadRemoteSyncHarness({
+    GameShared: {
+      getNetworkTuning() {
+        return {
+          remoteInterpolation: {
+            minDelayMs: 1,
+            maxDelayMs: 160,
+            intervalDelayScale: 1.6,
+            jitterDelayScale: 1.4,
+            fallbackCatchupRemainingPerSecond: 0.001,
+            hitboxLeadMs: 0
+          }
+        };
+      },
+      getMovementTuning() {
+        return { gravity: 18, runSpeed: 11 };
+      },
+      getWeaponStats() {
+        return { moveSpeedMultiplier: 1 };
+      }
+    }
+  });
+  const render = createRender({
+    actorVisual: {
+      syncHitboxes(position) {
+        hitboxPositions.push({
+          x: Number(position && position.x || 0),
+          y: Number(position && position.y || 0),
+          z: Number(position && position.z || 0)
+        });
+      }
+    }
+  });
+  const renderMap = new Map([[render.id, render]]);
+  const originalNow = Date.now;
+  Date.now = () => 1100;
+  try {
+    remoteSync.updateRemoteEntities(1 / 60, renderMap);
+  } finally {
+    Date.now = originalNow;
+  }
+
+  assert.equal(hitboxPositions.length, 1);
+  assert.ok(render.lastPresentedTransform.x > 4.5 && render.lastPresentedTransform.x < 5.5);
+  assert.equal(hitboxPositions[0].x, render.lastPresentedTransform.x);
+  assert.equal(hitboxPositions[0].y, render.lastPresentedTransform.footY);
+  assert.equal(hitboxPositions[0].z, render.lastPresentedTransform.z);
+});
+
 test('remote sync preserves fast backpedal in the presented transform', async () => {
   const remoteSync = await loadRemoteSyncHarness();
   const render = createRender({

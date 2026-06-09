@@ -278,6 +278,21 @@ test('remote entities reuse the same snapshot history array between updates', as
   assert.equal(render.snapshotHistory.length, 2);
 });
 
+test('remote entities default new renders to the online snapshot cadence', async () => {
+  const { entitiesApi } = await loadRemoteEntities();
+  const entityId = 'usr_default_cadence';
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId), {
+    serverTime: 1000,
+    receivedAt: 1000
+  });
+
+  const render = entitiesApi.getRenderMap().get(entityId);
+  assert.ok(render);
+  assert.equal(render.snapshotIntervalMs, 1000 / 30);
+  assert.equal(render.lastSnapshotStepMs, 1000 / 30);
+});
+
 test('remote entities refresh lateral movement flags on every snapshot', async () => {
   const { entitiesApi } = await loadRemoteEntities();
   const entityId = 'usr_lateral_flags';

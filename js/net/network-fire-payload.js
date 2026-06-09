@@ -107,6 +107,20 @@
         return eyeOrigin;
     }
 
+    function resolvePresentationDelayMs(state) {
+        var fireIntent = state && state.fireIntent;
+        var delayMs = Number(fireIntent && fireIntent.presentationDelayMs || 0);
+        if (!isFinite(delayMs) || delayMs <= 0) return 0;
+        var sharedApi = state && state.sharedApi;
+        var networkTuning = sharedApi && sharedApi.getNetworkTuning
+            ? (sharedApi.getNetworkTuning() || {})
+            : ((sharedApi && sharedApi.gameplayTuning && sharedApi.gameplayTuning.network) || {});
+        var remoteTuning = networkTuning.remoteInterpolation || {};
+        var maxDelayMs = Math.max(1, Number(remoteTuning.maxDelayMs || 180));
+        var maxExtraDelayMs = Math.max(0, Number(remoteTuning.lossDelayPaddingMaxMs || 160));
+        return Math.min(Math.round(delayMs), maxDelayMs + maxExtraDelayMs);
+    }
+
     function resolveEstimatedServerShotTime(state) {
         var connectionTiming = state && state.connectionTiming;
         var estimatedServerTime = Number(
@@ -115,7 +129,7 @@
                 : 0
         );
         if (!isFinite(estimatedServerTime) || estimatedServerTime <= 0) return 0;
-        return Math.round(estimatedServerTime);
+        return Math.max(0, Math.round(estimatedServerTime - resolvePresentationDelayMs(state)));
     }
 
     function buildPayload(state) {
@@ -148,6 +162,7 @@
         resolveViewFovDeg: resolveViewFovDeg,
         resolveAimForward: resolveAimForward,
         resolveAimOrigin: resolveAimOrigin,
+        resolvePresentationDelayMs: resolvePresentationDelayMs,
         resolveEstimatedServerShotTime: resolveEstimatedServerShotTime
     };
 })();

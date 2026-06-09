@@ -215,7 +215,7 @@
         function canFlushRateLimitedImmediate(inputSendTimer, inputSendInterval, lastSentInputSample) {
             if (!lastSentInputSample) return true;
             var interval = Math.max(0.001, Number(inputSendInterval || 0));
-            var minImmediateInterval = Math.min(interval, 1 / 120);
+            var minImmediateInterval = Math.min(interval, 1 / 60);
             var timer = Math.min(interval, Math.max(0, Number(inputSendTimer || 0)));
             var elapsedSinceLastSend = Math.max(0, interval - timer);
             return (elapsedSinceLastSend + 0.000001) >= minImmediateInterval;
@@ -257,9 +257,9 @@
                 movementLocked: !!(opts.getPlayerApi && opts.getPlayerApi() && opts.getPlayerApi().isMovementLocked && opts.getPlayerApi().isMovementLocked()),
                 inputState: cloneInputState(inputState)
             };
-            var recentSamples = inputSeqHistory.slice(Math.max(0, inputSeqHistory.length - 3)).concat([sentSample]);
+            var recentSamples = inputSeqHistory.slice(Math.max(0, inputSeqHistory.length - 1)).concat([sentSample]);
             var linkMetrics = getLinkMetrics();
-            if (wsSend({
+            var sent = wsSend({
                 t: opts.getInputMessageType(),
                 seq: seq,
                 dtMs: dtMs,
@@ -278,7 +278,8 @@
                 snapshotAckSeq: linkMetrics.snapshotAckSeq,
                 linkRttMs: linkMetrics.linkRttMs,
                 linkJitterMs: linkMetrics.linkJitterMs
-            })) {
+            });
+            if (sent) {
                 opts.setLastInputSeqSent(seq);
                 if (opts.setLastSentInputSample) {
                     opts.setLastSentInputSample(sentSample);
@@ -287,6 +288,22 @@
                 if (inputSeqHistory.length > 96) inputSeqHistory.shift();
                 resetInputDriftTracking(playerPos, rotation);
             }
+            return sent;
+        }
+
+        function flushInputNow(playerPos, rotation) {
+            if (!opts.isActive()) return false;
+            if (opts.isConnected && !opts.isConnected()) return false;
+            if (!playerPos || !rotation) return false;
+            var inputSendInterval = Math.max(0.001, Number(opts.getInputSendInterval() || 0));
+            var playerApi = opts.getPlayerApi();
+            var anim = (playerApi && playerApi.getAnimNetState) ? playerApi.getAnimNetState() : null;
+            var inputState = (playerApi && playerApi.getNetworkInputState) ? playerApi.getNetworkInputState() : null;
+            var sent = sendInputSample(inputState, rotation, anim, inputSendInterval, playerPos);
+            if (sent && opts.setInputSendTimer) {
+                opts.setInputSendTimer(inputSendInterval);
+            }
+            return sent;
         }
 
         function update(dt, playerPos, rotation) {
@@ -395,6 +412,7 @@
             clearReconnectTimer: clearReconnectTimer,
             connectWs: connectWs,
             wsSend: wsSend,
+            flushInputNow: flushInputNow,
             update: update,
             shutdownConnection: shutdownConnection
         };

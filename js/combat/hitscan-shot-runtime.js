@@ -276,6 +276,30 @@
             };
         }
 
+        function netEntityIdFromTarget(target) {
+            if (!target) return '';
+            var directId = String(target.netEntityId || '');
+            if (directId) return directId;
+            var targetId = String(target.targetId || '');
+            if (targetId.indexOf('net:') === 0) return targetId.slice(4);
+            var hitbox = target.hitbox || target.bodyHitbox || target.headHitbox || null;
+            var userData = hitbox && hitbox.userData ? hitbox.userData : null;
+            directId = String(userData && userData.netEntityId || '');
+            if (directId) return directId;
+            targetId = String(userData && userData.targetId || '');
+            return targetId.indexOf('net:') === 0 ? targetId.slice(4) : '';
+        }
+
+        function resolveNetTargetPresentationDelayMs(target) {
+            if (!target || target.ownerType !== 'net') return 0;
+            var net = netApi();
+            var renderMap = net && net.getRenderMap ? net.getRenderMap() : null;
+            var netEntityId = netEntityIdFromTarget(target);
+            var render = netEntityId && renderMap && renderMap.get ? renderMap.get(netEntityId) : null;
+            var delayMs = Number(render && render.interpolationDelayMs || 0);
+            return isFinite(delayMs) && delayMs > 0 ? Math.round(delayMs) : 0;
+        }
+
         function authorityTargetFromLockTarget(target) {
             if (!target || !target.worldPos) return null;
             var bodyHitbox = target.bodyHitbox || target.hitbox || null;
@@ -283,6 +307,7 @@
             return {
                 targetId: target.targetId || '',
                 ownerType: target.ownerType || 'unknown',
+                netEntityId: netEntityIdFromTarget(target),
                 x: Number(target.worldPos.x || 0),
                 y: Number(target.worldPos.y || 0),
                 z: Number(target.worldPos.z || 0),
@@ -514,6 +539,20 @@
             var authority = sharedHitscanAuthority();
             if (!shotContext || !authority || !authority.resolveHitscanShot) return [];
             return authority.resolveHitscanShot(shotContext);
+        }
+
+        function resolveShotPresentationDelayMs(shotContext) {
+            var authority = sharedHitscanAuthority();
+            if (!shotContext || !authority || !authority.resolveHitscanShot) return 0;
+            var shots = authority.resolveHitscanShot(shotContext);
+            if (!Array.isArray(shots) || shots.length === 0) return 0;
+            var maxDelayMs = 0;
+            for (var i = 0; i < shots.length; i++) {
+                var shot = shots[i];
+                var target = shot && shot.target ? shot.target : null;
+                maxDelayMs = Math.max(maxDelayMs, resolveNetTargetPresentationDelayMs(target));
+            }
+            return maxDelayMs;
         }
 
         function shouldPredictNetHit(camera, hitboxMesh, shotToken, pelletIndex, shotSample) {
@@ -933,12 +972,14 @@
             if (!camera || !weapon) return null;
             var shotContext = buildLocalShotContext(camera, weapon, shotToken, shotSample);
             if (!shotContext) return null;
+            var presentationDelayMs = resolveShotPresentationDelayMs(shotContext);
             return {
                 weaponId: weapon.id,
                 aimOrigin: shotContext.aimOrigin,
                 aimForward: shotContext.aimForward,
                 adsActive: !!shotContext.adsActive,
-                viewFovDeg: Number(shotContext.viewFovDeg || 0)
+                viewFovDeg: Number(shotContext.viewFovDeg || 0),
+                presentationDelayMs: presentationDelayMs
             };
         }
 

@@ -18,7 +18,7 @@ async function loadRuntimeCoreFactory() {
   return sandbox.globalThis.__MAYHEM_RUNTIME.GameNetRuntimeCore;
 }
 
-test('runtime core sends redundant input tails plus snapshot ack and link metrics', async () => {
+test('runtime core sends compact input tails plus snapshot ack and link metrics', async () => {
   const GameNetRuntimeCore = await loadRuntimeCoreFactory();
   const sentMessages = [];
   const inputHistory = [
@@ -117,11 +117,77 @@ test('runtime core sends redundant input tails plus snapshot ack and link metric
   assert.equal(inputMessage.linkRttMs, 88);
   assert.equal(inputMessage.linkJitterMs, 14);
   assert.equal(Array.isArray(inputMessage.inputs), true);
-  assert.equal(inputMessage.inputs.length, 4);
-  assert.deepEqual(inputMessage.inputs.map((sample) => sample.seq), [1, 2, 3, 4]);
+  assert.equal(inputMessage.inputs.length, 2);
+  assert.deepEqual(inputMessage.inputs.map((sample) => sample.seq), [3, 4]);
   assert.equal(pingMessage.snapshotAckSeq, 12);
   assert.equal(pingMessage.linkRttMs, 88);
   assert.equal(pingMessage.linkJitterMs, 14);
+});
+
+test('runtime core can flush the current input immediately before fire', async () => {
+  const GameNetRuntimeCore = await loadRuntimeCoreFactory();
+  const sentMessages = [];
+  const inputHistory = [];
+  let inputSendTimer = 0.01;
+  let lastSentSeq = 0;
+  let lastSentInputSample = null;
+  const socket = {
+    readyState: 1,
+    send(raw) {
+      sentMessages.push(JSON.parse(raw));
+    }
+  };
+
+  const core = GameNetRuntimeCore.create({
+    isActive: () => true,
+    getTransport: () => null,
+    setTransport() {},
+    getReconnectTimer: () => null,
+    setReconnectTimer() {},
+    getWs: () => socket,
+    setWs() {},
+    setConnected() {},
+    getSocketIdentity: () => ({ id: 'usr_test' }),
+    nextConnectAttemptSeq: () => 1,
+    getConnectAttemptSeq: () => 1,
+    wsEndpoint: () => 'ws://localhost',
+    handleMessage() {},
+    ensureArenaIdentity: () => null,
+    getConnectionTimingState: () => ({ rttMs: 42, rttJitterMs: 9 }),
+    getSnapshotAckSeq: () => 21,
+    isConnected: () => true,
+    getInputSendTimer: () => inputSendTimer,
+    setInputSendTimer(value) { inputSendTimer = Number(value || 0); },
+    getInputSendInterval: () => 1 / 30,
+    getLastSentInputSample: () => lastSentInputSample,
+    setLastSentInputSample(value) { lastSentInputSample = value; },
+    getPlayerApi: () => ({
+      getAnimNetState: () => ({ equippedWeaponId: 'rifle' }),
+      getNetworkInputState: () => ({ forward: true, left: true, jump: true }),
+      isMovementLocked: () => false
+    }),
+    nextInputSeq: () => 9,
+    getInputSeqHistory: () => inputHistory,
+    setLastInputSeqSent(value) { lastSentSeq = Number(value || 0); },
+    getInputMessageType: () => 'input'
+  });
+
+  assert.equal(core.flushInputNow({ x: 1, y: 2, z: 3 }, { yaw: 1.25, pitch: -0.2 }), true);
+
+  assert.equal(sentMessages.length, 1);
+  assert.equal(sentMessages[0].t, 'input');
+  assert.equal(sentMessages[0].seq, 9);
+  assert.equal(sentMessages[0].yaw, 1.25);
+  assert.equal(sentMessages[0].pitch, -0.2);
+  assert.equal(sentMessages[0].forward, true);
+  assert.equal(sentMessages[0].left, true);
+  assert.equal(sentMessages[0].jump, true);
+  assert.equal(sentMessages[0].snapshotAckSeq, 21);
+  assert.equal(sentMessages[0].linkRttMs, 42);
+  assert.equal(sentMessages[0].linkJitterMs, 9);
+  assert.equal(lastSentSeq, 9);
+  assert.equal(inputHistory.length, 1);
+  assert.equal(inputSendTimer, 1 / 30);
 });
 
 test('runtime core forces a send after cumulative tiny movement and yaw drift', async () => {
@@ -289,6 +355,6 @@ test('runtime core rate-limits look-only immediate sends on high-refresh frames'
   core.update(1 / 240, { x: 0, y: 0, z: 0 }, { yaw: 0.03, pitch: 0 });
   core.update(1 / 240, { x: 0, y: 0, z: 0 }, { yaw: 0.04, pitch: 0 });
 
-  assert.equal(sentMessages.filter((message) => message.t === 'input').length, 2);
-  assert.equal(lastSentSeq, 3);
+  assert.equal(sentMessages.filter((message) => message.t === 'input').length, 1);
+  assert.equal(lastSentSeq, 2);
 });

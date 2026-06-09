@@ -36,6 +36,11 @@
         var hasCompleteWeaponLoadout = !!(weaponSlots[0] && weaponSlots[1]);
         var commands = networkCommandApi();
 
+        if (multiplayerMode && hasCompleteWeaponLoadout) {
+            if (!commands || !commands.sendWeaponLoadout) return committed;
+            if (!commands.sendWeaponLoadout(weaponSlots[0] || '', weaponSlots[1] || '')) return committed;
+        }
+
         if (runtime.GameHitscan && runtime.GameHitscan.setWeaponOrder && hasCompleteWeaponLoadout) {
             runtime.GameHitscan.setWeaponOrder(validSlots);
         }
@@ -45,10 +50,6 @@
         if (runtime.GameThrowables && runtime.GameThrowables.setSelectedThrowable && committed.selectedThrowableId) {
             runtime.GameThrowables.setSelectedThrowable(committed.selectedThrowableId);
         }
-        if (multiplayerMode && commands && commands.sendWeaponLoadout && hasCompleteWeaponLoadout) {
-            commands.sendWeaponLoadout(weaponSlots[0] || '', weaponSlots[1] || '');
-        }
-
         return committed;
     };
 

@@ -23,7 +23,7 @@
 
     var entityConstants = sharedApi().entityConstants || {};
     var REMOTE_EYE_HEIGHT = Number(entityConstants.EYE_HEIGHT || 1.6);
-    var DEFAULT_SNAPSHOT_INTERVAL_MS = 1000 / 60;
+    var DEFAULT_SNAPSHOT_INTERVAL_MS = 1000 / 30;
     var MAX_SNAPSHOT_HISTORY = 20;
     var DEFAULT_TELEPORT_RESET_DISTANCE_WU = 8;
 

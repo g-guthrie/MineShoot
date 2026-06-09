@@ -633,10 +633,18 @@
         return runtimeCore.wsSend(msg);
     }
 
+    function flushInputBeforeFire() {
+        var gamePlayer = playerApi();
+        var playerPos = gamePlayer && gamePlayer.getPosition ? gamePlayer.getPosition() : null;
+        var playerRot = gamePlayer && gamePlayer.getRotation ? gamePlayer.getRotation() : null;
+        return runtimeCore.flushInputNow(playerPos, playerRot);
+    }
+
     var commandsApi = commandFactory.create({
         wsSend: wsSend,
         enterMatchMessageType: MSG_C2S.ENTER_MATCH,
         buildFirePayload: buildFirePayload,
+        flushInputBeforeFire: flushInputBeforeFire,
         fireMessageType: MSG_C2S.FIRE,
         rollMessageType: MSG_C2S.ROLL,
         reloadMessageType: MSG_C2S.RELOAD,

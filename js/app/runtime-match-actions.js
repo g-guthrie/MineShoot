@@ -19,6 +19,7 @@
         var netShotCounter = 0;
         var firePoseRetryTimer = 0;
         var worldCollisionDebugRoot = null;
+        var lastAppliedWeaponId = '';
 
         function gameUiApi() {
             return opts.getGameUiApi ? opts.getGameUiApi() : null;
@@ -251,25 +252,39 @@
         }
 
         function applyWeapon(weapon) {
-            if (!weapon) return;
+            if (!weapon) return false;
+            var weaponId = String(weapon.id || '');
+            if (!weaponId) return false;
             var uiApi = gameUiApi();
             var playerApi = gamePlayerApi();
             var docsApi = gameDocsApi();
+            var hitscanApi = gameHitscanApi();
+            var netCommands = currentMatchCommandApi();
+            if (multiplayerMode()) {
+                if (!netCommands || !netCommands.sendEquipWeapon) {
+                    if (lastAppliedWeaponId && hitscanApi && hitscanApi.setWeapon) hitscanApi.setWeapon(lastAppliedWeaponId);
+                    setTransientDebug('Weapon equip unavailable.', 700);
+                    return false;
+                }
+                if (!netCommands.sendEquipWeapon(weaponId)) {
+                    if (lastAppliedWeaponId && hitscanApi && hitscanApi.setWeapon) hitscanApi.setWeapon(lastAppliedWeaponId);
+                    setTransientDebug('Weapon equip send failed.', 700);
+                    return false;
+                }
+            }
             if (uiApi && uiApi.updateWeaponInfo) {
                 uiApi.updateWeaponInfo(weapon);
             }
             if (playerApi && playerApi.setWeaponModel) {
-                playerApi.setWeaponModel(weapon.id);
+                playerApi.setWeaponModel(weaponId);
             }
             syncReticleWithWeapon(weapon);
-            var netCommands = currentMatchCommandApi();
-            if (multiplayerMode() && netCommands && netCommands.sendEquipWeapon) {
-                netCommands.sendEquipWeapon(weapon.id);
-            }
             if (docsApi && docsApi.refresh) {
                 docsApi.refresh();
             }
+            lastAppliedWeaponId = weaponId;
             setTransientDebug('Weapon: ' + weapon.name, 950);
+            return true;
         }
 
         function syncCommittedLoadoutToRuntime() {
@@ -384,9 +399,21 @@
             netShotCounter = (netShotCounter + 1) % 1000000;
             var shotToken = 's' + Date.now().toString(36) + '-' + netShotCounter.toString(36);
             if (!hitscanApi || !hitscanApi.fire) return;
+            if (hitscanApi.canFire && !hitscanApi.canFire()) return;
             var shotSample = hitscanApi.captureShotSample
                 ? hitscanApi.captureShotSample(currentCamera, shotToken)
                 : null;
+            if (multiplayerMode()) {
+                var activeWeapon = hitscanApi.getCurrentWeapon ? hitscanApi.getCurrentWeapon() : currentWeapon;
+                if (
+                    !activeWeapon ||
+                    !(netApi && netApi.isConnected && netApi.isConnected()) ||
+                    !(netCommands && netCommands.sendFire) ||
+                    !netCommands.sendFire(activeWeapon.id, shotToken, shotSample)
+                ) {
+                    return;
+                }
+            }
             var fired = hitscanApi.fire(
                 currentCamera,
                 function (hitboxMesh, hitPoint, distance, hitType, damage, weapon, pelletIndex) {
@@ -422,16 +449,6 @@
             );
 
             if (fired) {
-                var activeWeapon = hitscanApi.getCurrentWeapon ? hitscanApi.getCurrentWeapon() : null;
-                if (
-                    multiplayerMode() &&
-                    activeWeapon &&
-                    netCommands &&
-                    netCommands.sendFire
-                ) {
-                    netCommands.sendFire(activeWeapon.id, shotToken, shotSample);
-                }
-
                 if (player && player.triggerAction) {
                     player.triggerAction('fire');
                 }

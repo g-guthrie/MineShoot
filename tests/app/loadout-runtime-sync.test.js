@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
 
-async function loadHarness(sharedOverride = null) {
+async function loadHarness(sharedOverride = null, options = {}) {
   const [loadoutStateCode, loadoutRuntimeCode] = await Promise.all([
     fs.readFile(new URL('../../js/app/loadout-state.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/app/loadout-runtime-sync.js', import.meta.url), 'utf8')
@@ -69,6 +69,7 @@ async function loadHarness(sharedOverride = null) {
         commands: {
           sendWeaponLoadout(slot1, slot2) {
             netWeaponLoadoutCalls.push([String(slot1 || ''), String(slot2 || '')]);
+            return options.sendWeaponLoadoutResult !== false;
           }
         }
       }
@@ -117,4 +118,41 @@ test('loadout runtime sync applies committed state to gameplay and net while ign
   assert.deepEqual(harness.weaponOrderCalls.at(-1), ['machinegun', 'rifle']);
   assert.deepEqual(harness.playerLoadoutCalls.at(-1), { slots: ['machinegun', 'rifle'] });
   assert.deepEqual(harness.netWeaponLoadoutCalls.at(-1), ['machinegun', 'rifle']);
+});
+
+test('loadout runtime sync does not apply multiplayer loadout locally when send fails', async () => {
+  const harness = await loadHarness(null, {
+    sendWeaponLoadoutResult: false
+  });
+  const loadoutState = harness.runtime.GameLoadoutState;
+  const loadoutRuntime = harness.runtime.GameLoadoutRuntimeSync;
+
+  loadoutState.init();
+  loadoutState.setSelectedThrowable('plasma');
+
+  const synced = loadoutRuntime.applyCommittedLoadout(true);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(synced.weaponSlots)), ['rifle', 'shotgun']);
+  assert.deepEqual(harness.netWeaponLoadoutCalls, [['rifle', 'shotgun']]);
+  assert.deepEqual(harness.weaponOrderCalls, []);
+  assert.deepEqual(harness.playerLoadoutCalls, []);
+  assert.deepEqual(harness.throwableSelectionCalls, []);
+});
+
+test('loadout runtime sync does not apply multiplayer loadout locally when networking is unavailable', async () => {
+  const harness = await loadHarness();
+  const loadoutState = harness.runtime.GameLoadoutState;
+  const loadoutRuntime = harness.runtime.GameLoadoutRuntimeSync;
+
+  harness.runtime.GameNet = {};
+  loadoutState.init();
+  loadoutState.setSelectedThrowable('plasma');
+
+  const synced = loadoutRuntime.applyCommittedLoadout(true);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(synced.weaponSlots)), ['rifle', 'shotgun']);
+  assert.deepEqual(harness.netWeaponLoadoutCalls, []);
+  assert.deepEqual(harness.weaponOrderCalls, []);
+  assert.deepEqual(harness.playerLoadoutCalls, []);
+  assert.deepEqual(harness.throwableSelectionCalls, []);
 });

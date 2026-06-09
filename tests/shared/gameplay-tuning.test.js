@@ -272,7 +272,7 @@ test('network tuning exposes the canonical ping, reconcile, burst, and feedback 
   assert.equal(gameplayTuning.network.remoteInterpolation.presentationClockMaxLagMs, 250);
   assert.equal(gameplayTuning.network.remoteInterpolation.animationStateBlendMs, 80);
   assert.equal(gameplayTuning.network.remoteInterpolation.muzzleFlashPresentationMs, 70);
-  assert.equal(gameplayTuning.network.remoteInterpolation.hitboxLeadMs, 24);
+  assert.equal(gameplayTuning.network.remoteInterpolation.hitboxLeadMs, 0);
   assert.equal(gameplayTuning.network.remoteInterpolation.serverOffsetSnapDeltaMs, 180);
   assert.equal(gameplayTuning.network.ping.pessimisticRttAlpha, 0.05);
   assert.equal(gameplayTuning.network.ping.pessimisticWindowMs, 2000);

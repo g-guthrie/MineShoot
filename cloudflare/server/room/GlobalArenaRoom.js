@@ -219,8 +219,8 @@ const THROWABLE_IDS = Array.isArray(THROWABLE_STATS && THROWABLE_STATS.order)
   : ['frag', 'plasma', 'molotov', 'knife'];
 
 const ROOM_SIM_TICK_MS = 1000 / 60;
-const ROOM_SNAPSHOT_TICK_MS = 1000 / 60;
-const ROOM_INPUT_SEND_HZ = 60;
+const ROOM_SNAPSHOT_TICK_MS = 1000 / 30;
+const ROOM_INPUT_SEND_HZ = 30;
 const MAX_ROOM_TICK_FRAME_MS = 250;
 const MAX_SIM_STEPS_PER_TICK = 6;
 const DISCONNECT_GRACE_MS = 5000;
@@ -821,9 +821,13 @@ export class GlobalArenaRoom extends DurableObject {
     });
   }
 
-  buildRewoundHitscanTarget(entity, requestedShotTime, now = nowMs()) {
+  buildRewoundHitscanTarget(entity, requestedShotTime, now = nowMs(), options = {}) {
+    const requestedBudget = Number(options && options.maxRewindMs);
+    const maxRewindMs = Number.isFinite(requestedBudget) && requestedBudget > 0
+      ? requestedBudget
+      : this.adaptiveRewindBudgetMs(entity);
     return buildRewoundTargetEntity(entity, requestedShotTime, now, {
-      maxRewindMs: this.adaptiveRewindBudgetMs(entity)
+      maxRewindMs
     });
   }
 
@@ -1133,7 +1137,9 @@ export class GlobalArenaRoom extends DurableObject {
       markFireEngagement: (firingPlayer, fireMsg, stamp) => this.markFireEngagement(firingPlayer, fireMsg, stamp),
       markSnapshotBurst: (viewerIds, entityIds, stamp, ttlMs) => this.markSnapshotBurst(viewerIds, entityIds, stamp, ttlMs),
       resolveHitscanShotTime: (firingPlayer, fireMsg, stamp) => this.resolveHitscanShotTime(firingPlayer, fireMsg, stamp),
-      buildRewoundHitscanTarget: (entity, requestedShotTime, stamp) => this.buildRewoundHitscanTarget(entity, requestedShotTime, stamp),
+      buildRewoundHitscanTarget: (entity, requestedShotTime, stamp) => this.buildRewoundHitscanTarget(entity, requestedShotTime, stamp, {
+        maxRewindMs: this.adaptiveRewindBudgetMs(player)
+      }),
       authoritativeHitscanOrigin: (entity, requestedShotTime, stamp) => this.authoritativeHitscanOrigin(entity, requestedShotTime, stamp),
       authoritativeHitscanForward: (entity, requestedShotTime, stamp) => this.authoritativeHitscanForward(entity, requestedShotTime, stamp),
       shotTokenDamageAggregation: SHOT_TOKEN_DAMAGE_AGGREGATION,

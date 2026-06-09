@@ -502,6 +502,45 @@ test('shot samples keep local tracer and network fire intent on the same muzzle 
   assert.deepEqual(JSON.parse(JSON.stringify(intent.aimOrigin)), { x: 2, y: 1.75, z: -0.35 });
 });
 
+test('network fire intent records the resolved net target presentation delay', async () => {
+  const bodyHitbox = createHitbox('body', { x: 0, y: 1.6, z: -10 }, { x: 1.2, y: 1.2, z: 0.8 }, 'net:usr_remote');
+  bodyHitbox.userData.ownerType = 'net';
+  bodyHitbox.userData.netEntityId = 'usr_remote';
+  const renderMap = new Map([['usr_remote', { interpolationDelayMs: 92 }]]);
+  const netTarget = {
+    targetId: 'net:usr_remote',
+    ownerType: 'net',
+    netEntityId: 'usr_remote',
+    worldPos: bodyHitbox.position,
+    hitbox: bodyHitbox,
+    bodyHitbox,
+    headHitbox: null,
+    alive: true
+  };
+  const harness = await loadHitscanHarness({
+    primitiveType: 'hitscan_single',
+    pellets: 1,
+    hipfireSpread: 0,
+    maxRange: 24,
+    adsMaxRange: 24,
+    aimProfile: {
+      hipfire: { spread: 0, maxRange: 24 },
+      ads: { spread: 0, maxRange: 24 }
+    }
+  }, [], {
+    isActive() { return true; },
+    isConnected() { return true; },
+    getRenderMap() { return renderMap; },
+    getLockTargets() { return [netTarget]; },
+    getHitboxArray() { return [bodyHitbox]; }
+  });
+
+  const sample = harness.GameHitscan.captureShotSample(harness.camera, 'delay-shot');
+  const intent = harness.GameHitscan.buildNetworkFireIntent('delay-shot', sample);
+
+  assert.equal(intent.presentationDelayMs, 92);
+});
+
 test('tracer renderer uses traveled head-tail distance on early frames', async () => {
   const harness = await loadHitscanHarness();
   const configuredSegmentLength = getWeaponPresentation('pistol').tracer.segmentLength;

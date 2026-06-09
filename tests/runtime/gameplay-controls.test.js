@@ -224,6 +224,9 @@ async function loadControlsHarness(options = {}) {
     reloads: 0,
     reloadMessages: [],
     rollMessages: [],
+    throwMessages: [],
+    throwPredicted: [],
+    audioCalls: [],
     movementInputs: [],
     transientDebug: [],
     toggleWeaponCalls: [],
@@ -236,6 +239,16 @@ async function loadControlsHarness(options = {}) {
       getSelectedThrowable() { return 'plasma'; },
       getPreviewType() { return 'trajectory'; },
       getState() { return { plasma: { charges: 2 } }; },
+      buildClientThrowId() { return 'cthrow-test'; },
+      buildThrowIntent() { return { aim: true }; },
+      throwPredicted(type, _camera, clientThrowId, throwIntent) {
+        calls.throwPredicted.push({
+          type: String(type || ''),
+          clientThrowId: String(clientThrowId || ''),
+          throwIntent: JSON.parse(JSON.stringify(throwIntent || null))
+        });
+        return true;
+      },
       clearTrajectoryPreview() { calls.clearTrajectoryPreview += 1; },
       updateTrajectoryPreview() { calls.updateTrajectoryPreview += 1; }
     },
@@ -244,6 +257,11 @@ async function loadControlsHarness(options = {}) {
         calls.updateTrackingReticle.push({ visible: !!visible, hasTarget: !!hasTarget });
       },
       updateAbilityInfo() {}
+    },
+    GameAudio: {
+      play(name, payload) {
+        calls.audioCalls.push({ name: String(name || ''), payload: JSON.parse(JSON.stringify(payload || {})) });
+      }
     },
     GameHitscan: {
       getWeaponOrder() { return defaultWeaponOrder.slice(); },
@@ -551,6 +569,169 @@ test('gameplay controls do not start multiplayer reload prediction when reload n
   }]);
 });
 
+test('gameplay controls do not start multiplayer throw prediction when throw send fails', async () => {
+  const harness = await loadControlsHarness({
+    runtimeOverrides: {
+      GameThrowables: {
+        getSelectedThrowable() { return 'plasma'; },
+        getPreviewType() { return 'none'; },
+        getState() { return { plasma: { charges: 1 } }; },
+        buildClientThrowId() { return 'cthrow-failed'; },
+        buildThrowIntent() { return { aim: true }; },
+        throwPredicted(type, _camera, clientThrowId, throwIntent) {
+          harness.calls.throwPredicted.push({
+            type: String(type || ''),
+            clientThrowId: String(clientThrowId || ''),
+            throwIntent: JSON.parse(JSON.stringify(throwIntent || null))
+          });
+          return true;
+        }
+      },
+      GameNet: {
+        commands: {
+          sendThrow(type, clientThrowId, throwIntent) {
+            harness.calls.throwMessages.push({
+              type: String(type || ''),
+              clientThrowId: String(clientThrowId || ''),
+              throwIntent: JSON.parse(JSON.stringify(throwIntent || null))
+            });
+            return false;
+          }
+        }
+      }
+    },
+    createOverrides: {
+      getMultiplayerMode() { return true; }
+    }
+  });
+
+  harness.documentObj.dispatch('keydown', {
+    code: 'KeyQ',
+    repeat: false,
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  assert.deepEqual(harness.calls.throwMessages, [{
+    type: 'plasma',
+    clientThrowId: 'cthrow-failed',
+    throwIntent: { aim: true }
+  }]);
+  assert.deepEqual(harness.calls.throwPredicted, []);
+  assert.deepEqual(harness.calls.audioCalls, []);
+  assert.deepEqual(harness.calls.transientDebug, [{
+    text: 'Throw send failed.',
+    ms: 700
+  }]);
+});
+
+test('gameplay controls do not fall back to local throw when multiplayer throw networking is unavailable', async () => {
+  const harness = await loadControlsHarness({
+    runtimeOverrides: {
+      GameThrowables: {
+        getSelectedThrowable() { return 'plasma'; },
+        getPreviewType() { return 'none'; },
+        getState() { return { plasma: { charges: 1 } }; },
+        buildClientThrowId() { return 'cthrow-unavailable'; },
+        buildThrowIntent() { return { aim: true }; },
+        throwPredicted(type, _camera, clientThrowId, throwIntent) {
+          harness.calls.throwPredicted.push({
+            type: String(type || ''),
+            clientThrowId: String(clientThrowId || ''),
+            throwIntent: JSON.parse(JSON.stringify(throwIntent || null))
+          });
+          return true;
+        },
+        throw(type) {
+          harness.calls.throwMessages.push({ localOnly: true, type: String(type || '') });
+          return { ok: true, state: {} };
+        }
+      },
+      GameNet: {}
+    },
+    createOverrides: {
+      getMultiplayerMode() { return true; }
+    }
+  });
+
+  harness.documentObj.dispatch('keydown', {
+    code: 'KeyQ',
+    repeat: false,
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  assert.deepEqual(harness.calls.throwMessages, []);
+  assert.deepEqual(harness.calls.throwPredicted, []);
+  assert.deepEqual(harness.calls.audioCalls, []);
+  assert.deepEqual(harness.calls.transientDebug, [{
+    text: 'Throw unavailable.',
+    ms: 700
+  }]);
+});
+
+test('gameplay controls start multiplayer throw prediction after throw send succeeds', async () => {
+  const harness = await loadControlsHarness({
+    runtimeOverrides: {
+      GameThrowables: {
+        getSelectedThrowable() { return 'plasma'; },
+        getPreviewType() { return 'none'; },
+        getState() { return { plasma: { charges: 1 } }; },
+        buildClientThrowId() { return 'cthrow-ok'; },
+        buildThrowIntent() { return { aim: true }; },
+        throwPredicted(type, _camera, clientThrowId, throwIntent) {
+          harness.calls.throwPredicted.push({
+            type: String(type || ''),
+            clientThrowId: String(clientThrowId || ''),
+            throwIntent: JSON.parse(JSON.stringify(throwIntent || null))
+          });
+          return true;
+        }
+      },
+      GameNet: {
+        commands: {
+          sendThrow(type, clientThrowId, throwIntent) {
+            harness.calls.throwMessages.push({
+              type: String(type || ''),
+              clientThrowId: String(clientThrowId || ''),
+              throwIntent: JSON.parse(JSON.stringify(throwIntent || null))
+            });
+            return true;
+          }
+        }
+      }
+    },
+    createOverrides: {
+      getMultiplayerMode() { return true; }
+    }
+  });
+
+  harness.documentObj.dispatch('keydown', {
+    code: 'KeyQ',
+    repeat: false,
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  assert.deepEqual(harness.calls.throwMessages, [{
+    type: 'plasma',
+    clientThrowId: 'cthrow-ok',
+    throwIntent: { aim: true }
+  }]);
+  assert.deepEqual(harness.calls.throwPredicted, [{
+    type: 'plasma',
+    clientThrowId: 'cthrow-ok',
+    throwIntent: { aim: true }
+  }]);
+  assert.deepEqual(harness.calls.audioCalls, [{
+    name: 'throw',
+    payload: {
+      throwable: 'plasma',
+      projectileType: 'plasma'
+    }
+  }]);
+});
+
 test('gameplay controls do not switch weapons from wheel input without pointer lock', async () => {
   const harness = await loadControlsHarness({
     createOverrides: {
@@ -831,6 +1012,42 @@ test('gameplay controls send roll direction to the network in multiplayer', asyn
     movingBackward: false,
     movingLeft: false,
     movingRight: false
+  }]);
+});
+
+test('gameplay controls do not start multiplayer roll prediction when roll send fails', async () => {
+  const harness = await loadControlsHarness({
+    runtimeOverrides: {
+      GameNet: {
+        commands: {
+          sendRoll(payload) {
+            harness.calls.rollMessages.push(payload);
+            return false;
+          }
+        }
+      }
+    },
+    createOverrides: {
+      getMultiplayerMode() { return true; }
+    }
+  });
+
+  harness.documentObj.dispatch('keydown', {
+    code: 'KeyE',
+    repeat: false,
+    preventDefault() {}
+  });
+
+  assert.equal(harness.calls.rolls, 0);
+  assert.deepEqual(harness.calls.rollMessages, [{
+    movingForward: true,
+    movingBackward: false,
+    movingLeft: false,
+    movingRight: false
+  }]);
+  assert.deepEqual(harness.calls.transientDebug, [{
+    text: 'Roll send failed.',
+    ms: 700
   }]);
 });
 

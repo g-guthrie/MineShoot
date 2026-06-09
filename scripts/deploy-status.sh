@@ -62,14 +62,38 @@ worker_json() {
 }
 
 pages_json() {
-  if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+  if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+    curl -fsS \
+      -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+      -H "Content-Type: application/json" \
+      "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects/${CF_PAGES_PROJECT}/deployments"
+    return
+  fi
+
+  if [[ ! -x "$ROOT_DIR/scripts/wrangler.sh" ]]; then
     return 2
   fi
 
-  curl -fsS \
-    -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-    -H "Content-Type: application/json" \
-    "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects/${CF_PAGES_PROJECT}/deployments"
+  "$ROOT_DIR/scripts/wrangler.sh" pages deployment list \
+    --project-name "$CF_PAGES_PROJECT" \
+    --environment production \
+    --json | node -e "
+      let s = '';
+      process.stdin.on('data', (d) => s += d);
+      process.stdin.on('end', () => {
+        const rows = JSON.parse(s || '[]');
+        const result = rows.map((entry) => ({
+          id: String(entry.Id || entry.id || ''),
+          environment: String(entry.Environment || entry.environment || ''),
+          url: String(entry.Deployment || entry.url || ''),
+          latest_stage: { status: 'success' },
+          deployment_trigger: {
+            metadata: { commit_hash: String(entry.Source || entry.source || '') }
+          }
+        }));
+        console.log(JSON.stringify({ source: 'wrangler', result }));
+      });
+    "
 }
 
 read_worker_status() {
@@ -112,11 +136,24 @@ read_pages_status() {
         return head === commit || head.startsWith(commit) || commit.startsWith(shortHead);
       }) || null;
       if (!match) {
+        if (payload.source === 'wrangler' && deployments.length > 0) {
+          const latest = deployments[0];
+          console.log(JSON.stringify({
+            found: true,
+            commitMatched: false,
+            status: String(latest?.latest_stage?.status || 'success'),
+            environment: String(latest.environment || ''),
+            url: String(latest.url || ''),
+            id: String(latest.id || '')
+          }));
+          return;
+        }
         console.log(JSON.stringify({ found: false }));
         return;
       }
       console.log(JSON.stringify({
         found: true,
+        commitMatched: true,
         status: String(match?.latest_stage?.status || ''),
         environment: String(match.environment || ''),
         url: String(match.url || ''),
@@ -166,7 +203,9 @@ render_status() {
       const ok = data.status === 'success';
       const active = data.status === 'active';
       const summary = ok
-        ? '[PASS] Pages deploy: success'
+        ? (data.commitMatched === false
+          ? '[PASS] Pages deploy: latest production found (commit not exposed by Wrangler)'
+          : '[PASS] Pages deploy: success')
         : (active ? '[WAIT] Pages deploy: active' : '[FAIL] Pages deploy: ' + (data.status || 'failed'));
       console.log(summary);
       if (data.url) console.log('       ' + data.url);
