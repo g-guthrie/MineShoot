@@ -6,17 +6,17 @@
 import { createGunModel } from './gun-models.js';
 
 const THREE = globalThis.THREE;
-const HOLD_POSITION = { x: 0.33, y: -0.27, z: -0.46 };
+const HOLD_POSITION = { x: 0.3, y: -0.24, z: -0.38 };
 const DEG = Math.PI / 180;
 const SKIN_COLOR = 0xd2a77d;
 
 // Per-weapon view tuning: target on-screen barrel length and optional hold
 // offsets relative to HOLD_POSITION.
 const VIEW_TUNING = {
-  machinegun: { length: 0.6 },
-  shotgun: { length: 0.56 },
-  sniper: { length: 0.74, dy: 0.02 },
-  pistol: { length: 0.3, dy: 0.03, dx: -0.02 }
+  machinegun: { length: 0.88 },
+  shotgun: { length: 0.82 },
+  sniper: { length: 1.05, dy: 0.02 },
+  pistol: { length: 0.42, dy: 0.02, dx: -0.02 }
 };
 
 function buildArms(weaponId, gunLength) {

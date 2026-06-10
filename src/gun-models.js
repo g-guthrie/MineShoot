@@ -32,7 +32,7 @@ const MODELS = {
   pistol: {
     model: '/assets/weapons/low-poly-fps/models/m1911.glb',
     texture: '/assets/weapons/low-poly-fps/textures/m1911.png',
-    rotationDeg: [0, 0, 0]
+    rotationDeg: [0, 180, 0]
   }
 };
 
