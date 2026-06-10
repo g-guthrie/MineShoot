@@ -6,3 +6,4 @@ dist/
 test-results/
 .playwright-mcp/
 .codex/*.png
+tmp-e2e/
