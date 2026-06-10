@@ -118,10 +118,8 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
 
     /* ── Water plane ── */
     function buildWater(cx, cz, sizeX, sizeZ, place, mats) {
-        // Keep the visible top perfectly flush with the shore skin so the seam stays flat.
+        // Thin skin riding just above the sand ground plane (top at 0.04).
         tb(place, 'water', null, cx, 0.0, cz, sizeX, 0.08, sizeZ, mats.water, false);
-        // Dark bottom beneath water
-        tb(place, 'seabed', null, cx, -1.5, cz, sizeX, 2.6, sizeZ, mats.waterDeep, false);
     }
 
     /* ── Ship Hull (above waterline only) ── */
@@ -149,9 +147,10 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var sternZ = sz + hullL / 2;
         tb(place, 'hull', { part: 'stern' }, sx, hullH / 2 + 1, sternZ + 0.5, hullW + 0.5, hullH + 2, 1.5, mats.hullDark, true);
 
-        // Gunwale rails (top edge of hull)
-        tb(place, 'hull', { part: 'rail-port' }, sx - hullW / 2 + 0.2, hullH + 0.3, sz, 0.4, 0.6, hullL, mats.hullLight, false);
-        tb(place, 'hull', { part: 'rail-star' }, sx + hullW / 2 - 0.2, hullH + 0.3, sz, 0.4, 0.6, hullL, mats.hullLight, false);
+        // Gunwale rails (top edge of hull) — bottoms staggered 0.04 above the
+        // deck-plank bottom so the underside faces never share a plane
+        tb(place, 'hull', { part: 'rail-port' }, sx - hullW / 2 + 0.2, hullH + 0.34, sz, 0.4, 0.6, hullL, mats.hullLight, false);
+        tb(place, 'hull', { part: 'rail-star' }, sx + hullW / 2 - 0.2, hullH + 0.34, sz, 0.4, 0.6, hullL, mats.hullLight, false);
 
         return { hullW: hullW, hullH: hullH, hullL: hullL, bowZ: bowZ, sternZ: sternZ };
     }
@@ -165,8 +164,9 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var fcY = hull.hullH + 1.2;
         var fcZ = sz - hull.hullL / 2 + 3;
         tb(place, 'deck', { part: 'forecastle' }, sx, fcY, fcZ, hull.hullW - 0.6, 0.15, 5, mats.deckPlanks, true);
-        // Forecastle front wall
-        tb(place, 'deck', { part: 'fc-wall' }, sx, hull.hullH + 0.6, fcZ + 2.6, hull.hullW - 0.6, 1.2, 0.3, mats.deckTrim, true);
+        // Forecastle front wall — bottom lifted 0.08 off the deck-plank bottom,
+        // top trimmed clear of the forecastle top plane
+        tb(place, 'deck', { part: 'fc-wall' }, sx, hull.hullH + 0.64, fcZ + 2.6, hull.hullW - 0.6, 1.12, 0.3, mats.deckTrim, true);
 
         // Poop deck (raised stern)
         var pdY = hull.hullH + 2.2;
@@ -177,23 +177,23 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     }
 
     /* ── Captain's Cabin (on poop deck) ── */
-    function buildCabin(sx, sz, hull, deck, place, mats) {
+    function buildCabin(sx, sz, hull, deck, place, mats, windowMat) {
         var cabY = deck.pdY;
         var cabZ = deck.pdZ + 1;
         var cabW = 6;
         var cabH = 3.5;
-        var cabD = 4;
+        var cabD = 3.9; // kept short of the poop deck's stern face (no flush +Z planes)
 
         // Walls
         tb(place, 'cabin', { part: 'walls' }, sx, cabY + cabH / 2, cabZ, cabW, cabH, cabD, mats.cabinWall, true);
         // Roof
         tb(place, 'cabin', { part: 'roof' }, sx, cabY + cabH + 0.15, cabZ, cabW + 0.6, 0.3, cabD + 0.6, mats.cabinRoof, false);
 
-        // Windows — stern (south face), pushed out past stern hull
+        // Windows — stern (south face), embedded 0.09 into the wall, glow flickers
         for (var wi = -1; wi <= 1; wi++) {
             tb(place, 'cabin', { part: 'window' },
-                sx + wi * 1.8, cabY + cabH / 2 + 0.3, cabZ + cabD / 2 + 0.15,
-                1.0, 1.0, 0.12, mats.cabinWindow, false);
+                sx + wi * 1.8, cabY + cabH / 2 + 0.3, cabZ + cabD / 2 + 0.03,
+                1.0, 1.0, 0.24, windowMat || mats.cabinWindow, false);
         }
 
         return { cabY: cabY, cabZ: cabZ, cabW: cabW, cabH: cabH };
@@ -264,13 +264,13 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     }
 
     /* ── Lantern ── */
-    function buildLantern(lx, ly, lz, place, mats) {
+    function buildLantern(lx, ly, lz, place, mats, glowMat) {
         // Post
         tb(place, 'lantern', { part: 'post' }, lx, ly + 1.0, lz, 0.15, 2.0, 0.15, mats.iron, false);
         // Lamp body
         tb(place, 'lantern', { part: 'body' }, lx, ly + 2.2, lz, 0.4, 0.5, 0.4, mats.lanternFrame, false);
-        // Glow
-        tb(place, 'lantern', { part: 'glow' }, lx, ly + 2.2, lz, 0.25, 0.35, 0.25, mats.lanternGlow, false);
+        // Glow (pass a cloned material + ctx.addFlicker for animated lanterns)
+        tb(place, 'lantern', { part: 'glow' }, lx, ly + 2.2, lz, 0.25, 0.35, 0.25, glowMat || mats.lanternGlow, false);
     }
 
     /* ── Dock ── */
@@ -333,6 +333,68 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var cocoGeo = new THREE.SphereGeometry(0.2 * s, 6, 6);
         td(place, 'palm', { part: 'coconut' }, tx + 0.3, topY - 0.5, tz, cocoGeo, mats.barrel);
         td(place, 'palm', { part: 'coconut' }, tx - 0.2, topY - 0.6, tz + 0.2, cocoGeo, mats.barrel);
+    }
+
+    /* ── Crossed Palm Pair (two trunks leaning across each other) ── */
+    function buildCrossedPalms(px, pz, place, mats) {
+        // Trunk A — leans east (+X), reuses the scale-1.0 palm trunk profile
+        var trunkGeoA = new THREE.CylinderGeometry(0.2, 0.35, 6, 6);
+        td(place, 'palm', { part: 'trunk', variant: 'crossed' }, px + 0.09, 2.78, pz, trunkGeoA, mats.palmTrunk, 0, 0, -0.3);
+        // Trunk B — leans west (-X), scale-0.9 profile, crossing in front of A
+        var trunkGeoB = new THREE.CylinderGeometry(0.18, 0.315, 5.4, 6);
+        td(place, 'palm', { part: 'trunk', variant: 'crossed' }, px + 0.7, 2.49, pz + 0.6, trunkGeoB, mats.palmTrunk, 0, 0, 0.34);
+
+        // Frond crowns at each (offset) trunk top — crowns sit at different
+        // heights so the thin frond boxes never share a Y plane
+        // a0 stays 0 for both crowns — the radial fan only avoids
+        // frond-vs-frond overlap at the stock axis-aligned angles
+        var crowns = [
+            { cx: px + 0.97, cy: 5.9,  cz: pz,       s: 1.0, a0: 0 },
+            { cx: px - 0.2,  cy: 5.28, cz: pz + 0.6, s: 0.9, a0: 0 }
+        ];
+        for (var ci = 0; ci < crowns.length; ci++) {
+            var c = crowns[ci];
+            for (var fi = 0; fi < 6; fi++) {
+                var angle = c.a0 + (fi / 6) * Math.PI * 2;
+                var frondLen = 3 * c.s;
+                tb(place, 'palm', { part: 'frond', variant: 'crossed' },
+                    c.cx + Math.cos(angle) * frondLen * 0.5, c.cy, c.cz + Math.sin(angle) * frondLen * 0.5,
+                    0.6 * c.s, 0.08, frondLen,
+                    fi % 2 === 0 ? mats.palmLeaf : mats.palmLeafDark, false);
+            }
+        }
+    }
+
+    /* ── Rowboat (floating in the shallows) ── */
+    function buildRowboat(bx, bz, place, mats) {
+        // Hull base dips just below the water skin so it reads as floating
+        tb(place, 'rowboat', { part: 'base' },      bx, 0.14, bz, 1.6, 0.3, 3.4, mats.hullMid, true);
+        tb(place, 'rowboat', { part: 'side-port' }, bx - 0.65, 0.51, bz, 0.2, 0.5, 3.3, mats.hullDark, false);
+        tb(place, 'rowboat', { part: 'side-star' }, bx + 0.65, 0.51, bz, 0.2, 0.5, 3.3, mats.hullDark, false);
+        tb(place, 'rowboat', { part: 'bow-cap' },   bx, 0.51, bz - 1.55, 1.2, 0.5, 0.2, mats.hullDark, false);
+        tb(place, 'rowboat', { part: 'stern-cap' }, bx, 0.51, bz + 1.55, 1.2, 0.5, 0.2, mats.hullDark, false);
+        tb(place, 'rowboat', { part: 'bench' },     bx, 0.46, bz, 1.28, 0.08, 0.4, mats.deckPlanks, false);
+    }
+
+    /* ── Half-buried treasure chest (shore) ── */
+    function buildTreasureChest(tx, tz, place, mats) {
+        // Sand mound the chest is dug into (texture over the flat sand ground)
+        tb(place, 'treasure', { part: 'mound' }, tx, 0.08, tz, 2.6, 0.12, 2.0, mats.sand, false);
+        // Body sunk 0.2 below grade
+        tb(place, 'treasure', { part: 'body' },  tx, 0.15, tz, 1.4, 0.7, 1.0, mats.barrel, true);
+        tb(place, 'treasure', { part: 'band' },  tx, 0.3, tz, 1.46, 0.16, 1.06, mats.barrelBand, false);
+        // Spilling gold on the open chest
+        tb(place, 'treasure', { part: 'gold' },  tx, 0.57, tz, 1.16, 0.14, 0.76, mats.gold, false);
+        // Open lid leaning back on the buried hinge edge
+        var lid = place.addRamp(tx, 0.82, tz - 0.72, 1.5, 0.12, 1.1, mats.hullDark, 0, -1.05, false);
+        if (lid) { lid.userData = { role: 'treasure', part: 'lid' }; }
+    }
+
+    /* ── Rope coil (dock dressing) ── */
+    function buildRopeCoil(rx, ry, rz, place, mats, scale) {
+        var s = scale || 1;
+        var coilGeo = new THREE.TorusGeometry(0.34 * s, 0.12 * s, 6, 10);
+        td(place, 'rope-coil', null, rx, ry, rz, coilGeo, mats.dockRope, 0, Math.PI / 2, 0);
     }
 
     /* ── Rock cluster (small shore rocks) ── */
@@ -419,14 +481,16 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         // L wraps from south edge curving east, keeping it inside the biome
 
         // ── South wall (was east wall, now runs along X) ──
-        tb(place, 'cove-rock', { part: 'e-wall-1' },   rx + 2, 3.5, rz - 2,      4.0, 7.0, 3.0, mats.rock, true);
+        // -Z face nudged 0.06 off the barnacle slab's flush plane
+        tb(place, 'cove-rock', { part: 'e-wall-1' },   rx + 2, 3.5, rz - 1.94,   4.0, 7.0, 3.0, mats.rock, true);
         tb(place, 'cove-rock', { part: 'e-wall-2' },   rx + 6, 2.5, rz - 1,      3.0, 5.0, 3.5, mats.rockDark, true);
         tb(place, 'cove-rock', { part: 'e-wall-3' },   rx + 10, 1.8, rz - 2.5,   3.5, 3.6, 2.5, mats.rock, true);
         // Tall spire
         tb(place, 'cove-rock', { part: 'e-spire' },    rx + 3.5, 5.5, rz - 3,    2.0, 11.0, 1.8, mats.rockDark, true);
 
         // ── West wall (was north wall, now runs along Z) ──
-        tb(place, 'cove-rock', { part: 'n-wall-1' },   rx, 3.0, rz + 2,          3.0, 6.0, 4.5, mats.rockDark, true);
+        // -X face inset 0.08 from the corner mass's flush cliff plane
+        tb(place, 'cove-rock', { part: 'n-wall-1' },   rx + 0.08, 3.0, rz + 2,   3.0, 6.0, 4.5, mats.rockDark, true);
         tb(place, 'cove-rock', { part: 'n-wall-2' },   rx - 0.5, 2.2, rz + 6,    2.5, 4.4, 3.5, mats.rock, true);
         tb(place, 'cove-rock', { part: 'n-wall-3' },   rx + 0.5, 1.5, rz + 10,   2.8, 3.0, 3.0, mats.rockDark, true);
         // Tapers off northward
@@ -446,8 +510,10 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         tb(place, 'cove-rock', { part: 'rubble-3' },   rx + 2, 0.3, rz + 8,      1.3, 0.6, 1.0, mats.rock, true);
 
         // ── Outer face detail ──
-        tb(place, 'cove-rock', { part: 'outer-fin' },  rx + 1, 2.0, rz - 4.5,    2.5, 4.0, 1.0, mats.rock, true);
-        tb(place, 'cove-rock', { part: 'outer-spur' }, rx - 2.5, 0.6, rz + 3,    1.5, 1.2, 2.0, mats.rockDark, true);
+        // Fin pulled 0.12 off the cell seam so it can't share the water's -Z plane
+        tb(place, 'cove-rock', { part: 'outer-fin' },  rx + 1, 2.0, rz - 4.38,   2.5, 4.0, 1.0, mats.rock, true);
+        // Spur kept fully inside the west seam (jungle neighbor)
+        tb(place, 'cove-rock', { part: 'outer-spur' }, rx - 2.15, 0.6, rz + 3,   1.5, 1.2, 2.0, mats.rockDark, true);
         tb(place, 'cove-rock', { part: 'outer-chunk' },rx + 12, 0.5, rz - 3.5,   1.5, 1.0, 2.0, mats.rock, true);
 
         // ── Barnacle ring at waterline ──
@@ -473,9 +539,10 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         if (rampMesh) {
             rampMesh.userData = { role: 'gangplank' };
         }
-        // Side rails
-        tb(place, 'gangplank', { part: 'rail' }, gx - 0.9, gy + 0.7, gz, 0.1, 0.6, 5, mats.dockPost, false);
-        tb(place, 'gangplank', { part: 'rail' }, gx + 0.9, gy + 0.7, gz, 0.1, 0.6, 5, mats.dockPost, false);
+        // Side rails — tops at 4.58, staggered clear of the carriage tops (4.50),
+        // crate band top (4.54) and gunwale rail top (4.64)
+        tb(place, 'gangplank', { part: 'rail' }, gx - 0.9, gy + 0.78, gz, 0.1, 0.6, 5, mats.dockPost, false);
+        tb(place, 'gangplank', { part: 'rail' }, gx + 0.9, gy + 0.78, gz, 0.1, 0.6, 5, mats.dockPost, false);
     }
 
     /* ── Kraken ── */
@@ -536,7 +603,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             { dist: 5.5, angle: PI2 * 5/8,       tilt: 0.60, topR: 0.15, botR: 0.7, height: 5.0, mat: 'krakenBody' },  // full outward
             // Medium (3) — two more upright, one outward
             { dist: 4.5, angle: PI2 * 1/8 + 0.2, tilt: 0.15, topR: 0.10, botR: 0.5, height: 4.2, mat: 'krakenDark' },  // mostly upright
-            { dist: 5.0, angle: PI2 * 4/8 + 0.1, tilt: 0.55, topR: 0.10, botR: 0.5, height: 3.5, mat: 'krakenDark' },  // outward
+            { dist: 4.0, angle: PI2 * 4/8 + 0.1, tilt: 0.55, topR: 0.10, botR: 0.5, height: 3.5, mat: 'krakenDark' },  // outward (kept inside west seam)
             { dist: 4.5, angle: PI2 * 7/8 - 0.1, tilt: 0.18, topR: 0.10, botR: 0.5, height: 4.0, mat: 'krakenDark' },  // mostly upright
             // Small (2)
             { dist: 3.8, angle: PI2 * 2/8 + 0.1, tilt: 0.65, topR: 0.06, botR: 0.3, height: 2.5, mat: 'krakenBody' },
@@ -577,14 +644,20 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         buildWater(bounds.minX + (waterWidth * 0.5), oz, waterWidth, qd, place, mats);
 
         /* ── 2. Sandy shore (east side, +X — faces toward desert) ── */
-        tb(place, 'shore', { part: 'sand' }, bounds.maxX - (shoreWidth * 0.5), 0.0, oz, shoreWidth, 0.08, qd, mats.sand, false);
+        // The cell ground plane is rendered as sand by world.js, so no flat
+        // shore skin is needed — only shaped sand details (treasure mound).
 
         /* ── 3. Ship — positioned in the water, west-center ── */
         var shipX = ox - 8;
         var shipZ = oz;
         var hull = buildHull(shipX, shipZ, place, mats);
         var deck = buildDeck(shipX, shipZ, hull, place, mats);
-        var cabin = buildCabin(shipX, shipZ, hull, deck, place, mats);
+        // Cabin windows get a cloned emissive material so they can flicker
+        var windowGlow = cloneMaterial(mats.cabinWindow);
+        if (ctx && typeof ctx.addFlicker === 'function') {
+            ctx.addFlicker({ material: windowGlow, freq: 1.45, phase: 0.6, baseIntensity: 0.85, amplitude: 0.3 });
+        }
+        var cabin = buildCabin(shipX, shipZ, hull, deck, place, mats, windowGlow);
 
         /* ── 4. Masts ── */
         var deckY = hull.hullH;
@@ -598,11 +671,11 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         /* ── 5. Pirate flag on mainmast ── */
         buildFlag(shipX, deckY + 17, shipZ + 1, place, mats);
 
-        /* ── 6. Cannons — 3 per side ── */
+        /* ── 6. Cannons — 3 per side, carriages resting on the deck planks ── */
         for (var ci = 0; ci < 3; ci++) {
             var cz = shipZ - 4 + ci * 4;
-            buildCannon(shipX - hull.hullW / 2 + 0.3, deckY, cz, Math.PI / 2, place, mats);
-            buildCannon(shipX + hull.hullW / 2 - 0.3, deckY, cz, -Math.PI / 2, place, mats);
+            buildCannon(shipX - hull.hullW / 2 + 0.3, deckY + 0.1, cz, Math.PI / 2, place, mats);
+            buildCannon(shipX + hull.hullW / 2 - 0.3, deckY + 0.1, cz, -Math.PI / 2, place, mats);
         }
 
         /* ── 7. Deck props — barrels and crates ── */
@@ -612,10 +685,11 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         buildCrate(shipX + 2.5, deckY, shipZ - 1, place, mats, 1.2, 1.0, 1.2);
         buildCrate(shipX + 1.5, deckY, shipZ - 1.5, place, mats, 0.8, 0.8, 0.8);
 
-        /* ── 8. Ship lanterns ── */
-        buildLantern(shipX - hull.hullW / 2 + 0.5, deckY, shipZ - 6, place, mats);
-        buildLantern(shipX + hull.hullW / 2 - 0.5, deckY, shipZ - 6, place, mats);
-        buildLantern(shipX, deck.pdY, shipZ + hull.hullL / 2, place, mats);
+        /* ── 8. Ship lanterns — posts lifted off the shared Y=deck plane ── */
+        buildLantern(shipX - hull.hullW / 2 + 0.5, deckY + 0.12, shipZ - 6, place, mats);
+        buildLantern(shipX + hull.hullW / 2 - 0.5, deckY + 0.12, shipZ - 6, place, mats);
+        // Stern lantern offset from the center windows, raised clear of the cabin base
+        buildLantern(shipX + 2.6, deck.pdY + 0.08, shipZ + hull.hullL / 2, place, mats);
 
         /* ── 9. Dock — extends from shore (east) to ship's port side ── */
         var dockZ = shipZ - 2;
@@ -634,8 +708,20 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         buildBarrel(dockStartX - 2, dockInfo.dockY, dockZ + 1, place, mats, 0.9);
         buildCrate(dockStartX - 5, dockInfo.dockY, dockZ + 1, place, mats, 1.5, 1.0, 1.5);
         buildCrate(dockStartX - 5.5, dockInfo.dockY + 1.0, dockZ + 1.2, place, mats, 0.9, 0.7, 0.9);
-        buildLantern(dockStartX - 1, dockInfo.dockY, dockZ - 1.5, place, mats);
-        buildLantern(dockEndX + 2, dockInfo.dockY, dockZ + 1.5, place, mats);
+        // Dock lanterns flicker — cloned glow materials, offset phases
+        var dockGlowA = cloneMaterial(mats.lanternGlow);
+        var dockGlowB = cloneMaterial(mats.lanternGlow);
+        if (ctx && typeof ctx.addFlicker === 'function') {
+            ctx.addFlicker({ material: dockGlowA, freq: 2.1, phase: 0.15, baseIntensity: 1.0, amplitude: 0.35 });
+            ctx.addFlicker({ material: dockGlowB, freq: 1.7, phase: 1.3, baseIntensity: 1.0, amplitude: 0.35 });
+        }
+        buildLantern(dockStartX - 1, dockInfo.dockY, dockZ - 1.5, place, mats, dockGlowA);
+        buildLantern(dockEndX + 2, dockInfo.dockY, dockZ + 1.5, place, mats, dockGlowB);
+        // Rope coils beside the dock crates
+        var coilY = dockInfo.dockY + 0.27;
+        buildRopeCoil(dockStartX - 6.4, coilY, dockZ - 1.2, place, mats, 1.0);
+        buildRopeCoil(dockStartX - 6.4, coilY + 0.22, dockZ - 1.2, place, mats, 0.75);
+        buildRopeCoil(dockStartX - 7.3, coilY, dockZ + 1.3, place, mats, 0.9);
 
         /* ── 12. Shore details (east side, +X — toward desert) ── */
         // Palm trees
@@ -644,6 +730,8 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         buildPalmTree(ox + 22, oz + 2, place, mats, 1.1);
         buildPalmTree(ox + 15, oz - 15, place, mats, 0.8);
         buildPalmTree(ox + 21, oz + 14, place, mats, 1.0);
+        // Crossed pair near the NE shore
+        buildCrossedPalms(ox + 23, oz - 13, place, mats);
 
         // Rock clusters
         buildRocks(ox + 14, oz - 12, place, mats, 1.2);
@@ -656,6 +744,12 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         buildBarrel(ox + 16.5, 0, oz - 4.2, place, mats, 0.9);
         buildCrate(ox + 15, 0, oz - 6, place, mats, 1.5, 1.2, 1.5);
         buildCrate(ox + 14, 0, oz - 5, place, mats, 1.0, 1.0, 1.0);
+
+        // Half-buried treasure chest up the beach
+        buildTreasureChest(ox + 16, oz + 10.5, place, mats);
+
+        // Rowboat drifting in the shallows south of the dock
+        buildRowboat(ox + 5, oz + 18, place, mats);
 
         /* ── 13. Sea rocks (west/water side, -X) ── */
         // Original formation — SW corner
@@ -671,15 +765,30 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         buildKraken(shipX - 13, shipZ + 5, shipX, shipZ, place, mats);
 
         /* ── 14. Anchor ── */
-        // Visual anchor on the bow
-        tb(place, 'anchor', { part: 'shank' }, shipX + 1.5, hull.hullH / 2 - 1, hull.bowZ - 4, 0.15, 2.5, 0.15, mats.iron, false);
-        tb(place, 'anchor', { part: 'stock' }, shipX + 1.5, hull.hullH / 2 - 2, hull.bowZ - 4, 1.5, 0.15, 0.15, mats.iron, false);
+        // Visual anchor hanging on the starboard bow taper (outside its +X face)
+        tb(place, 'anchor', { part: 'shank' }, shipX + 2.2, hull.hullH / 2 - 1, hull.bowZ - 4, 0.15, 2.5, 0.15, mats.iron, false);
+        tb(place, 'anchor', { part: 'stock' }, shipX + 2.2, hull.hullH / 2 - 2, hull.bowZ - 4, 1.5, 0.15, 0.15, mats.iron, false);
 
         /* ── 14. Wheel on poop deck ── */
         var wheelGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.12, CYLINDER_SEGMENTS);
         td(place, 'wheel', null, shipX, deck.pdY + 1.0, deck.pdZ - 1.5, wheelGeo, mats.mastWood, 0, Math.PI / 2, 0);
         // Wheel stand
         tb(place, 'wheel', { part: 'stand' }, shipX, deck.pdY + 0.5, deck.pdZ - 1.5, 0.3, 1.0, 0.3, mats.mastWood, false);
+
+        /* ── 16. Spawn exclusions ── */
+        // Water is a non-solid decal — keep spawns out of the cove itself.
+        if (ctx && typeof ctx.addExclusion === 'function') {
+            var wxA = bounds.minX + 7;
+            var wxB = bounds.minX + 29;
+            ctx.addExclusion(wxA, bounds.minZ + 9, 11);
+            ctx.addExclusion(wxA, oz, 11);
+            ctx.addExclusion(wxA, bounds.maxZ - 9, 11);
+            ctx.addExclusion(wxB, bounds.minZ + 9, 11);
+            ctx.addExclusion(wxB, oz, 11);
+            ctx.addExclusion(wxB, bounds.maxZ - 9, 11);
+            // Shore stash — barrels are non-colliding decor, keep spawns outside
+            ctx.addExclusion(ox + 16, oz - 5, 3);
+        }
 
         return {
             structures: 4,
@@ -690,7 +799,10 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             ductLength: 0,
             masts: 3,
             cannons: 6,
-            palmTrees: 5,
+            palmTrees: 7,
+            rowboats: 1,
+            treasureChests: 1,
+            ropeCoils: 3,
             shipLength: hull.hullL
         };
     }

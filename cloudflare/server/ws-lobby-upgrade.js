@@ -6,7 +6,12 @@ import {
   getPrivateRoomMember,
   isRegisteredPrivateRoomId
 } from './private-rooms.js';
-import { resolveLobbyWsIdentity } from './ws-identity.js';
+import {
+  guestTokenSecret,
+  readGuestTokenFromRequest,
+  resolveLobbyWsIdentity,
+  verifyGuestToken
+} from './ws-identity.js';
 
 const WS_LOBBY_RATE_WINDOW_MS = 60_000;
 const WS_LOBBY_RATE_LIMIT = 30;
@@ -30,6 +35,16 @@ export async function handleWsLobbyUpgrade(env, request) {
 
   const session = await getSessionFromRequest(env, request).catch(() => null);
   const identity = resolveLobbyWsIdentity({ session, url });
+
+  // Guest actor ids are client-supplied. When a guest token secret is
+  // configured, a guest actorId is only trusted for lobby observation when it
+  // arrives with a valid server-issued HMAC token; otherwise the connection
+  // is treated as a fresh anonymous guest (which cannot be a room member).
+  const secret = guestTokenSecret(env);
+  if (!identity.isAuthenticated && secret) {
+    const verifiedGuestActorId = await verifyGuestToken(secret, readGuestTokenFromRequest(env, request, url));
+    identity.actorId = verifiedGuestActorId || '';
+  }
 
   if (!identity.actorId) {
     return new Response('Missing actor identity.', { status: 400 });

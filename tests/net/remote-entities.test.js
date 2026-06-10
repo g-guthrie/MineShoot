@@ -382,6 +382,172 @@ test('remote entities add and decay temporary delay padding during packet loss b
   assert.equal(Number(render.lossDelayPaddingMs || 0) < paddingAfterBurst, true);
 });
 
+test('remote entities skip loss padding when the entity was merely omitted from delta snapshots', async () => {
+  const { entitiesApi } = await loadRemoteEntities({
+    network: {
+      remoteInterpolation: {
+        lossBurstThresholdScale: 1.5,
+        lossDelayPaddingTriggerCount: 2,
+        lossDelayPaddingIntervalScale: 1.0,
+        lossDelayPaddingMaxMs: 120
+      }
+    }
+  });
+  const entityId = 'usr_idle_omission';
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId), {
+    serverTime: 1000,
+    receivedAt: 1000,
+    snapshotSeq: 10,
+    prevAppliedSnapshotSeq: 9
+  });
+
+  const render = entitiesApi.getRenderMap().get(entityId);
+  render.snapshotIntervalMs = 100;
+  render.lastSnapshotStepMs = 100;
+  render.snapshotJitterMs = 0;
+
+  // Frames 11-13 reached this viewer but omitted the idle entity (delta
+  // compression); the serverTime gap when it resumes moving is not packet
+  // loss, and the multi-second resume spacing is not a cadence sample.
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId, { x: 2 }), {
+    serverTime: 1360,
+    receivedAt: 1360,
+    snapshotSeq: 14,
+    prevAppliedSnapshotSeq: 13
+  });
+
+  assert.equal(Number(render.lossDelayPaddingMs || 0), 0);
+  assert.equal(Number(render.consecutiveMissedSnapshots || 0), 0);
+  assert.equal(Number(render.snapshotIntervalMs), 100);
+});
+
+test('remote entities learn the effective interval of cadence-limited entities without counting loss', async () => {
+  const { entitiesApi } = await loadRemoteEntities({
+    network: {
+      remoteInterpolation: {
+        lossBurstThresholdScale: 1.5,
+        lossDelayPaddingTriggerCount: 2,
+        lossDelayPaddingIntervalScale: 1.0,
+        lossDelayPaddingMaxMs: 120
+      }
+    }
+  });
+  const entityId = 'usr_cadence_tier';
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId, { x: 1 }), {
+    serverTime: 1000,
+    receivedAt: 1000,
+    snapshotSeq: 10,
+    prevAppliedSnapshotSeq: 9
+  });
+
+  const render = entitiesApi.getRenderMap().get(entityId);
+  render.snapshotIntervalMs = 100;
+  render.lastSnapshotStepMs = 100;
+  render.snapshotJitterMs = 0;
+
+  // Degraded-cadence tier: the server sends this moving entity on every 2nd
+  // frame (seq gap 2 while the viewer applied every frame). The ~66ms
+  // arrival spacing is its real effective interval and must be learned,
+  // but the omitted frame is not packet loss.
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId, { x: 2 }), {
+    serverTime: 1066,
+    receivedAt: 1066,
+    snapshotSeq: 12,
+    prevAppliedSnapshotSeq: 11
+  });
+
+  assert.equal(Number(render.lossDelayPaddingMs || 0), 0);
+  assert.equal(Number(render.consecutiveMissedSnapshots || 0), 0);
+  assert.equal(Number(render.snapshotIntervalMs.toFixed(2)), 89.8);
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId, { x: 3 }), {
+    serverTime: 1132,
+    receivedAt: 1132,
+    snapshotSeq: 14,
+    prevAppliedSnapshotSeq: 13
+  });
+
+  assert.equal(Number(render.lossDelayPaddingMs || 0), 0);
+  assert.ok(
+    Number(render.snapshotIntervalMs) < 89.8 && Number(render.snapshotIntervalMs) > 66,
+    `expected interval converging toward 66ms, saw ${render.snapshotIntervalMs}`
+  );
+});
+
+test('remote entities still count loss when burst frames inflate the global seq for every viewer frame', async () => {
+  const { entitiesApi } = await loadRemoteEntities({
+    network: {
+      remoteInterpolation: {
+        lossBurstThresholdScale: 1.5,
+        lossDelayPaddingTriggerCount: 2,
+        lossDelayPaddingIntervalScale: 1.0,
+        lossDelayPaddingMaxMs: 120
+      }
+    }
+  });
+  const entityId = 'usr_burst_seq';
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId, { x: 1 }), {
+    serverTime: 1000,
+    receivedAt: 1000,
+    snapshotSeq: 10,
+    prevAppliedSnapshotSeq: 9
+  });
+
+  const render = entitiesApi.getRenderMap().get(entityId);
+  render.snapshotIntervalMs = 100;
+  render.lastSnapshotStepMs = 100;
+  render.snapshotJitterMs = 0;
+
+  // The global seq jumped by 4 but the viewer's own received-frame gap is
+  // also 4: every frame the viewer got contained this entity, so the
+  // serverTime stall is potential packet loss, not a delta omission.
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId, { x: 2 }), {
+    serverTime: 1360,
+    receivedAt: 1360,
+    snapshotSeq: 14,
+    prevAppliedSnapshotSeq: 10
+  });
+
+  assert.equal(Number(render.lossDelayPaddingMs || 0) > 0, true);
+});
+
+test('remote entities still add loss padding when the snapshot stream itself gapped', async () => {
+  const { entitiesApi } = await loadRemoteEntities({
+    network: {
+      remoteInterpolation: {
+        lossBurstThresholdScale: 1.5,
+        lossDelayPaddingTriggerCount: 2,
+        lossDelayPaddingIntervalScale: 1.0,
+        lossDelayPaddingMaxMs: 120
+      }
+    }
+  });
+  const entityId = 'usr_stream_gap';
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId), {
+    serverTime: 1000,
+    receivedAt: 1000,
+    snapshotSeq: 10
+  });
+
+  const render = entitiesApi.getRenderMap().get(entityId);
+  render.snapshotIntervalMs = 100;
+  render.lastSnapshotStepMs = 100;
+  render.snapshotJitterMs = 0;
+
+  // Consecutive seq with a large serverTime gap means the stream stalled.
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId, { x: 2 }), {
+    serverTime: 1360,
+    receivedAt: 1360,
+    snapshotSeq: 11
+  });
+
+  assert.equal(Number(render.lossDelayPaddingMs || 0) > 0, true);
+});
+
 test('remote entities raise interpolation delay faster than they lower it', async () => {
   const { entitiesApi } = await loadRemoteEntities({
     network: {

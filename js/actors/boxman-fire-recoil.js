@@ -30,13 +30,15 @@ export function applyFireRecoilPose(rig, recoilState) {
 export function decayFireRecoilState(recoilState, dt) {
     if (!recoilState) return false;
     var step = Math.max(0, Number(dt || 0));
-    var pitchBlend = Math.min(1, step * 24 * Math.max(0.2, Number(recoilState.recoverPitchScale || 1)));
-    var yawBlend = Math.min(1, step * 28 * Math.max(0.2, Number(recoilState.recoverYawScale || 1)));
-    var rollBlend = Math.min(1, step * 26 * Math.max(0.2, Number(recoilState.recoverRollScale || 1)));
-    var lowerArmBlend = Math.min(1, step * 30 * Math.max(0.2, Number(recoilState.recoverPitchScale || 1)));
-    var weaponBlend = Math.min(
-        1,
-        step * 18 * Math.max(0.2, (Number(recoilState.recoverPitchScale || 1) + Number(recoilState.recoverRollScale || 1)) * 0.5)
+    // Exponential decay keeps the recovery rate frame-rate independent;
+    // min(1, dt*k) hits 1 at <=24fps and snapped all recoil to zero in a
+    // single frame on any hitch.
+    var pitchBlend = 1 - Math.exp(-step * 24 * Math.max(0.2, Number(recoilState.recoverPitchScale || 1)));
+    var yawBlend = 1 - Math.exp(-step * 28 * Math.max(0.2, Number(recoilState.recoverYawScale || 1)));
+    var rollBlend = 1 - Math.exp(-step * 26 * Math.max(0.2, Number(recoilState.recoverRollScale || 1)));
+    var lowerArmBlend = 1 - Math.exp(-step * 30 * Math.max(0.2, Number(recoilState.recoverPitchScale || 1)));
+    var weaponBlend = 1 - Math.exp(
+        -step * 18 * Math.max(0.2, (Number(recoilState.recoverPitchScale || 1) + Number(recoilState.recoverRollScale || 1)) * 0.5)
     );
     recoilState.weaponKick += (0 - recoilState.weaponKick) * weaponBlend;
     recoilState.shoulderPitch += (0 - recoilState.shoulderPitch) * pitchBlend;

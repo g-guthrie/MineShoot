@@ -120,6 +120,7 @@
         var launchContext = cloneLaunchContext(null);
         var lastHandledMatchEndAt = 0;
         var listenersBound = false;
+        var boundListeners = [];
         var lastStartRequestAt = 0;
         var lastGameplayActivityAt = 0;
         var idleMonitorHandle = 0;
@@ -829,6 +830,23 @@
             return requestPlayStart(event);
         }
 
+        function addManagedListener(target, type, fn, listenerOpts) {
+            if (!target || typeof target.addEventListener !== 'function') return;
+            target.addEventListener(type, fn, listenerOpts);
+            boundListeners.push([target, type, fn, listenerOpts]);
+        }
+
+        function removeManagedListeners() {
+            for (var i = 0; i < boundListeners.length; i++) {
+                var entry = boundListeners[i];
+                var target = entry[0];
+                if (target && typeof target.removeEventListener === 'function') {
+                    target.removeEventListener(entry[1], entry[2], entry[3]);
+                }
+            }
+            boundListeners.length = 0;
+        }
+
         var api = {
             bindRuntimeControls: function () {
                 if (listenersBound) return;
@@ -843,12 +861,12 @@
                 runtime.GameSession = api;
 
                 if (playBtn) {
-                    playBtn.addEventListener('click', triggerResumeGameplay);
-                    playBtn.addEventListener('touchend', triggerResumeGameplay, { passive: false });
+                    addManagedListener(playBtn, 'click', triggerResumeGameplay);
+                    addManagedListener(playBtn, 'touchend', triggerResumeGameplay, { passive: false });
                 }
 
                 if (backModeBtn) {
-                    backModeBtn.addEventListener('click', function (event) {
+                    addManagedListener(backModeBtn, 'click', function (event) {
                         event.preventDefault();
                         event.stopPropagation();
                         if (pauseState.active || canResumeGameplay()) {
@@ -860,7 +878,7 @@
                 }
 
                 if (postGameEls.celebration) {
-                    postGameEls.celebration.addEventListener('click', function () {
+                    addManagedListener(postGameEls.celebration, 'click', function () {
                         if (postGameState.active && postGameState.phase === 'celebration') {
                             showPostGameResults();
                         }
@@ -868,7 +886,7 @@
                 }
 
                 if (postGameEls.continueBtn) {
-                    postGameEls.continueBtn.addEventListener('click', function (event) {
+                    addManagedListener(postGameEls.continueBtn, 'click', function (event) {
                         event.preventDefault();
                         event.stopPropagation();
                         completePostGameFlow();
@@ -876,12 +894,12 @@
                 }
 
                 if (handoffEls.enterBtn) {
-                    handoffEls.enterBtn.addEventListener('click', function (event) {
+                    addManagedListener(handoffEls.enterBtn, 'click', function (event) {
                         api.enterGameplay(event, launchContext);
                     });
                 }
 
-                document.addEventListener('keydown', function (event) {
+                addManagedListener(document, 'keydown', function (event) {
                     if (event.key === 'Escape' && !event.repeat) {
                         suppressNextEscapeArm = escapeModalOpen();
                         if (suppressNextEscapeArm) {
@@ -917,18 +935,18 @@
                     }
                 });
 
-                document.addEventListener('mousemove', recordGameplayActivity);
-                document.addEventListener('mousedown', recordGameplayActivity);
-                document.addEventListener('mouseup', recordGameplayActivity);
-                document.addEventListener('wheel', recordGameplayActivity);
-                document.addEventListener('touchstart', recordGameplayActivity);
-                document.addEventListener('keyup', function (event) {
+                addManagedListener(document, 'mousemove', recordGameplayActivity);
+                addManagedListener(document, 'mousedown', recordGameplayActivity);
+                addManagedListener(document, 'mouseup', recordGameplayActivity);
+                addManagedListener(document, 'wheel', recordGameplayActivity);
+                addManagedListener(document, 'touchstart', recordGameplayActivity);
+                addManagedListener(document, 'keyup', function (event) {
                     if (!shouldArmEscapeResume(event)) return;
                     escapeResumeReady = true;
                 });
-                window.addEventListener('focus', recordGameplayActivity);
+                addManagedListener(window, 'focus', recordGameplayActivity);
 
-                document.addEventListener('pointerlockchange', function () {
+                addManagedListener(document, 'pointerlockchange', function () {
                     var target = opts.getPointerLockTarget ? opts.getPointerLockTarget() : null;
                     var lostWhilePlaying = !!isPlaying;
                     escapeResumeReady = false;
@@ -962,7 +980,7 @@
                     emitSessionState();
                 });
 
-                document.addEventListener('pointerlockerror', function () {
+                addManagedListener(document, 'pointerlockerror', function () {
                     escapeResumeReady = false;
                     if (!document.pointerLockElement) {
                         var resumablePause = !isPlaying && !pendingInputCapture && canResumeGameplay();
@@ -986,6 +1004,19 @@
                 }
 
                 emitSessionState();
+            },
+            unbindRuntimeControls: function () {
+                if (!listenersBound) return;
+                listenersBound = false;
+                removeManagedListeners();
+                clearIdleMonitor();
+                clearPostGameTimer();
+                if (runtime.GameSession === api) {
+                    runtime.GameSession = null;
+                }
+            },
+            destroy: function () {
+                api.unbindRuntimeControls();
             },
             isPlaying: function () {
                 return !!isPlaying;

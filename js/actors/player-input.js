@@ -277,6 +277,12 @@
 
         return {
             keydown: function (e) {
+                // Without the capture gate, keys pressed while menus/overlays are
+                // open (pointer lock released) still stream movement intent to the
+                // authoritative server while local prediction is frozen. Releases
+                // (keyup) stay ungated so keys never stick when capture is lost
+                // between press and release.
+                if (!hasCapture()) return;
                 if (matches('move_forward', e, 'KeyW') && !gateRolling('forward', e)) setMovementKey('forward', true);
                 if (matches('move_left', e, 'KeyA') && !gateRolling('left', e)) setMovementKey('left', true);
                 if (matches('move_backward', e, 'KeyS') && !gateRolling('backward', e)) setMovementKey('backward', true);
@@ -330,7 +336,10 @@
                 clearKeys();
             },
             pointerlockchange: function () {
-                if (!hasCapture()) cancelScope();
+                if (!hasCapture()) {
+                    cancelScope();
+                    clearKeys();
+                }
             }
         };
     }

@@ -6,8 +6,11 @@
     'use strict';
 
     var ec = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityConstants) || {};
-    var HEAD = ec.HEAD_HITBOX_SIZE || { x: 1.092, y: 0.669, z: 1.092 };
-    var BODY = ec.BODY_HITBOX_SIZE || { x: 2.7, y: 1.525, z: 2.7 };
+    // Fallbacks mirror shared/entity-constants.js HEAD_HITBOX_SIZE and
+    // BODY_HITBOX_SIZE; keep them in sync or fallback hitboxes will not match
+    // the server's hit volumes.
+    var HEAD = ec.HEAD_HITBOX_SIZE || { x: 1.092, y: 0.77, z: 1.092 };
+    var BODY = ec.BODY_HITBOX_SIZE || { x: 2.485, y: 1.98, z: 1.74 };
 
     var HEAD_COLOR_ENEMY = 0xff4444;
     var HEAD_COLOR_NET = 0xff6666;

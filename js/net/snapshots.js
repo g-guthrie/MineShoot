@@ -17,7 +17,8 @@
             var snapshotMeta = {
                 delta: !!opts.delta,
                 serverTime: Number(opts.serverTime || 0),
-                receivedAt: Number(opts.receivedAt || Date.now())
+                receivedAt: Number(opts.receivedAt || Date.now()),
+                snapshotSeq: Math.max(0, Number(opts.snapshotSeq || 0))
             };
 
             if (!opts.delta) {

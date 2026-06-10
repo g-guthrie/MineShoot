@@ -388,6 +388,80 @@ test('room runtime consumes queued input samples in sequence and weights their t
   assert.equal(player.inputQueue.length, 0);
 });
 
+test('room runtime carries excess queued input time to later ticks instead of compressing it', () => {
+  const player = {
+    seq: 0,
+    pendingInputSeq: 0,
+    lastProcessedInputSeq: 0,
+    lastReceivedInputSeq: 0,
+    yaw: 0,
+    pitch: 0,
+    inputState: {},
+    inputQueue: []
+  };
+  const deps = {
+    movementLocked: false,
+    clamp(value, min, max) { return Math.max(min, Math.min(max, value)); },
+    createMovementInputState() { return {}; }
+  };
+
+  queueAuthoritativeInput(player, { seq: 1, dtMs: 16, yaw: 0.1, forward: true }, deps);
+  queueAuthoritativeInput(player, { seq: 2, dtMs: 16, yaw: 0.2, forward: true }, deps);
+
+  const tickDtSec = 1 / 60;
+  const firstPlan = consumeQueuedAuthoritativeInputs(player, tickDtSec, {
+    createMovementInputState() { return {}; }
+  });
+
+  assert.deepEqual(firstPlan.steps.map((step) => step.seq), [1]);
+  assert.equal(firstPlan.processedSeq, 1);
+  assert.deepEqual(player.inputQueue.map((sample) => sample.seq), [2]);
+
+  const secondPlan = consumeQueuedAuthoritativeInputs(player, tickDtSec, {
+    createMovementInputState() { return {}; }
+  });
+
+  assert.deepEqual(secondPlan.steps.map((step) => step.seq), [2]);
+  assert.equal(secondPlan.processedSeq, 2);
+  assert.equal(player.inputQueue.length, 0);
+});
+
+test('room runtime drains the input backlog faster once carrying it would add latency', () => {
+  const player = {
+    seq: 0,
+    pendingInputSeq: 0,
+    lastProcessedInputSeq: 0,
+    lastReceivedInputSeq: 0,
+    yaw: 0,
+    pitch: 0,
+    inputState: {},
+    inputQueue: []
+  };
+  const deps = {
+    movementLocked: false,
+    clamp(value, min, max) { return Math.max(min, Math.min(max, value)); },
+    createMovementInputState() { return {}; }
+  };
+
+  for (let seq = 1; seq <= 6; seq++) {
+    queueAuthoritativeInput(player, { seq, dtMs: 16, yaw: seq / 10, forward: true }, deps);
+  }
+
+  const plan = consumeQueuedAuthoritativeInputs(player, 1 / 60, {
+    createMovementInputState() { return {}; }
+  });
+
+  assert.deepEqual(plan.steps.map((step) => step.seq), [1, 2, 3]);
+  assert.deepEqual(player.inputQueue.map((sample) => sample.seq), [4, 5, 6]);
+  // Drained samples keep their real durations: ~48ms of client input must not
+  // be time-compressed into the 16.7ms tick.
+  const totalDtSec = plan.steps.reduce((sum, step) => sum + step.dtSec, 0);
+  assert.ok(Math.abs(totalDtSec - 0.048) < 0.000001);
+  for (const step of plan.steps) {
+    assert.ok(Math.abs(step.dtSec - 0.016) < 0.000001);
+  }
+});
+
 test('room runtime ack only advances to the last processed input seq', () => {
   const player = {
     seq: 4,

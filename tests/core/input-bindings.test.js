@@ -79,7 +79,28 @@ test('input bindings expose the shipped defaults and normalize modifier labels',
   assert.equal(api.matchesWithFallback('reload', { code: 'KeyR' }, 'KeyX'), true);
   assert.equal(labels.matchesBinding('reload', { code: 'KeyR' }, 'KeyX'), true);
   assert.equal(labels.matchesBinding('move_forward', { code: 'KeyW' }, 'ArrowUp'), true);
-  assert.equal(labels.matchesBinding('move_forward', { code: 'ArrowUp' }, 'ArrowUp'), true);
+  // A bound action listens to its binding only: the hardcoded fallback must not
+  // keep a second key alive, or rebound actions double-trigger on their old key.
+  assert.equal(labels.matchesBinding('move_forward', { code: 'ArrowUp' }, 'ArrowUp'), false);
+  assert.equal(labels.matchesBinding('unregistered_action', { code: 'F6' }, 'F6'), true);
+});
+
+test('rebound actions release their old key instead of double-triggering', async () => {
+  const { api } = await loadBindingsHarness();
+  // Swapping W/S: assigning KeyS to move_forward swaps move_backward onto KeyW.
+  api.assign('move_forward', 'KeyS');
+  assert.equal(api.getBinding('move_forward'), 'KeyS');
+  assert.equal(api.getBinding('move_backward'), 'KeyW');
+
+  // Pressing W must press backward only — never both directions at once.
+  assert.equal(api.matchesWithFallback('move_forward', { code: 'KeyW' }, 'KeyW'), false);
+  assert.equal(api.matchesWithFallback('move_backward', { code: 'KeyW' }, 'KeyS'), true);
+  assert.equal(api.matchesWithFallback('move_forward', { code: 'KeyS' }, 'KeyW'), true);
+
+  // An unregistered fallback-only action yields to tokens owned by real bindings.
+  assert.equal(api.matchesWithFallback('camera_origin_tune', { code: 'F6' }, 'F6'), true);
+  api.assign('toggle_debug', 'F6');
+  assert.equal(api.matchesWithFallback('camera_origin_tune', { code: 'F6' }, 'F6'), false);
 });
 
 test('input bindings reject reserved targets', async () => {

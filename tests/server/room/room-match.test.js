@@ -176,6 +176,142 @@ test('public FFA still starts with one human but does not auto-win without a kil
   assert.equal(room.finishPublicMatchCalled, 1);
 });
 
+test('public FFA ends with a forfeit win when the field thins without the survivor scoring', () => {
+  const room = {
+    roomName: 'ffa-01',
+    gameMode: 'ffa',
+    players: new Map([
+      ['u1', { id: 'u1', fixtureType: '', teamId: '', kills: 0, progressScore: 0, eliminated: false }]
+    ]),
+    matchState: Object.assign(emptyMatchState('ffa'), { started: true, matchBaselinePlayerCount: 2 }),
+    isPublicMatchRoom() { return true; },
+    connectedHumanCount() { return 1; },
+    finishPublicMatchCalled: 0,
+    finishPublicMatch(winnerId, winnerTeam) {
+      this.finishPublicMatchCalled += 1;
+      return finishPublicMatch(this, {
+        nowMs: () => 84,
+        matchResetDelayMs: 5000,
+        gameModeFfa: 'ffa',
+        gameModeTdm: 'tdm'
+      }, winnerId, winnerTeam);
+    }
+  };
+
+  updateLeaderProgress(room, {
+    gameModeFfa: 'ffa',
+    teamAlpha: 'alpha',
+    teamBravo: 'bravo'
+  });
+  assert.equal(room.matchState.ended, true);
+  assert.equal(room.matchState.winnerId, 'u1');
+  assert.equal(room.finishPublicMatchCalled, 1);
+});
+
+test('public FFA ends on mutual elimination with the top-kills player as winner', () => {
+  const room = {
+    roomName: 'ffa-01',
+    gameMode: 'ffa',
+    players: new Map([
+      ['u1', { id: 'u1', fixtureType: '', teamId: '', kills: 2, progressScore: 2, eliminated: true }],
+      ['u2', { id: 'u2', fixtureType: '', teamId: '', kills: 3, progressScore: 3, eliminated: true }]
+    ]),
+    matchState: Object.assign(emptyMatchState('ffa'), { started: true, matchBaselinePlayerCount: 2 }),
+    isPublicMatchRoom() { return true; },
+    connectedHumanCount() { return 2; },
+    finishPublicMatchCalled: 0,
+    finishPublicMatch(winnerId, winnerTeam) {
+      this.finishPublicMatchCalled += 1;
+      return finishPublicMatch(this, {
+        nowMs: () => 84,
+        matchResetDelayMs: 5000,
+        gameModeFfa: 'ffa',
+        gameModeTdm: 'tdm'
+      }, winnerId, winnerTeam);
+    }
+  };
+
+  updateLeaderProgress(room, {
+    gameModeFfa: 'ffa',
+    teamAlpha: 'alpha',
+    teamBravo: 'bravo'
+  });
+  assert.equal(room.matchState.ended, true);
+  assert.equal(room.matchState.winnerId, 'u2');
+  assert.equal(room.finishPublicMatchCalled, 1);
+});
+
+test('public FFA mutual elimination with no kills ends in a draw, never crowning a pending joiner', () => {
+  const room = {
+    roomName: 'ffa-01',
+    gameMode: 'ffa',
+    players: new Map([
+      ['u1', { id: 'u1', fixtureType: '', teamId: '', kills: 0, progressScore: 0, eliminated: true }],
+      ['u2', { id: 'u2', fixtureType: '', teamId: '', kills: 0, progressScore: 0, eliminated: true }],
+      // 0-kill joiner still in the invulnerable entry window: must not win.
+      ['u3', { id: 'u3', fixtureType: '', teamId: '', kills: 0, progressScore: 0, eliminated: false, pending: true }]
+    ]),
+    matchState: Object.assign(emptyMatchState('ffa'), { started: true, matchBaselinePlayerCount: 3 }),
+    isEntityMatchEntryPending(player) { return !!(player && player.pending); },
+    isPublicMatchRoom() { return true; },
+    connectedHumanCount() { return 3; },
+    finishPublicMatchCalled: 0,
+    finishPublicMatch(winnerId, winnerTeam) {
+      this.finishPublicMatchCalled += 1;
+      return finishPublicMatch(this, {
+        nowMs: () => 84,
+        matchResetDelayMs: 5000,
+        gameModeFfa: 'ffa',
+        gameModeTdm: 'tdm'
+      }, winnerId, winnerTeam);
+    }
+  };
+
+  updateLeaderProgress(room, {
+    gameModeFfa: 'ffa',
+    teamAlpha: 'alpha',
+    teamBravo: 'bravo'
+  });
+  assert.equal(room.matchState.ended, true);
+  assert.equal(room.matchState.winnerId, '');
+  assert.equal(room.finishPublicMatchCalled, 1);
+});
+
+test('public FFA mutual elimination ignores pending joiners when picking the top-kills winner', () => {
+  const room = {
+    roomName: 'ffa-01',
+    gameMode: 'ffa',
+    players: new Map([
+      ['u1', { id: 'u1', fixtureType: '', teamId: '', kills: 2, progressScore: 2, eliminated: true }],
+      ['u2', { id: 'u2', fixtureType: '', teamId: '', kills: 0, progressScore: 0, eliminated: true }],
+      ['u3', { id: 'u3', fixtureType: '', teamId: '', kills: 0, progressScore: 0, eliminated: false, pending: true }]
+    ]),
+    matchState: Object.assign(emptyMatchState('ffa'), { started: true, matchBaselinePlayerCount: 3 }),
+    isEntityMatchEntryPending(player) { return !!(player && player.pending); },
+    isPublicMatchRoom() { return true; },
+    connectedHumanCount() { return 3; },
+    finishPublicMatchCalled: 0,
+    finishPublicMatch(winnerId, winnerTeam) {
+      this.finishPublicMatchCalled += 1;
+      return finishPublicMatch(this, {
+        nowMs: () => 84,
+        matchResetDelayMs: 5000,
+        gameModeFfa: 'ffa',
+        gameModeTdm: 'tdm'
+      }, winnerId, winnerTeam);
+    }
+  };
+
+  updateLeaderProgress(room, {
+    gameModeFfa: 'ffa',
+    teamAlpha: 'alpha',
+    teamBravo: 'bravo'
+  });
+  assert.equal(room.matchState.ended, true);
+  assert.equal(room.matchState.winnerId, 'u1');
+  assert.equal(room.finishPublicMatchCalled, 1);
+});
+
 test('public FFA match baseline includes bot-filled participants', () => {
   const room = {
     roomName: 'ffa-01',
@@ -333,6 +469,121 @@ test('private room four-team tdm preserves assignments and scores the winning te
 
   assert.equal(room.matchState.teamProgress.charlie, 1);
   assert.deepEqual(finishCall, { winnerId: '', winnerTeam: 'charlie' });
+});
+
+test('TDM kill value tracks the live team size after a mid-match join', () => {
+  const room = {
+    gameMode: 'tdm',
+    matchState: Object.assign(emptyMatchState('tdm'), {
+      started: true,
+      targetProgress: 10,
+      teamProgress: { alpha: 0, bravo: 0 },
+      teamBaselineSize: { alpha: 1, bravo: 1 }
+    }),
+    players: new Map([
+      ['u1', { id: 'u1', fixtureType: '', teamId: 'alpha', kills: 0, deaths: 0, progressScore: 0 }],
+      ['u2', { id: 'u2', fixtureType: '', teamId: 'alpha', kills: 0, deaths: 0, progressScore: 0 }],
+      ['u3', { id: 'u3', fixtureType: '', teamId: 'bravo', kills: 0, deaths: 0, progressScore: 0 }]
+    ]),
+    getEntityById(id) { return this.players.get(id) || null; },
+    assignPlayerToCurrentTeam(player) {
+      return assignPlayerToCurrentTeam(this, player, {
+        teamAlpha: 'alpha',
+        teamBravo: 'bravo'
+      });
+    },
+    updateLeaderProgress() {},
+    finishPublicMatch() {}
+  };
+
+  recordElimination(room, {
+    nowMs: () => 100,
+    gameModeFfa: 'ffa',
+    gameModeTdm: 'tdm',
+    tdmTargetProgress: 10
+  }, 'u1', 'u3');
+
+  // alpha has two live members even though its start-of-match baseline was 1.
+  assert.equal(room.matchState.teamProgress.alpha, 0.5);
+  assert.equal(room.matchState.teamBaselineSize.alpha, 2);
+  assert.equal(room.players.get('u1').progressScore, 0.5);
+  assert.equal(room.players.get('u2').progressScore, 0.5);
+});
+
+test('TDM kill value keeps the match-start baseline when team members leave', () => {
+  const room = {
+    gameMode: 'tdm',
+    matchState: Object.assign(emptyMatchState('tdm'), {
+      started: true,
+      targetProgress: 10,
+      teamProgress: { alpha: 0, bravo: 0 },
+      teamBaselineSize: { alpha: 3, bravo: 3 }
+    }),
+    // Two of alpha's three starters have left the room.
+    players: new Map([
+      ['u1', { id: 'u1', fixtureType: '', teamId: 'alpha', kills: 0, deaths: 0, progressScore: 0 }],
+      ['u4', { id: 'u4', fixtureType: '', teamId: 'bravo', kills: 0, deaths: 0, progressScore: 0 }]
+    ]),
+    getEntityById(id) { return this.players.get(id) || null; },
+    assignPlayerToCurrentTeam(player) {
+      return assignPlayerToCurrentTeam(this, player, {
+        teamAlpha: 'alpha',
+        teamBravo: 'bravo'
+      });
+    },
+    updateLeaderProgress() {},
+    finishPublicMatch() {}
+  };
+
+  recordElimination(room, {
+    nowMs: () => 100,
+    gameModeFfa: 'ffa',
+    gameModeTdm: 'tdm',
+    tdmTargetProgress: 10
+  }, 'u1', 'u4');
+
+  // The divisor never shrinks below the match-start size, so a thinned team
+  // does not score faster per kill.
+  assert.equal(room.matchState.teamBaselineSize.alpha, 3);
+  assert.equal(room.matchState.teamProgress.alpha, Number((1 / 3).toFixed(3)));
+});
+
+test('TDM kill value ignores pending-entry joiners in the divisor', () => {
+  const room = {
+    gameMode: 'tdm',
+    matchState: Object.assign(emptyMatchState('tdm'), {
+      started: true,
+      targetProgress: 10,
+      teamProgress: { alpha: 0, bravo: 0 },
+      teamBaselineSize: { alpha: 1, bravo: 1 }
+    }),
+    players: new Map([
+      ['u1', { id: 'u1', fixtureType: '', teamId: 'alpha', kills: 0, deaths: 0, progressScore: 0 }],
+      // Invulnerable, unspawned joiner still inside the entry window.
+      ['u2', { id: 'u2', fixtureType: '', teamId: 'alpha', kills: 0, deaths: 0, progressScore: 0, pending: true }],
+      ['u3', { id: 'u3', fixtureType: '', teamId: 'bravo', kills: 0, deaths: 0, progressScore: 0 }]
+    ]),
+    isEntityMatchEntryPending(player) { return !!(player && player.pending); },
+    getEntityById(id) { return this.players.get(id) || null; },
+    assignPlayerToCurrentTeam(player) {
+      return assignPlayerToCurrentTeam(this, player, {
+        teamAlpha: 'alpha',
+        teamBravo: 'bravo'
+      });
+    },
+    updateLeaderProgress() {},
+    finishPublicMatch() {}
+  };
+
+  recordElimination(room, {
+    nowMs: () => 100,
+    gameModeFfa: 'ffa',
+    gameModeTdm: 'tdm',
+    tdmTargetProgress: 10
+  }, 'u1', 'u3');
+
+  assert.equal(room.matchState.teamBaselineSize.alpha, 1);
+  assert.equal(room.matchState.teamProgress.alpha, 1);
 });
 
 test('TDM eliminations ignore same-team targets', () => {

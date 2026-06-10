@@ -105,6 +105,7 @@ export function toEntityState(entity, now = nowMs()) {
       : null,
     stunUntil: entity.stunUntil || 0,
     slowUntil: entity.slowUntil || 0,
+    slowMultiplier: Number(entity.slowMultiplier || 1),
     throwables,
     visibleWallhack: true
   };

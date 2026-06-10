@@ -8,7 +8,9 @@
             stunUntil: 0,
             spawnShieldUntil: 0,
             weaponUntil: 0,
-            throwableUntil: 0
+            throwableUntil: 0,
+            slowUntil: 0,
+            slowMultiplier: 1
         };
 
         function nowMs() {
@@ -21,6 +23,17 @@
 
         function isSpawnShielded(now) {
             return Number(state.spawnShieldUntil || 0) > Number(now || nowMs());
+        }
+
+        function isSlowed(now) {
+            return Number(state.slowUntil || 0) > Number(now || nowMs());
+        }
+
+        // The server simulates slowed players by scaling their movement dt;
+        // prediction must apply the same multiplier or every slow rubber-bands.
+        function slowMovementMultiplier(now) {
+            if (!isSlowed(now)) return 1;
+            return Math.max(0.1, Math.min(1, Number(state.slowMultiplier || 1)));
         }
 
         function actionRestrictionUntil(actionType) {
@@ -57,6 +70,10 @@
             if (!isSpawnShielded(stamp)) state.spawnShieldUntil = 0;
             if (!isActionRestricted('weapon', stamp)) state.weaponUntil = 0;
             if (!isActionRestricted('throwable', stamp)) state.throwableUntil = 0;
+            if (!isSlowed(stamp)) {
+                state.slowUntil = 0;
+                state.slowMultiplier = 1;
+            }
         }
 
         function applyStatusState(patch) {
@@ -65,6 +82,8 @@
             if (typeof patch.spawnShieldUntil === 'number') state.spawnShieldUntil = patch.spawnShieldUntil;
             if (typeof patch.weaponUntil === 'number') state.weaponUntil = patch.weaponUntil;
             if (typeof patch.throwableUntil === 'number') state.throwableUntil = patch.throwableUntil;
+            if (typeof patch.slowUntil === 'number') state.slowUntil = patch.slowUntil;
+            if (typeof patch.slowMultiplier === 'number') state.slowMultiplier = patch.slowMultiplier;
             clearExpiredStatusState(nowMs());
             if (opts.onStatusVisualChange) {
                 opts.onStatusVisualChange({
@@ -77,6 +96,8 @@
             getState: function () { return state; },
             isStunned: isStunned,
             isSpawnShielded: isSpawnShielded,
+            isSlowed: isSlowed,
+            slowMovementMultiplier: slowMovementMultiplier,
             isActionRestricted: isActionRestricted,
             isMovementLocked: isMovementLocked,
             isActionLocked: isActionLocked,

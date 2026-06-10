@@ -63,21 +63,25 @@ function pushPoint(points, x, y, z, rotY, rotX) {
   let ny = y;
   let nz = z;
 
-  if (rotX) {
-    const cosX = Math.cos(rotX);
-    const sinX = Math.sin(rotX);
-    const rx = ny * cosX - nz * sinX;
-    const rz = ny * sinX + nz * cosX;
-    ny = rx;
-    nz = rz;
-  }
-
+  // Match three.js default Euler order 'XYZ' (v' = Rx * Ry * v for z = 0):
+  // the client's rendered ramp meshes set rotation.y and rotation.x, so the
+  // yaw must be applied to the local point before the tilt or the server's
+  // AABB diverges from the client's for any ramp using both rotations.
   if (rotY) {
     const cosY = Math.cos(rotY);
     const sinY = Math.sin(rotY);
     const rx = nx * cosY + nz * sinY;
     const rz = (-nx * sinY) + nz * cosY;
     nx = rx;
+    nz = rz;
+  }
+
+  if (rotX) {
+    const cosX = Math.cos(rotX);
+    const sinX = Math.sin(rotX);
+    const ry = ny * cosX - nz * sinX;
+    const rz = ny * sinX + nz * cosX;
+    ny = ry;
     nz = rz;
   }
 

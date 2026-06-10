@@ -203,6 +203,7 @@ async function loadMenuLoadoutHarness({ storageMap, deferShared = false, autoIni
         commands: {
           sendWeaponLoadout(primaryId, secondaryId) {
             netWeaponLoadoutCalls.push([String(primaryId || ''), String(secondaryId || '')]);
+            return true;
           },
           sendAbilityLoadout(abilityId) {
             netAbilityLoadoutCalls.push(String(abilityId || ''));

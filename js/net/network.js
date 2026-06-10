@@ -280,11 +280,28 @@
         } else if (frameServerTime > 0 && lastAppliedBufferedServerTime > 0 && frameServerTime <= lastAppliedBufferedServerTime) {
             return false;
         }
+        // Stamp receivedAt with the frame's jitter-buffer release time
+        // (readyAt), not wire-arrival time: the frame sat in the receive
+        // jitter buffer for computeRemoteBufferDelayMs, and the interpolation
+        // clock (per-entity serverTimeOffsetMs, freeze-gap checks) is derived
+        // from receivedAt. Using the arrival stamp made the render clock run
+        // ahead of the newest applied sample, so remote entities were
+        // permanently extrapolating and cycling through freeze/blend. The
+        // drain loop only applies frames once readyAt <= now, so readyAt
+        // never runs ahead of the apply timeline either — and unlike a
+        // Date.now() apply-time stamp, a backgrounded tab that applies its
+        // queued backlog late does not stamp every entity with the same
+        // stalled clock (which spiked measuredOffsetMs by the stall length).
+        var frameReadyAt = Math.max(0, Number(frame.readyAt || 0));
         var snapshotMeta = {
             delta: !!frame.delta,
             serverTime: frameServerTime,
-            receivedAt: Number(frame.receivedAt || Date.now()),
-            snapshotSeq: frameSnapshotSeq
+            receivedAt: frameReadyAt > 0 ? frameReadyAt : Date.now(),
+            snapshotSeq: frameSnapshotSeq,
+            // Viewer's previously applied frame seq: lets per-entity history
+            // distinguish "entity omitted from frames I received" from
+            // "global seq advanced on frames I never received".
+            prevAppliedSnapshotSeq: lastAppliedBufferedSnapshotSeq
         };
         var entities = Array.isArray(frame.entities) ? frame.entities : [];
         for (var i = 0; i < entities.length; i++) {

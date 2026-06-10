@@ -174,24 +174,40 @@
         if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
         if (Object.prototype.hasOwnProperty.call(parsed, 'roll')) return parsed;
 
+        // Pre-roll profiles may already use roll's default key (KeyE) for
+        // another action. Relocate roll to a free key instead of bailing,
+        // which would silently reset the player's entire custom profile.
+        var legacyTokens = {};
+        var i;
+        var actionId;
+        for (i = 0; i < ACTION_DEFS.length; i++) {
+            actionId = ACTION_DEFS[i].id;
+            if (actionId === 'roll' || !Object.prototype.hasOwnProperty.call(parsed, actionId)) continue;
+            var legacyToken = normalizeToken(parsed[actionId]);
+            if (!isSupportedToken(legacyToken)) return null;
+            legacyTokens[legacyToken] = true;
+        }
+        var rollCandidates = ['KeyE', 'KeyC', 'KeyX', 'KeyZ', 'KeyB', 'KeyN', 'KeyM', 'KeyU', 'KeyO', 'KeyP'];
+        var rollToken = '';
+        for (i = 0; i < rollCandidates.length; i++) {
+            if (!legacyTokens[rollCandidates[i]]) {
+                rollToken = rollCandidates[i];
+                break;
+            }
+        }
+        if (!rollToken) return null;
+
         var next = buildDefaultBindings();
         var seenTokens = {};
-        for (var i = 0; i < ACTION_DEFS.length; i++) {
-            var actionId = ACTION_DEFS[i].id;
-            var token = normalizeToken(next[actionId]);
+        for (i = 0; i < ACTION_DEFS.length; i++) {
+            actionId = ACTION_DEFS[i].id;
+            var token = actionId === 'roll' ? rollToken : normalizeToken(next[actionId]);
             if (actionId !== 'roll' && Object.prototype.hasOwnProperty.call(parsed, actionId)) {
-                var legacyToken = normalizeToken(parsed[actionId]);
-                if (!isSupportedToken(legacyToken)) return null;
-                token = legacyToken;
+                token = normalizeToken(parsed[actionId]);
             }
             if (!isSupportedToken(token) || seenTokens[token]) return null;
             next[actionId] = token;
             seenTokens[token] = true;
-        }
-
-        for (var key in parsed) {
-            if (!Object.prototype.hasOwnProperty.call(parsed, key)) continue;
-            if (!actionDefById[key]) continue;
         }
 
         return next;
@@ -287,7 +303,15 @@
     }
 
     function matchesWithFallback(actionId, event, fallbackCodes) {
-        if (matches(actionId, event)) return true;
+        // The hardcoded fallback only exists for actions with no live binding
+        // (unregistered debug actions, bindings store unavailable). When the
+        // action IS bound, the binding is the single source of truth: keeping
+        // the fallback active would re-trigger rebound actions on their old
+        // keys and press both directions at once after a W/S swap.
+        var token = bindings[String(actionId || '')];
+        if (token) return tokenFromEvent(event) === token;
+        var eventToken = tokenFromEvent(event);
+        if (eventToken && findActionForToken(eventToken, '')) return false;
         var code = String(event && event.code || '');
         var fallbacks = Array.isArray(fallbackCodes) ? fallbackCodes : [fallbackCodes];
         for (var i = 0; i < fallbacks.length; i++) {

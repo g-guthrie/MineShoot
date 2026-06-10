@@ -8,5 +8,10 @@ export function pointInBounds(bounds, u, v) {
 }
 
 export function cloneMaterial(material) {
-  return (material && typeof material.clone === 'function') ? material.clone() : material;
+  if (!material || typeof material.clone !== 'function') return material;
+  const clone = material.clone();
+  // Clones are per-mesh, not part of the shared cache: they must be
+  // disposable on world rebuild, so drop the shared-material marker.
+  if (clone.userData) delete clone.userData.__mayhemSharedMaterial;
+  return clone;
 }

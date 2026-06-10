@@ -407,6 +407,7 @@
         function getInputSyncState() {
             var inputSeqHistory = readArray('getInputSeqHistory');
             var latestPending = inputSeqHistory.length > 0 ? inputSeqHistory[inputSeqHistory.length - 1] : null;
+            var oldestPending = inputSeqHistory.length > 0 ? inputSeqHistory[0] : null;
             var lastSentSeq = typeof opts.getLastInputSeqSent === 'function' ? opts.getLastInputSeqSent() : 0;
             var lastAckedSeq = typeof opts.getLastInputSeqAcked === 'function' ? opts.getLastInputSeqAcked() : 0;
             var connectionTiming = opts.getConnectionTimingState ? opts.getConnectionTimingState() : null;
@@ -443,6 +444,7 @@
                 pendingInputCount: inputSeqHistory.length,
                 hasUnsentInputTail: hasUnsentInputTail,
                 latestPendingAgeMs: latestPending ? Math.max(0, Date.now() - Number(latestPending.at || 0)) : 0,
+                oldestPendingAgeMs: oldestPending ? Math.max(0, Date.now() - Number(oldestPending.at || 0)) : 0,
                 latestAckAgeMs: lastAcceptedSelfAckAt > 0 ? Math.max(0, Date.now() - lastAcceptedSelfAckAt) : 0,
                 inputSendIntervalMs: Math.max(0, inputSendInterval * 1000),
                 estimatedRttMs: connectionTiming ? Math.max(0, Number(connectionTiming.rttMs || 0)) : 0,
@@ -465,6 +467,7 @@
                 lastAckedSeq: Number(inputSyncState.lastAckedSeq || 0),
                 ackDrift: Number(inputSyncState.ackDrift || 0),
                 latestPendingAgeMs: Number(inputSyncState.latestPendingAgeMs || 0),
+                oldestPendingAgeMs: Number(inputSyncState.oldestPendingAgeMs || 0),
                 latestAckAgeMs: Number(inputSyncState.latestAckAgeMs || 0),
                 inputSendIntervalMs: Number(inputSyncState.inputSendIntervalMs || 0),
                 rttMs: Number(inputSyncState.estimatedRttMs || 0),

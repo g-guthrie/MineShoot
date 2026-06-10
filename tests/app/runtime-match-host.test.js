@@ -11,6 +11,9 @@ async function loadHostHarness({ bootstrapStart, clockDeltas } = {}) {
     bootstrapStarts: 0,
     bootstrapDisposals: [],
     controlsUnbind: [],
+    sessionCreates: 0,
+    sessionBinds: 0,
+    sessionUnbinds: 0,
     sessionEmits: 0,
     stepDts: [],
     renderFrames: []
@@ -87,8 +90,14 @@ async function loadHostHarness({ bootstrapStart, clockDeltas } = {}) {
     getRuntimeSessionFactory() {
       return {
         create() {
+          calls.sessionCreates += 1;
           return {
-            bindRuntimeControls() {},
+            bindRuntimeControls() {
+              calls.sessionBinds += 1;
+            },
+            unbindRuntimeControls() {
+              calls.sessionUnbinds += 1;
+            },
             emitSessionState() {
               calls.sessionEmits += 1;
             },
@@ -266,6 +275,25 @@ test('runtime match host tears down the previous runtime before starting a new o
   assert.deepEqual(harness.calls.bootstrapDisposals, [1]);
   assert.deepEqual(harness.calls.controlsUnbind, [1]);
   assert.equal(harness.host.isRuntimeReady(), true);
+});
+
+test('runtime match host unbinds session controls on teardown and rebinds the reused session on restart', async () => {
+  const harness = await loadHostHarness();
+
+  await harness.host.startRuntime({});
+  assert.equal(harness.calls.sessionCreates, 1);
+  assert.equal(harness.calls.sessionBinds, 1);
+  assert.equal(harness.calls.sessionUnbinds, 0);
+
+  harness.host.teardownRuntime('test_exit');
+  assert.equal(harness.calls.sessionUnbinds, 1);
+
+  await harness.host.startRuntime({});
+  // The session object is reused (it carries cross-match state) but its
+  // global listeners are rebound, so each run owns exactly one listener set.
+  assert.equal(harness.calls.sessionCreates, 1);
+  assert.equal(harness.calls.sessionUnbinds, 2);
+  assert.equal(harness.calls.sessionBinds, 2);
 });
 
 test('runtime match host disposes stale bootstrap results that resolve after teardown', async () => {

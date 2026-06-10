@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   currentRoomNowMs,
+  ensureRoomTick,
   stopRoomTickIfEmpty,
   tickRoom
 } from '../../../cloudflare/server/room/RoomTick.js';
@@ -114,4 +115,61 @@ test('stopRoomTickIfEmpty keeps live human rooms running and clears sim-only roo
 test('currentRoomNowMs uses simulation time only inside simulation ticks', () => {
   assert.equal(currentRoomNowMs({ inSimulationTick: true, simulationNowMs: 123 }, () => 456), 123);
   assert.equal(currentRoomNowMs({ inSimulationTick: false, simulationNowMs: 123 }, () => 456), 456);
+});
+
+test('tick keeps the simulation clock anchored to wall time in steady state', () => {
+  const { room } = createTickRoom({
+    clients: new Map([[{}, { userId: 'u1' }]])
+  });
+
+  tickRoom(room, {
+    nowMs: () => 1020,
+    simTickMs: 1000 / 60,
+    snapshotTickMs: 1000 / 60
+  });
+
+  const accumulator = Math.max(0, Number(room.simulationAccumulatorMs || 0));
+  assert.ok(Math.abs(room.simulationNowMs - (1020 - accumulator)) < 0.000001);
+});
+
+test('tick keeps the snapshot stamp on simulated-state time after clamps drop wall time', () => {
+  const SIM_TICK_MS = 1000 / 60;
+  const { calls, room } = createTickRoom({
+    clients: new Map([[{}, { userId: 'u1' }]])
+  });
+
+  // A 1s stall: frame delta clamps to maxFrameMs and the step cap drops the
+  // rest. The sim clock must stay on the time entities were actually stepped
+  // to — stamping the wall-derived `now - accumulator` would mark positions
+  // with a future time and clients would see a backward-velocity glitch.
+  tickRoom(room, {
+    nowMs: () => 2000,
+    simTickMs: SIM_TICK_MS,
+    snapshotTickMs: SIM_TICK_MS,
+    maxFrameMs: 250,
+    maxSteps: 6
+  });
+
+  const steppedMs = calls.simSteps.reduce((sum, dtSec) => sum + (dtSec * 1000), 0);
+  assert.equal(calls.simSteps.length, 6);
+  assert.ok(Math.abs(room.simulationNowMs - (1000 + steppedMs)) < 0.000001);
+  // The clamp dropped time, so the wall-derived value would be far ahead.
+  const accumulator = Math.max(0, Number(room.simulationAccumulatorMs || 0));
+  assert.ok(room.simulationNowMs < (2000 - accumulator));
+});
+
+test('ensureRoomTick re-anchors a stale simulation clock when a room resumes', () => {
+  const room = {
+    tickHandle: null,
+    simulationNowMs: 1000,
+    tick() {}
+  };
+
+  ensureRoomTick(room, {
+    nowMs: () => 50000,
+    setInterval: () => 1
+  });
+
+  assert.equal(room.simulationNowMs, 50000);
+  assert.equal(room.lastTickAt, 50000);
 });

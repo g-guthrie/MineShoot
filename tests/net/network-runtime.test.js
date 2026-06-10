@@ -567,3 +567,97 @@ test('GameNet jitter-buffered full snapshots prune stale remote visuals when the
   assert.deepEqual(harness.getUpdateCalls().map((entry) => entry.entity.id), ['usr_live']);
   assert.deepEqual(harness.getRemovedVisualIds(), ['usr_stale']);
 });
+
+test('GameNet stamps buffered remote frames with their buffer-release time so interpolation sees the post-buffer timeline', async () => {
+  const harness = await createNetHarness({
+    nowMs: 1000,
+    networkFlags: { remoteReceiveJitterBuffer: true }
+  });
+  harness.init();
+
+  harness.dispatch({
+    t: 'snapshot',
+    snapshotSeq: 1,
+    serverTime: 1000,
+    entities: [{
+      id: 'usr_buffered',
+      username: 'REMOTE',
+      alive: true,
+      x: 1,
+      y: 1.6,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      velocityY: 0,
+      jumpHoldTimer: 0,
+      moveSpeedNorm: 0,
+      isGrounded: true,
+      jumpHeldLast: false,
+      sprinting: false,
+      fastBackpedal: false,
+      weaponId: 'rifle'
+    }],
+    projectiles: [],
+    fireZones: []
+  });
+
+  const readyAt = Number(harness.getRuntimeState().peekRemoteFrame().readyAt || 0);
+  assert.ok(readyAt > 1000, 'frame should be held by the jitter buffer');
+
+  // Simulate a stalled (e.g. backgrounded) tab applying the frame long after
+  // it became ready: the stamp must be the buffer-release time, not the late
+  // apply wall clock, or every entity inherits the stall in its measured
+  // clock offset.
+  const applyNow = Math.ceil(readyAt) + 5000;
+  harness.setNow(applyNow);
+  harness.update();
+
+  const calls = harness.getUpdateCalls();
+  assert.equal(calls.length, 1);
+  // receivedAt must reflect when the frame became visible to interpolation
+  // (post-buffer release time), not wire arrival; otherwise the per-entity
+  // render clock runs ahead of the newest applied sample and extrapolates
+  // permanently. It must also not be the apply-time wall clock, which
+  // inherits event-loop stalls.
+  assert.equal(Number(calls[0].snapshotMeta.receivedAt), readyAt);
+  assert.equal(Number(calls[0].snapshotMeta.serverTime), 1000);
+  assert.equal(Number(calls[0].snapshotMeta.snapshotSeq), 1);
+  // First applied frame: the viewer had no previously applied seq.
+  assert.equal(Number(calls[0].snapshotMeta.prevAppliedSnapshotSeq), 0);
+
+  harness.dispatch({
+    t: 'snapshot',
+    snapshotSeq: 2,
+    serverTime: 1033,
+    entities: [{
+      id: 'usr_buffered',
+      username: 'REMOTE',
+      alive: true,
+      x: 2,
+      y: 1.6,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      velocityY: 0,
+      jumpHoldTimer: 0,
+      moveSpeedNorm: 0,
+      isGrounded: true,
+      jumpHeldLast: false,
+      sprinting: false,
+      fastBackpedal: false,
+      weaponId: 'rifle'
+    }],
+    projectiles: [],
+    fireZones: []
+  });
+  const secondReadyAt = Number(harness.getRuntimeState().peekRemoteFrame().readyAt || 0);
+  harness.setNow(Math.ceil(secondReadyAt) + 5);
+  harness.update();
+
+  const laterCalls = harness.getUpdateCalls();
+  assert.equal(laterCalls.length, 2);
+  assert.equal(Number(laterCalls[1].snapshotMeta.receivedAt), secondReadyAt);
+  // The viewer's previously applied frame seq is plumbed so per-entity
+  // history can tell delta omissions apart from frames it never received.
+  assert.equal(Number(laterCalls[1].snapshotMeta.prevAppliedSnapshotSeq), 1);
+});

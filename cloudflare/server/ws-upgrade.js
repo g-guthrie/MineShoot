@@ -8,7 +8,12 @@ import {
   touchPrivateRoomById
 } from './private-rooms.js';
 import { consumePublicMatchAssignment } from './party-match-state.js';
-import { resolveGameplayWsIdentity } from './ws-identity.js';
+import {
+  guestTokenSecret,
+  readGuestTokenFromRequest,
+  resolveGameplayWsIdentity,
+  verifyGuestToken
+} from './ws-identity.js';
 const WS_RATE_WINDOW_MS = 60_000;
 const WS_RATE_LIMIT = 45;
 
@@ -30,13 +35,25 @@ export async function handleWsUpgrade(env, request, classPresets) {
     url,
     classPresets
   });
+
+  // Guest actor ids are client-supplied. When a guest token secret is
+  // configured, a guest actorId is only trusted for identity-sensitive checks
+  // (private-room admission, match assignments) when it arrives with a valid
+  // server-issued HMAC token; otherwise the guest is treated as anonymous.
+  // Public arena play continues to work without a token.
+  const secret = guestTokenSecret(env);
+  if (!identity.isAuthenticated && secret) {
+    const verifiedGuestActorId = await verifyGuestToken(secret, readGuestTokenFromRequest(env, request, url));
+    identity.actorId = verifiedGuestActorId || '';
+  }
+
   if (isRegisteredPrivateRoomId(roomId)) {
     const room = await getPrivateRoomById(env, roomId);
     if (!room || !room.room_id) {
       return new Response('Private room not found.', { status: 404 });
     }
     if (!identity.actorId) {
-      return new Response('Private room admission requires an actor identity.', { status: 403 });
+      return new Response('Private room admission requires a verified actor identity.', { status: 403 });
     }
     const membership = await getPrivateRoomMember(env, identity.actorId);
     if (!membership || String(membership.room_id || '') !== String(room.room_id || '')) {

@@ -636,7 +636,9 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         tb(place, 'entry-road', null,
             driveCenterX, 0.04, gateZ, driveLen, 0.08, gateWidth, mats.asphalt, false);
         // Internal east-west road (reactor eastward to towers only)
-        var iewStartX = driveEndX;
+        // Start 0.05 east of the reactor west wall so the road's -X face is not
+        // coplanar with the purple wall face (z-fight guard).
+        var iewStartX = driveEndX + 0.05;
         var iewEndX = ox + 21;
         var iewLen = iewEndX - iewStartX;
         tb(place, 'internal-road-ew', null,
@@ -764,7 +766,9 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             if (tn === 1) northTreeX -= 8;
             if (tn === 2) northTreeX += 10;
             if (tn === 3) northTreeX += 7;
-            treePositions.push({ x: northTreeX, z: snapGrid(fenceMinZ - 2), s: 0.7 + (tn % 3) * 0.3 });
+            // z held at fenceMinZ - 0.5 (not snapped): the snapped row sat on the
+            // north interior seam and the widest canopy bled into the radar cell.
+            treePositions.push({ x: northTreeX, z: fenceMinZ, s: 0.7 + (tn % 3) * 0.3 });
         }
         // South tree line (4 trees, ~10 unit spacing, one pointy)
         for (var ts = 0; ts < 4; ts++) {
@@ -772,7 +776,9 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             var southTreeX = snapGrid(fenceMinX + 4 + (ts * 10));
             if (ts === 1) southTreeX -= 3;
             if (ts === 3) southTreeX += 3;
-            treePositions.push({ x: southTreeX, z: snapGrid(fenceMaxZ + 2), s: 0.6 + (ts % 3) * 0.35, pointy: false });
+            // z held at fenceMaxZ + 2.5 (not snapped): the snapped row's canopies
+            // crossed the southern interior seam (z=110) into the volcano cell.
+            treePositions.push({ x: southTreeX, z: fenceMaxZ + 2.0, s: 0.6 + (ts % 3) * 0.35, pointy: false });
         }
         // East tree line (5 trees, natural wall, skip cooling tower zones)
         // Towers at roughly oz-10 and oz+10, radius ~7 each with scale
@@ -792,8 +798,11 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             var westTreeZ = snapGrid(twz);
             treePositions.push({ x: westTreeX, z: westTreeZ, s: 0.6 + (tw % 3) * 0.3 });
         }
-        // Corner trees (skip NE — cooling towers)
-        treePositions.push({ x: snapGrid(fenceMaxX + 3), z: snapGrid(fenceMaxZ + 3), s: 0.9 });
+        // Corner tree (skip NE — cooling towers). Pulled inside the cell: the old
+        // snapped spot put the trunk past the east WORLD edge and the canopy across
+        // the southern interior seam. Sits west of the east tree line, same row as
+        // the south line.
+        treePositions.push({ x: snapGrid(fenceMaxX - 2), z: fenceMaxZ + 2.0, s: 0.9 });
 
         for (var ti = 0; ti < treePositions.length; ti++) {
             var tp = treePositions[ti];

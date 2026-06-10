@@ -306,16 +306,39 @@ export function updateLeaderProgress(room, deps) {
     room.matchState.leaderProgress = Number(leaderProgress.toFixed(3));
     room.matchState.aliveCount = aliveCount;
     if (room.matchState.stockMode && room.matchState.started && !room.matchState.ended && aliveCount <= 1) {
-      let winnerId = '';
-      let winnerKills = 0;
+      let survivorId = '';
+      let survivorKills = 0;
+      let topKillsId = '';
+      let topKills = -1;
+      let participantCount = 0;
+      let eliminatedCount = 0;
       for (const player of room.players.values()) {
-        if (!player || player.fixtureType === 'sim_player' || player.eliminated) continue;
-        winnerId = player.id;
-        winnerKills = Math.max(0, Number(player.kills || 0));
-        break;
+        if (!player || player.fixtureType === 'sim_player') continue;
+        participantCount += 1;
+        if (player.eliminated) eliminatedCount += 1;
+        // Pending-entry joiners are invulnerable and unspawned — they never
+        // fought, so they are not winner candidates.
+        if (isPendingEntry(room, player)) continue;
+        const kills = Math.max(0, Number(player.kills || 0));
+        if (kills > topKills) {
+          topKills = kills;
+          topKillsId = player.id;
+        }
+        if (player.eliminated) continue;
+        survivorId = player.id;
+        survivorKills = kills;
       }
-      if (winnerId && winnerKills > 0) {
-        room.finishPublicMatch(winnerId, '');
+      // A fresh match can sit at aliveCount <= 1 (solo start, opponents still in
+      // entry freeze) — only finish once the field has actually thinned.
+      const baselineCount = Math.max(participantCount, Number(room.matchState.matchBaselinePlayerCount || 0));
+      const matchThinned = eliminatedCount > 0 || participantCount < baselineCount;
+      if (survivorId && (survivorKills > 0 || matchThinned)) {
+        room.finishPublicMatch(survivorId, '');
+      } else if (!survivorId && aliveCount === 0 && matchThinned && topKillsId) {
+        // With no survivor, crown the top scorer only if somebody actually
+        // scored; an all-zero field ends in a draw rather than crowning
+        // whichever 0-kill player iteration order reached last.
+        room.finishPublicMatch(topKills > 0 ? topKillsId : '', '');
       }
     }
     return;
@@ -379,7 +402,22 @@ export function recordElimination(room, deps, sourceId, targetId) {
   if (room.gameMode === gameModeTdm) {
     const teamId = source.teamId || room.assignPlayerToCurrentTeam(source);
     if (!teamId) return;
-    const baseline = Math.max(1, Number((room.matchState.teamBaselineSize && room.matchState.teamBaselineSize[teamId]) || 1));
+    // Per-capita scoring divides by a stable per-team baseline: the roster
+    // size captured at match start, allowed to grow when active members
+    // legitimately join mid-match but never allowed to shrink, so a team
+    // whose members leave cannot score faster per kill. Pending-entry
+    // joiners are invulnerable and unspawned, so they never inflate it.
+    let activeTeamSize = 0;
+    for (const player of room.players.values()) {
+      if (!player || player.fixtureType === 'sim_player') continue;
+      if (isPendingEntry(room, player)) continue;
+      if (player.teamId === teamId) activeTeamSize += 1;
+    }
+    const storedBaseline = Number((room.matchState.teamBaselineSize && room.matchState.teamBaselineSize[teamId]) || 1);
+    const baseline = Math.max(1, storedBaseline, activeTeamSize);
+    if (room.matchState.teamBaselineSize && Object.prototype.hasOwnProperty.call(room.matchState.teamBaselineSize, teamId)) {
+      room.matchState.teamBaselineSize[teamId] = baseline;
+    }
     const nextProgress = Number(((room.matchState.teamProgress && room.matchState.teamProgress[teamId]) || 0) + (1 / baseline));
     room.matchState.teamProgress[teamId] = Number(nextProgress.toFixed(3));
     for (const player of room.players.values()) {

@@ -202,6 +202,18 @@
             return null;
         }
 
+        // Capture the viewer's previously accepted frame seq before
+        // updateSnapshotTiming advances it: the direct (non-jitter-buffered)
+        // apply path forwards opts as the per-entity snapshotMeta, and
+        // remote-entities uses prevAppliedSnapshotSeq to tell genuine
+        // per-entity omissions apart from frames this viewer never received.
+        if (opts.prevAppliedSnapshotSeq === undefined && connectionTiming && connectionTiming.connectionTimingState) {
+            var priorTimingState = connectionTiming.connectionTimingState() || {};
+            opts.prevAppliedSnapshotSeq = Math.max(0, Number(
+                priorTimingState.snapshot && priorTimingState.snapshot.snapshotSeq || 0
+            ));
+        }
+
         var acceptedSnapshot = connectionTiming && connectionTiming.updateSnapshotTiming
             ? connectionTiming.updateSnapshotTiming(opts)
             : true;

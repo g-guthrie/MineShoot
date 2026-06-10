@@ -85,7 +85,9 @@
         if (RT.GamePlayer && RT.GamePlayer.setStatusState) {
             RT.GamePlayer.setStatusState({
                 stunUntil: toLocalTime(netApi, selfState.stunUntil),
-                spawnShieldUntil: toLocalTime(netApi, selfState.spawnShieldUntil)
+                spawnShieldUntil: toLocalTime(netApi, selfState.spawnShieldUntil),
+                slowUntil: toLocalTime(netApi, selfState.slowUntil),
+                slowMultiplier: Number(selfState.slowMultiplier || 1)
             });
 
             if (RT.GamePlayer.setActionRestrictions) {
@@ -121,6 +123,7 @@
                     lastAckedSeq: inputSyncState ? Number(inputSyncState.lastAckedSeq || 0) : 0,
                     ackDrift: inputSyncState ? Number(inputSyncState.ackDrift || 0) : 0,
                     latestPendingAgeMs: inputSyncState ? Number(inputSyncState.latestPendingAgeMs || 0) : 0,
+                    oldestPendingAgeMs: inputSyncState ? Number(inputSyncState.oldestPendingAgeMs || 0) : 0,
                     latestAckAgeMs: inputSyncState ? Number(inputSyncState.latestAckAgeMs || 0) : 0,
                     rttMs: connectionTimingState ? Number(connectionTimingState.rttMs || 0) : 0,
                     rttJitterMs: connectionTimingState ? Number(connectionTimingState.rttJitterMs || 0) : 0,

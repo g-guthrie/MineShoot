@@ -9,7 +9,9 @@
         stunUntil: true,
         spawnShieldUntil: true,
         weaponUntil: true,
-        throwableUntil: true
+        throwableUntil: true,
+        slowUntil: true,
+        slowMultiplier: true
     };
 
     function nowMs(opts) {
@@ -39,6 +41,18 @@
     function isSpawnShielded(source, now, opts) {
         var state = resolveState(source);
         return isActiveUntil(readUntil(state, 'spawnShieldUntil'), now || nowMs(opts));
+    }
+
+    function isSlowed(source, now, opts) {
+        var state = resolveState(source);
+        return isActiveUntil(readUntil(state, 'slowUntil'), now || nowMs(opts));
+    }
+
+    // Mirrors the server's slowed-movement time scaling for client prediction.
+    function slowMovementMultiplier(source, now, opts) {
+        if (!isSlowed(source, now, opts)) return 1;
+        var state = resolveState(source);
+        return Math.max(0.1, Math.min(1, Number(state && state.slowMultiplier || 1)));
     }
 
     function isActionRestricted(source, actionType, now, opts) {
@@ -72,6 +86,10 @@
         if (!isSpawnShielded(state, stamp, opts)) state.spawnShieldUntil = 0;
         if (!isActionRestricted(state, 'weapon', stamp, opts)) state.weaponUntil = 0;
         if (!isActionRestricted(state, 'throwable', stamp, opts)) state.throwableUntil = 0;
+        if (!isSlowed(state, stamp, opts)) {
+            state.slowUntil = 0;
+            state.slowMultiplier = 1;
+        }
         return state;
     }
 
@@ -84,6 +102,8 @@
         if (typeof patch.spawnShieldUntil === 'number') state.spawnShieldUntil = patch.spawnShieldUntil;
         if (typeof patch.weaponUntil === 'number') state.weaponUntil = patch.weaponUntil;
         if (typeof patch.throwableUntil === 'number') state.throwableUntil = patch.throwableUntil;
+        if (typeof patch.slowUntil === 'number') state.slowUntil = patch.slowUntil;
+        if (typeof patch.slowMultiplier === 'number') state.slowMultiplier = patch.slowMultiplier;
 
         clearExpiredStatusState(state, nowMs(opts), opts);
 
@@ -146,6 +166,12 @@
             isSpawnShielded: function (now) {
                 return isSpawnShielded(stateSource, now, opts);
             },
+            isSlowed: function (now) {
+                return isSlowed(stateSource, now, opts);
+            },
+            slowMovementMultiplier: function (now) {
+                return slowMovementMultiplier(stateSource, now, opts);
+            },
             isActionRestricted: function (actionType, now) {
                 return isActionRestricted(stateSource, actionType, now, opts);
             },
@@ -184,6 +210,8 @@
         create: create,
         isStunned: isStunned,
         isSpawnShielded: isSpawnShielded,
+        isSlowed: isSlowed,
+        slowMovementMultiplier: slowMovementMultiplier,
         isActionRestricted: isActionRestricted,
         isMovementLocked: isMovementLocked,
         isActionLocked: isActionLocked,

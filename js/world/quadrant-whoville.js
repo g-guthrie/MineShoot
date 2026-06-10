@@ -105,23 +105,26 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var mx = ox + 20;
         var mz = oz - 18;
 
-        // Wide base (irregular, built from overlapping blocks)
+        // Wide base (irregular, built from overlapping blocks).
+        // Interleaved boxes use slightly different heights / inset faces so
+        // no two coplanar same-facing faces overlap (z-fight prevention),
+        // and everything stays clamped to the desert seam at x = maxX.
         tb(place, 'crumpit', { part: 'base-1' }, mx, 1.5, mz, 14, 3, 14, mats.rockDark, true);
-        tb(place, 'crumpit', { part: 'base-2' }, mx + 2, 1.5, mz - 1, 12, 3, 10, mats.rockGrey, true);
+        tb(place, 'crumpit', { part: 'base-2' }, mx + 0.95, 1.54, mz - 1, 11.9, 3.08, 10, mats.rockGrey, true);
         tb(place, 'crumpit', { part: 'base-3' }, mx - 3, 1, mz + 3, 8, 2, 8, mats.rockDark, true);
-        tb(place, 'crumpit', { part: 'base-4' }, mx + 4, 1, mz - 4, 6, 2, 6, mats.rockGrey, true);
+        tb(place, 'crumpit', { part: 'base-4' }, mx + 4, 1, mz - 4, 5.9, 2, 5.9, mats.rockGrey, true);
 
-        // Snow on base edges
-        tb(place, 'crumpit', { part: 'snow-base-1' }, mx - 5, 0.15, mz + 5, 6, 0.3, 4, mats.snow, false);
-        tb(place, 'crumpit', { part: 'snow-base-2' }, mx + 6, 0.15, mz - 5, 4, 0.3, 5, mats.snow, false);
+        // Snow on base edges (inset from the rock faces so nothing sits flush)
+        tb(place, 'crumpit', { part: 'snow-base-1' }, mx - 5, 0.15, mz + 4.95, 6, 0.3, 4, mats.snow, false);
+        tb(place, 'crumpit', { part: 'snow-base-2' }, mx + 4.8, 0.15, mz - 5, 3.8, 0.3, 5, mats.snow, false);
 
         // Tier 2
         tb(place, 'crumpit', { part: 'tier2-1' }, mx, 4.5, mz, 10, 3, 10, mats.rockGrey, true);
-        tb(place, 'crumpit', { part: 'tier2-2' }, mx + 1, 4.5, mz - 1, 8, 3, 8, mats.rockDark, true);
+        tb(place, 'crumpit', { part: 'tier2-2' }, mx + 1, 4.5, mz - 1, 7.9, 3.1, 7.9, mats.rockDark, true);
 
         // Tier 3
         tb(place, 'crumpit', { part: 'tier3-1' }, mx, 7.5, mz, 7, 3, 7, mats.rockDark, true);
-        tb(place, 'crumpit', { part: 'tier3-2' }, mx + 1, 7.5, mz, 5, 3, 6, mats.rockGrey, true);
+        tb(place, 'crumpit', { part: 'tier3-2' }, mx + 1, 7.5, mz, 4.9, 3.1, 6, mats.rockGrey, true);
 
         // Tier 4 — getting narrow
         tb(place, 'crumpit', { part: 'tier4' }, mx, 10.5, mz, 5, 3, 5, mats.rockGrey, true);
@@ -147,7 +150,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         tb(place, 'crumpit', { part: 'snow-curl-3' }, mx - 2.8, 19.35, mz + 2.2, 1.2, 0.1, 1.2, mats.snowCap, false);
 
         // Snow streaks on mountain sides
-        tb(place, 'crumpit', { part: 'snow-side-1' }, mx - 3, 8, mz, 0.3, 4, 3, mats.snowCap, false);
+        tb(place, 'crumpit', { part: 'snow-side-1' }, mx - 3, 8.05, mz, 0.3, 3.9, 3, mats.snowCap, false);
         tb(place, 'crumpit', { part: 'snow-side-2' }, mx + 2, 11, mz - 1, 0.3, 3, 2, mats.snowCap, false);
         tb(place, 'crumpit', { part: 'snow-side-3' }, mx, 6, mz + 4, 3, 0.3, 0.3, mats.snowCap, false);
 
@@ -157,7 +160,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
 
         // Craggy outcrops
         tb(place, 'crumpit', { part: 'outcrop-1' }, mx - 5, 2, mz + 2, 3, 4, 2, mats.rockDark, true);
-        tb(place, 'crumpit', { part: 'outcrop-2' }, mx + 5, 1.5, mz - 3, 2, 3, 3, mats.rockGrey, true);
+        tb(place, 'crumpit', { part: 'outcrop-2' }, mx + 5, 1.58, mz - 3, 2, 3.16, 3, mats.rockGrey, true);
         tb(place, 'crumpit', { part: 'outcrop-3' }, mx + 3, 2.5, mz + 5, 3, 2, 2, mats.rockDark, true);
     }
 
@@ -372,16 +375,19 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var cx = (x1 + x2) / 2;
         var cz = (z1 + z2) / 2;
 
+        // Edge strips are 0.06 shorter per end than the cobble slab so their
+        // end faces never sit coplanar with the slab ends (z-fight prevention).
+        var edgeLen = len - 0.12;
         if (Math.abs(dx) > Math.abs(dz)) {
             // Horizontal path
             tb(place, 'path', { part: 'cobble' }, cx, 0.06, cz, len, 0.08, 2, mats.cobble, false);
-            tb(place, 'path', { part: 'edge-1' }, cx, 0.06, cz - 1, len, 0.06, 0.3, mats.cobbleDark, false);
-            tb(place, 'path', { part: 'edge-2' }, cx, 0.06, cz + 1, len, 0.06, 0.3, mats.cobbleDark, false);
+            tb(place, 'path', { part: 'edge-1' }, cx, 0.06, cz - 1, edgeLen, 0.06, 0.3, mats.cobbleDark, false);
+            tb(place, 'path', { part: 'edge-2' }, cx, 0.06, cz + 1, edgeLen, 0.06, 0.3, mats.cobbleDark, false);
         } else {
             // Vertical path
             tb(place, 'path', { part: 'cobble' }, cx, 0.06, cz, 2, 0.08, len, mats.cobble, false);
-            tb(place, 'path', { part: 'edge-1' }, cx - 1, 0.06, cz, 0.3, 0.06, len, mats.cobbleDark, false);
-            tb(place, 'path', { part: 'edge-2' }, cx + 1, 0.06, cz, 0.3, 0.06, len, mats.cobbleDark, false);
+            tb(place, 'path', { part: 'edge-1' }, cx - 1, 0.06, cz, 0.3, 0.06, edgeLen, mats.cobbleDark, false);
+            tb(place, 'path', { part: 'edge-2' }, cx + 1, 0.06, cz, 0.3, 0.06, edgeLen, mats.cobbleDark, false);
         }
     }
 
@@ -389,6 +395,15 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     function buildSnowDrift(x, z, place, mats, w, d) {
         tb(place, 'drift', { part: 'base' }, x, 0.2, z, w, 0.4, d, mats.snow, false);
         tb(place, 'drift', { part: 'top' }, x + 0.2, 0.45, z, w * 0.6, 0.2, d * 0.7, mats.snow, false);
+    }
+
+    /* ── Swirly Snow Patch (thin overlapping decals, staggered tops) ── */
+    function buildSnowSwirl(x, z, place, mats) {
+        // Staggered top heights (0.06 / 0.08 / 0.10) and offset footprints so
+        // overlapping decals never share a coplanar face. Bottoms stay >= 0.01.
+        tb(place, 'swirl', { part: 'base' }, x, 0.035, z, 2.6, 0.05, 2, mats.snowShadow, false);
+        tb(place, 'swirl', { part: 'mid' }, x + 0.5, 0.05, z + 0.3, 1.8, 0.06, 1.3, mats.snow, false);
+        tb(place, 'swirl', { part: 'curl' }, x - 0.45, 0.065, z - 0.45, 1.1, 0.07, 0.9, mats.snowShadow, false);
     }
 
     /* ══════════════════════════════════════════════════════ */
@@ -433,6 +448,9 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         buildWhoHouse(ox - 8, oz - 14, place, mats, 3);
         buildWhoHouse(ox + 2, oz - 10, place, mats, 6);
 
+        // South-east corner (sparse spot below the mountain)
+        buildWhoHouse(ox + 21, oz + 18, place, mats, 4);
+
         /* ── Candy cane lamp posts along paths ── */
         buildCandyCaneLamp(ox - 14, oz + 6, place, mats);
         buildCandyCaneLamp(ox - 6, oz + 6, place, mats);
@@ -440,6 +458,8 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         buildCandyCaneLamp(ox - 2, oz + 14, place, mats);
         buildCandyCaneLamp(ox - 2, oz - 2, place, mats);
         buildCandyCaneLamp(ox + 10, oz + 2, place, mats);
+        buildCandyCaneLamp(ox + 14, oz + 6, place, mats);
+        buildCandyCaneLamp(ox - 2, oz + 18, place, mats);
 
         /* ── Cobblestone paths connecting everything ── */
         // Main east-west path through village
@@ -478,15 +498,28 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         buildSnowDrift(ox + 12, oz - 8, place, mats, 3, 5);
         buildSnowDrift(ox - 6, oz - 20, place, mats, 8, 3);
 
+        /* ── Swirly snow patches (thin staggered decals) ── */
+        buildSnowSwirl(ox - 24, oz + 10, place, mats);
+        buildSnowSwirl(ox + 9, oz - 2, place, mats);
+        buildSnowSwirl(ox - 14, oz - 2, place, mats);
+
+        /* ── Spawn exclusion — tight present cluster by the big tree ── */
+        // (non-solid props players should not spawn inside; mountain/houses
+        // are solid so their colliders already block spawns)
+        if (ctx && typeof ctx.addExclusion === 'function') {
+            ctx.addExclusion(ox - 10.25, oz + 6, 3.2);
+        }
+
         return {
             name: 'whoville',
             description: 'Whoville Christmas Village with Mount Crumpit',
             stats: {
-                houses: 13,
-                lampposts: 6,
+                houses: 14,
+                lampposts: 8,
                 snowmen: 2,
                 trees: 9,
-                presents: 6
+                presents: 6,
+                snowSwirls: 3
             }
         };
     }

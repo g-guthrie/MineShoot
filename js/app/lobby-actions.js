@@ -437,6 +437,7 @@
                 })
                 .then(function () {
                     setBusy(false);
+                    setRoomStatus('Room created. Share the code to invite players.', false);
                     setActiveSurface('room');
                     render();
                     return true;

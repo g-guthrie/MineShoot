@@ -171,7 +171,8 @@ import { pointInBounds as pt } from './biome-utils.js';
         var cw = 5.0 * s;
         var ch = 1.2 * s;
         var top1 = place.addBlock(x, trunkH + ch * 0.2, z, cw, ch, cw, mats.leaf, true);
-        var top2 = place.addBlock(x + 1.5 * s, trunkH - 0.5, z - 1.0 * s, cw * 0.7, ch * 0.9, cw * 0.6, mats.leafLight, false);
+        // +0.06 z nudge keeps top2's -Z face off top1's -Z plane (both sit at z - 2.5s otherwise -> z-fight).
+        var top2 = place.addBlock(x + 1.5 * s, trunkH - 0.5, z - 1.0 * s + 0.06, cw * 0.7, ch * 0.9, cw * 0.6, mats.leafLight, false);
         var top3 = place.addBlock(x - 1.2 * s, trunkH + ch * 0.6, z + 0.8 * s, cw * 0.55, ch * 0.7, cw * 0.5, mats.leafDark, false);
 
         ctx.addLeafSway({ mesh: top1, baseRotY: 0, freq: 0.5, phase: x * 1.2 + z * 0.8, amp: 0.012 });
@@ -289,7 +290,7 @@ import { pointInBounds as pt } from './biome-utils.js';
         // Side channel walls and lower buttresses scaled up from the original layout.
         addWallBlock(-sx(2.4), sy(2.0), sz(0.5), sx(1.2), sy(2.5), sz(1.0), mats.stone, true);
         addWallBlock(sx(2.2), sy(1.6), sz(0.3), sx(1.0), sy(2.0), sz(0.9), mats.stone, true);
-        addWallBlock(-sx(2.4), sy(3.4), sz(0.5), sx(1.4), sy(0.3), sz(1.2), mats.mossy, false);
+        addWallBlock(-sx(2.4), sy(3.4), sz(0.5) - 0.06, sx(1.4), sy(0.3), sz(1.2), mats.mossy, false); // inset off the cliff's front plane
         addWallBlock(sx(2.2), sy(2.8), sz(0.3), sx(1.2), sy(0.25), sz(1.0), mats.mossy, false);
         addWallBlock(-sx(3.5), sy(1.1), sz(1.7), sx(1.2), sy(1.5), sz(1.1), mats.stone, true);
         addWallBlock(sx(3.3), sy(1.0), sz(1.6), sx(1.1), sy(1.4), sz(1.0), mats.stone, true);
@@ -355,7 +356,7 @@ import { pointInBounds as pt } from './biome-utils.js';
         addWallBlock(-sx(2.2), 0.12, sz(5.5), sx(0.95), sy(0.05), sz(0.7), mats.stone, false);
         addWallBlock(sx(1.8), 0.1, sz(5.95), sx(0.84), sy(0.04), sz(0.6), mats.mossy, false);
         addWallBlock(sx(0.3), 0.08, sz(6.6), sx(0.8), sy(0.035), sz(0.55), mats.stone, false);
-        addWallBlock(-sx(3.0), 0.16, sz(3.9), sx(0.9), sy(0.07), sz(0.85), mats.stone, false);
+        addWallBlock(-sx(3.0) + 0.08, 0.163, sz(3.9), sx(0.9), sy(0.07), sz(0.85), mats.stone, false); // inset off the pool sheet's +Z edge
         addWallBlock(sx(3.2), 0.18, sz(4.2), sx(1.05), sy(0.08), sz(0.88), mats.mossy, false);
         addWallBlock(-sx(3.8), 0.22, sz(5.0), sx(1.2), sy(0.09), sz(1.0), mats.stone, false);
         addWallBlock(sx(4.1), 0.24, sz(5.3), sx(1.15), sy(0.1), sz(0.95), mats.stone, false);

@@ -111,6 +111,7 @@
         var sample = {
             serverTime: serverTime,
             receivedAt: receivedAt,
+            snapshotSeq: Math.max(0, Math.floor(Number(snapshotMeta && snapshotMeta.snapshotSeq || 0))),
             x: Number(entity.x || 0),
             footY: snapshotFootY(entity),
             z: Number(entity.z || 0),
@@ -207,44 +208,77 @@
             }
         }
 
+        var previousSnapshotSeq = previous ? Math.max(0, Number(previous.snapshotSeq || 0)) : 0;
+        // snapshotSeq is a room-global counter: the server allocates one per
+        // collected frame, and frames are routinely never delivered to this
+        // viewer (no-change skips, burst frames for other viewers). An entity
+        // seq gap alone is therefore ambiguous. The entity was genuinely
+        // omitted from frames the viewer received only when its seq gap
+        // exceeds the viewer's own received-frame seq gap; an equal gap means
+        // the entity was present in every frame the viewer got, so the
+        // serverTime spacing still carries real loss signal.
+        var prevViewerAppliedSeq = Math.max(0, Math.floor(Number(snapshotMeta && snapshotMeta.prevAppliedSnapshotSeq || 0)));
+        var entitySeqGap = (sample.snapshotSeq > 0 && previousSnapshotSeq > 0)
+            ? (sample.snapshotSeq - previousSnapshotSeq)
+            : 0;
+        var viewerSeqGap = (sample.snapshotSeq > 0 && prevViewerAppliedSeq > 0)
+            ? (sample.snapshotSeq - prevViewerAppliedSeq)
+            : 0;
+        var entityOmittedAcrossGap = entitySeqGap > 1 &&
+            viewerSeqGap > 0 &&
+            entitySeqGap > viewerSeqGap;
         if (previous && serverTime > Number(previous.serverTime || 0)) {
             var rawIntervalMs = Math.max(1, serverTime - Number(previous.serverTime || 0));
             var priorIntervalMs = clamp(Number(render.snapshotIntervalMs || DEFAULT_SNAPSHOT_INTERVAL_MS), 16, 140);
-            var nextIntervalMs = clamp(
-                rawIntervalMs,
-                Math.max(16, priorIntervalMs * 0.5),
-                Math.max(16, priorIntervalMs * 3)
-            );
-            var priorStepMs = clamp(Number(render.lastSnapshotStepMs || priorIntervalMs), 16, 140);
-            render.lastSnapshotStepMs = nextIntervalMs;
-            render.snapshotIntervalMs = (priorIntervalMs * 0.7) + (nextIntervalMs * 0.3);
-            var jitterSampleMs = Math.abs(nextIntervalMs - priorStepMs);
-            var priorJitterMs = clamp(Number(render.snapshotJitterMs || 0), 0, 120);
-            render.snapshotJitterMs = (priorJitterMs * 0.65) + (clamp(jitterSampleMs, 0, 120) * 0.35);
-            var lossThresholdScale = Math.max(1.1, Number(interpolationTuning.lossBurstThresholdScale || 1.5));
-            var expectedIntervalMs = Math.max(16, priorIntervalMs);
-            var missedSnapshots = rawIntervalMs > (expectedIntervalMs * lossThresholdScale)
-                ? Math.max(1, Math.round(rawIntervalMs / expectedIntervalMs) - 1)
-                : 0;
-            var priorLossPaddingMs = Math.max(0, Number(render.lossDelayPaddingMs || 0));
-            if (missedSnapshots > 0) {
-                render.consecutiveMissedSnapshots = Math.max(0, Number(render.consecutiveMissedSnapshots || 0)) + missedSnapshots;
-            } else {
-                render.consecutiveMissedSnapshots = 0;
+            // An omitted entity still reveals its effective cadence (e.g. a
+            // degraded-tier entity sent every 2nd-3rd frame arrives at its
+            // real ~66-100ms interval) as long as the spacing is a plausible
+            // snapshot interval. An idle entity resuming after seconds of
+            // delta omission carries no cadence signal and must not pollute
+            // the learned interval.
+            var learnCadence = !entityOmittedAcrossGap || rawIntervalMs <= 140;
+            if (learnCadence) {
+                var nextIntervalMs = clamp(
+                    rawIntervalMs,
+                    Math.max(16, priorIntervalMs * 0.5),
+                    Math.max(16, priorIntervalMs * 3)
+                );
+                var priorStepMs = clamp(Number(render.lastSnapshotStepMs || priorIntervalMs), 16, 140);
+                render.lastSnapshotStepMs = nextIntervalMs;
+                render.snapshotIntervalMs = (priorIntervalMs * 0.7) + (nextIntervalMs * 0.3);
+                var jitterSampleMs = Math.abs(nextIntervalMs - priorStepMs);
+                var priorJitterMs = clamp(Number(render.snapshotJitterMs || 0), 0, 120);
+                render.snapshotJitterMs = (priorJitterMs * 0.65) + (clamp(jitterSampleMs, 0, 120) * 0.35);
             }
-            var lossTriggerCount = Math.max(2, Math.round(Number(interpolationTuning.lossDelayPaddingTriggerCount || 2)));
-            if (Number(render.consecutiveMissedSnapshots || 0) >= lossTriggerCount) {
-                var paddingFloorMs = expectedIntervalMs * Math.max(0.5, Number(interpolationTuning.lossDelayPaddingIntervalScale || 1));
-                var paddingCapMs = Math.max(
-                    paddingFloorMs,
-                    Number(interpolationTuning.lossDelayPaddingMaxMs || (expectedIntervalMs * 2))
-                );
-                render.lossDelayPaddingMs = Math.min(
-                    paddingCapMs,
-                    Math.max(priorLossPaddingMs * 0.8, paddingFloorMs)
-                );
+            if (entityOmittedAcrossGap) {
+                render.consecutiveMissedSnapshots = 0;
+                render.lossDelayPaddingMs = Math.max(0, Number(render.lossDelayPaddingMs || 0)) * 0.6;
             } else {
-                render.lossDelayPaddingMs = priorLossPaddingMs * 0.6;
+                var lossThresholdScale = Math.max(1.1, Number(interpolationTuning.lossBurstThresholdScale || 1.5));
+                var expectedIntervalMs = Math.max(16, priorIntervalMs);
+                var missedSnapshots = rawIntervalMs > (expectedIntervalMs * lossThresholdScale)
+                    ? Math.max(1, Math.round(rawIntervalMs / expectedIntervalMs) - 1)
+                    : 0;
+                var priorLossPaddingMs = Math.max(0, Number(render.lossDelayPaddingMs || 0));
+                if (missedSnapshots > 0) {
+                    render.consecutiveMissedSnapshots = Math.max(0, Number(render.consecutiveMissedSnapshots || 0)) + missedSnapshots;
+                } else {
+                    render.consecutiveMissedSnapshots = 0;
+                }
+                var lossTriggerCount = Math.max(2, Math.round(Number(interpolationTuning.lossDelayPaddingTriggerCount || 2)));
+                if (Number(render.consecutiveMissedSnapshots || 0) >= lossTriggerCount) {
+                    var paddingFloorMs = expectedIntervalMs * Math.max(0.5, Number(interpolationTuning.lossDelayPaddingIntervalScale || 1));
+                    var paddingCapMs = Math.max(
+                        paddingFloorMs,
+                        Number(interpolationTuning.lossDelayPaddingMaxMs || (expectedIntervalMs * 2))
+                    );
+                    render.lossDelayPaddingMs = Math.min(
+                        paddingCapMs,
+                        Math.max(priorLossPaddingMs * 0.8, paddingFloorMs)
+                    );
+                } else {
+                    render.lossDelayPaddingMs = priorLossPaddingMs * 0.6;
+                }
             }
         } else if (!render.snapshotIntervalMs) {
             render.snapshotIntervalMs = DEFAULT_SNAPSHOT_INTERVAL_MS;

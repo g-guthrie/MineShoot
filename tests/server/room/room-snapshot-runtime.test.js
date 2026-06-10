@@ -360,3 +360,19 @@ test('snapshot runtime tracks engagements and broadcasts to active clients only'
   assert.equal(room.sent[0].ws, activeWs);
   assert.ok(ensureSnapshotBurstState(room.clients.get(activeWs)));
 });
+
+test('snapshot runtime stamps broadcasts with the simulation clock, not wall time', () => {
+  const room = makeRoom();
+  const ws = { id: 'active' };
+  room.players.set('u1', baseEntity('u1'));
+  room.clients.set(ws, { userId: 'u1' });
+  room.activeSocketByUserId.set('u1', ws);
+  // Entity positions are only ever advanced to simulationNowMs; the snapshot
+  // serverTime must match it so clients interpolate against the right clock.
+  room.simulationNowMs = 444;
+
+  broadcastSnapshot(room, true, { ...snapshotDeps(), nowMs: () => 999 });
+
+  assert.equal(room.sent.length, 1);
+  assert.equal(room.sent[0].payload.serverTime, 444);
+});

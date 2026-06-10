@@ -13,6 +13,7 @@ export function createFakeEnv() {
     privateRoomInvites: new Map(),
     partyPresence: new Map(),
     friendships: new Map(),
+    loginAttempts: new Map(),
     partyInvites: new Map(),
     partyDirectInvites: new Map(),
     schema: {
@@ -132,6 +133,18 @@ export function createFakeEnv() {
       return;
     }
     if (q.indexOf('insert into users') >= 0) {
+      if (q.indexOf('pin_hash') >= 0) {
+        state.users.set(String(args[0]), {
+          id: String(args[0]),
+          username: String(args[1]),
+          username_norm: String(args[2]),
+          pin_plain: String(args[3]),
+          pin_hash: String(args[4]),
+          pin_salt: String(args[5]),
+          created_at: Number(args[6]) || 0
+        });
+        return;
+      }
       state.users.set(String(args[0]), {
         id: String(args[0]),
         username: String(args[1]),
@@ -139,6 +152,27 @@ export function createFakeEnv() {
         pin_plain: String(args[3]),
         created_at: Number(args[4]) || 0
       });
+      return;
+    }
+    if (q.indexOf('update users set pin_hash') >= 0) {
+      const user = state.users.get(String(args[0]));
+      if (user) {
+        user.pin_hash = String(args[1]);
+        user.pin_salt = String(args[2]);
+        user.pin_plain = '';
+      }
+      return;
+    }
+    if (q.indexOf('insert into login_attempts') >= 0) {
+      state.loginAttempts.set(String(args[0]), {
+        attempt_key: String(args[0]),
+        fail_count: Number(args[1]) || 0,
+        window_started_at: Number(args[2]) || 0
+      });
+      return;
+    }
+    if (q.indexOf('delete from login_attempts where attempt_key') >= 0) {
+      state.loginAttempts.delete(String(args[0]));
       return;
     }
     if (q.indexOf('insert into profiles') >= 0) {
@@ -380,7 +414,11 @@ export function createFakeEnv() {
 
   function executeFirst(sql, args) {
     const q = normalize(sql);
-    if (q.indexOf('select id, username, pin_plain from users where username_norm') >= 0) {
+    if (q.indexOf('select attempt_key, fail_count, window_started_at from login_attempts where attempt_key') >= 0) {
+      return state.loginAttempts.get(String(args[0])) || null;
+    }
+    if (q.indexOf('select id, username, pin_plain, pin_hash, pin_salt from users where username_norm') >= 0 ||
+        q.indexOf('select id, username, pin_plain from users where username_norm') >= 0) {
       var matchUser = null;
       state.users.forEach(function (user) {
         if (user.username_norm === String(args[0])) matchUser = user;

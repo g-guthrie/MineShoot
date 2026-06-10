@@ -129,7 +129,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         tb(place, 'south-cliff', { part: 'right-foot' }, centerX + 17.0, 4.75, southZ + 0.05, 13.8, 9.5, 4.7, mats.limestoneDark, true);
         tb(place, 'south-cliff', { part: 'front-left-buttress' }, centerX - 23.2, 2.4, frontZ - 0.3, 4.2, 4.8, 2.0, mats.limestone, true);
         tb(place, 'south-cliff', { part: 'front-right-buttress' }, centerX + 23.0, 2.7, frontZ - 0.1, 4.4, 5.4, 2.1, mats.limestone, true);
-        tb(place, 'south-cliff', { part: 'left-stack' }, centerX - 14.8, 9.2, southZ - 0.55, 15.0, 8.4, 5.6, mats.limestone, true);
+        tb(place, 'south-cliff', { part: 'left-stack' }, centerX - 14.8, 9.2, southZ - 0.69, 15.0, 8.4, 5.6, mats.limestone, true);
         tb(place, 'south-cliff', { part: 'right-stack' }, centerX + 15.2, 8.6, southZ - 0.35, 14.2, 7.2, 5.2, mats.limestone, true);
         tb(place, 'south-cliff', { part: 'crown' }, centerX, 12.9, southZ - 0.1, 23.0, 5.2, 4.0, mats.limestoneLight, true);
         tb(place, 'south-cliff', { part: 'moss-left' }, centerX - 15.0, 13.55, southZ - 1.0, 12.2, 0.34, 3.4, mats.moss, false);
@@ -270,15 +270,15 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
 
         var logs = [
             { u: 0.29, v: 0.36, w: 4.4, d: 0.7 },
-            { u: 0.71, v: 0.42, w: 4.0, d: 0.7 },
+            { u: 0.70, v: 0.42, w: 4.0, d: 0.7 },
             { u: 0.30, v: 0.79, w: 4.2, d: 0.8 },
             { u: 0.70, v: 0.78, w: 4.0, d: 0.8 }
         ];
         for (var j = 0; j < logs.length; j++) {
             var logPos = pt(bounds, logs[j].u, logs[j].v);
             var alongX = j % 2 === 0;
-            tb(place, 'fallen-log', { index: j }, logPos.x, 0.48, logPos.z, alongX ? logs[j].w : logs[j].d, 0.62, alongX ? logs[j].d : logs[j].w, mats.driftwood, true);
-            tb(place, 'fallen-log-moss', { index: j }, logPos.x + 0.1, 0.82, logPos.z - 0.08, alongX ? logs[j].w * 0.55 : 0.36, 0.08, alongX ? 0.36 : logs[j].w * 0.55, mats.mossDark, false);
+            tb(place, 'fallen-log', { index: j }, logPos.x, 0.38, logPos.z, alongX ? logs[j].w : logs[j].d, 0.62, alongX ? logs[j].d : logs[j].w, mats.driftwood, true);
+            tb(place, 'fallen-log-moss', { index: j }, logPos.x + 0.1, 0.72, logPos.z - 0.08, alongX ? logs[j].w * 0.55 : 0.36, 0.08, alongX ? 0.36 : logs[j].w * 0.55, mats.mossDark, false);
         }
 
         return covers.length + logs.length;
@@ -379,7 +379,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var centerX = (bounds.minX + bounds.maxX) * 0.5;
         var centerZ = (bounds.minZ + bounds.maxZ) * 0.5;
 
-        tb(place, 'river-meadow-base', null, centerX, 0.035, centerZ, (bounds.maxX - bounds.minX) - 1.2, 0.07, (bounds.maxZ - bounds.minZ) - 1.2, mats.meadow, false);
+        tb(place, 'river-meadow-base', null, centerX, 0.035, centerZ - 0.05, (bounds.maxX - bounds.minX) - 1.2, 0.07, (bounds.maxZ - bounds.minZ) - 1.2, mats.meadow, false);
 
         var riverSegments = buildRiverChannel(bounds, place, mats);
         var cliffStats = buildSouthCliff(bounds, place, mats, ctx);

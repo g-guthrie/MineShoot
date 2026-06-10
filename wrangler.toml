@@ -48,5 +48,5 @@ class_name = "PrivateRoomLobbyHub"
 
 [[env.e2e.d1_databases]]
 binding = "DB"
-database_name = "minecraft-fps-db-prod"
-database_id = "340efedb-7247-447b-ac66-7a8e7acef9d6"
+database_name = "minecraft-fps-db-e2e"
+database_id = "00000000-0000-4000-8000-00000000e2e0"

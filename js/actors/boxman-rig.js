@@ -52,6 +52,10 @@ import {
     var STOP_RECENT_GRACE_SEC = 0.2;
     var STOP_STRAFE_INTERRUPT_PROGRESS = 0.45;
     var FAST_BACKPEDAL_PLAYBACK_SCALE = 1.25;
+    var RUN_CLIP_REFERENCE_SPEED_WU = 8;
+    var SPRINT_CLIP_REFERENCE_SPEED_WU = 14;
+    var LOCOMOTION_PLAYBACK_MIN_SCALE = 0.55;
+    var LOCOMOTION_PLAYBACK_MAX_SCALE = 1.4;
     var IDLE_AIM_PITCH_LIMIT = 45 * (Math.PI / 180);
     var IDLE_AIM_NEUTRAL_PITCH = 28 * (Math.PI / 180);
     var IDLE_AIM_RESPONSE_SCALE = 0.5;
@@ -433,6 +437,22 @@ import {
         if (name === 'run' && animState && animState.fastBackpedal) {
             timeScale = FAST_BACKPEDAL_PLAYBACK_SCALE;
         }
+        if (name === 'run' || name === 'sprint') {
+            // Sync the leg cycle to the actual travel speed so feet stop
+            // sliding at ADS/jog speeds and weapon-modified move speeds. The
+            // fastBackpedal scale above is the fallback when speed is absent;
+            // a real speed reading reproduces it (fast backpedal ~= jog*1.25).
+            var cadenceSpeed = resolveHorizontalSpeed(animState);
+            if (cadenceSpeed > 0.05) {
+                var cadenceReference = name === 'sprint'
+                    ? SPRINT_CLIP_REFERENCE_SPEED_WU
+                    : RUN_CLIP_REFERENCE_SPEED_WU;
+                timeScale = Math.max(
+                    LOCOMOTION_PLAYBACK_MIN_SCALE,
+                    Math.min(LOCOMOTION_PLAYBACK_MAX_SCALE, cadenceSpeed / cadenceReference)
+                );
+            }
+        }
         if (name === MANUAL_ROLL_CLIP && animState && animState.manualRollReverse) {
             reverse = true;
         }
@@ -524,6 +544,12 @@ import {
     }
 
     function idleAimNeutralWeight(activeClipName) {
+        // Clips that hard-write the OUT right-arm base pose already bake
+        // IDLE_AIM_NEUTRAL_PITCH into the arm (IDLE_RIGHT_ARM_OUT_UPPER_X).
+        // Adding the neutral term again through the aim pose double-counts it
+        // and pops the arm ~53deg on every jump/fall/landing transition.
+        if (clipUsesLockedRightArmAimBasePose(activeClipName)) return 0;
+        if (String(activeClipName || '') === 'run') return 0;
         return 1;
     }
 
@@ -850,13 +876,25 @@ import {
             }
         }
 
-        if (motionState.lockName && motionState.lockRemaining > 0) {
-            return motionState.lockName;
+        if (grounded && !motionState.wasGrounded) {
+            // Landing must preempt airborne one-shot locks (short hops land
+            // while the jump clip lock is still running, which used to swallow
+            // the landing transition entirely). A manual roll keeps playing
+            // through touchdown, and grounded locks cannot coincide with a
+            // landing frame.
+            var lockBlocksLanding = motionState.manualRollActive ||
+                (motionState.lockName &&
+                    motionState.lockRemaining > 0 &&
+                    motionState.lockName !== 'jump_idle' &&
+                    motionState.lockName !== 'jump_running');
+            if (!lockBlocksLanding) {
+                motionState.lockName = landingClip(motionState, animState);
+                motionState.lockRemaining = Math.max(0.12, clipDuration(actions, motionState.lockName, 0.2) * 0.8);
+                return motionState.lockName;
+            }
         }
 
-        if (grounded && !motionState.wasGrounded) {
-            motionState.lockName = landingClip(motionState, animState);
-            motionState.lockRemaining = Math.max(0.12, clipDuration(actions, motionState.lockName, 0.2) * 0.8);
+        if (motionState.lockName && motionState.lockRemaining > 0) {
             return motionState.lockName;
         }
 
@@ -864,6 +902,7 @@ import {
             motionState.lockName = moving ? 'jump_running' : 'jump_idle';
             motionState.lockRemaining = Math.max(0.12, clipDuration(actions, motionState.lockName, 0.24) * 0.55);
             motionState.jumpTriggered = false;
+            motionState.jumpTriggeredRemaining = 0;
             return motionState.lockName;
         }
 
@@ -1584,6 +1623,15 @@ import {
                     motionState.stopDirectionalSnapshot = null;
                 }
             }
+            if (motionState.jumpTriggeredRemaining > 0) {
+                // A jump trigger that never produced an airborne frame (blocked
+                // jump, ceiling bump resolved same tick) must not survive to
+                // replay later when the player walks off a ledge.
+                motionState.jumpTriggeredRemaining = Math.max(0, motionState.jumpTriggeredRemaining - dt);
+                if (motionState.jumpTriggeredRemaining === 0) {
+                    motionState.jumpTriggered = false;
+                }
+            }
 
             motionState.directional = updateDirectionalLocomotionState(motionState.directional, dt, animState);
             refreshRecentForwardStopWindow(motionState, animState, motionState.directional, dt);
@@ -1608,14 +1656,17 @@ import {
             var stopSettleWeight = stopDirectionalSettleWeight(motionState);
             var idleAimActive = idleAimAllowed(animState, rig.activeClipName);
             var pitchRecoilTarget = Number(fireRecoilState.shoulderPitch || 0) + (Number(fireRecoilState.lowerArmPitch || 0) * 0.35);
+            var yawRecoilTarget = Number(fireRecoilState.shoulderYaw || 0);
             var weaponArmYawState = resolveIdleAimYawState(motionState, stopSettleWeight);
             var weaponArmAimYaw = idleAimTargetYaw(weaponArmYawState, rig.activeClipName);
             var idleAimTarget = idleAimActive ? (idleAimTargetPitch(animState, rig.activeClipName) + pitchRecoilTarget) : 0;
             var idleAimTargetYawValue = idleAimActive
-                ? weaponArmAimYaw
+                ? (weaponArmAimYaw + yawRecoilTarget)
                 : 0;
             var idleAimBlendSpeed = idleAimActive ? IDLE_AIM_BLEND_IN_SPEED : IDLE_AIM_BLEND_OUT_SPEED;
-            var idleAimBlend = Math.min(1, dt * idleAimBlendSpeed);
+            // Exponential form keeps the aim convergence rate identical across
+            // frame rates; min(1, dt*k) converges visibly faster at 30fps.
+            var idleAimBlend = 1 - Math.exp(-dt * idleAimBlendSpeed);
             var idleAimYawBlend = Number(stopSettleWeight || 0) > 0 ? 1 : idleAimBlend;
             motionState.idleAimCurrentPitch += (idleAimTarget - Number(motionState.idleAimCurrentPitch || 0)) * idleAimBlend;
             if (Math.abs(idleAimTarget - motionState.idleAimCurrentPitch) < 0.0001) {
@@ -1636,14 +1687,15 @@ import {
                     rig.modelRoot.rotation.y = Number(rig.modelBaseYaw || 0) + resolveRollFacingYaw(animState);
                 }
                 rig.activePoseName = 'roll';
+            } else if (stopSettleWeight > 0 && motionState.stopDirectionalSnapshot && !isDirectionalMove(animState)) {
+                // The settle snapshot REPLACES the live directional pose. The
+                // live state's facingYaw is still decaying for a few frames
+                // after a stop, so applying both would double the additive
+                // torso/head yaw channels and jerk the body on every stop.
+                applyDirectionalLocomotionPose(rig, motionState.stopDirectionalSnapshot, animState, stopSettleWeight);
+                rig.activePoseName = motionState.stopDirectionalSnapshot.poseName || '';
             } else if (applyDirectionalLocomotionPose(rig, motionState.directional, animState)) {
                 rig.activePoseName = motionState.directional.poseName || '';
-            }
-            if (stopSettleWeight > 0 && motionState.stopDirectionalSnapshot) {
-                applyDirectionalLocomotionPose(rig, motionState.stopDirectionalSnapshot, animState, stopSettleWeight);
-                if (!rig.activePoseName && motionState.stopDirectionalSnapshot.poseName) {
-                    rig.activePoseName = motionState.stopDirectionalSnapshot.poseName;
-                }
             }
             if (rig.activeClipName === 'run') {
                 applyRunRightArmIdleBasePose(rig, rig.activeClipName);
@@ -1718,6 +1770,7 @@ import {
             }
             if (kind === 'jump') {
                 motionState.jumpTriggered = true;
+                motionState.jumpTriggeredRemaining = 0.3;
                 return true;
             }
             if (kind === 'roll') {

@@ -52,7 +52,7 @@ import {
 
     var DEFAULT_QUADRANT_MAP = [];
 
-    var DEFAULT_WORLD_PROFILE_VERSION = 6;
+    var DEFAULT_WORLD_PROFILE_VERSION = 7;
     var DEFAULT_WORLD_FLAGS = {
         envV2: true,
         terrainPhysicsV2: true
@@ -93,6 +93,7 @@ import {
     GROUND_COLORS[BIOME_RIVER_ARCHES] = 0x79ad63;
     GROUND_COLORS['volcano'] = 0x2a2a2a;
     GROUND_COLORS['whoville'] = 0xf0f5ff;
+    GROUND_COLORS['pirate-cove'] = 0xc2b280;
 
     function groundColorForBiome(biomeId) {
         if (Object.prototype.hasOwnProperty.call(GROUND_COLORS, biomeId)) {
@@ -506,7 +507,7 @@ import {
             var geo = getSharedBoxGeometry(w, h, d);
             var mesh = new THREE.Mesh(geo, material);
             mesh.position.set(x, y, z);
-            mesh.castShadow = true;
+            mesh.castShadow = !(material && material.transparent);
             mesh.receiveShadow = true;
             mesh.userData = mesh.userData || {};
             mesh.userData.isSolid = isSolid !== false;
@@ -521,7 +522,7 @@ import {
             mesh.position.set(x, y, z);
             mesh.rotation.y = rotY || 0;
             mesh.rotation.x = tiltX || 0;
-            mesh.castShadow = true;
+            mesh.castShadow = !(material && material.transparent);
             mesh.receiveShadow = true;
             mesh.userData = mesh.userData || {};
             mesh.userData.isSolid = isSolid !== false;
@@ -536,7 +537,7 @@ import {
             if (rotY) mesh.rotation.y = rotY;
             if (rotX) mesh.rotation.x = rotX;
             if (rotZ) mesh.rotation.z = rotZ;
-            mesh.castShadow = true;
+            mesh.castShadow = !(material && material.transparent);
             mesh.receiveShadow = true;
             addTrackedObject(scene, mesh);
             markDecorSolid(mesh);

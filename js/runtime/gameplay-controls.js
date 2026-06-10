@@ -448,18 +448,26 @@
         }
 
         function resetTouchMovementState() {
+            // The jump flag is owned by the jump-button pointer; releasing the
+            // move stick must not sever a jump that is still physically held.
+            // Teardown paths call setJumpPressed(false) before this, so a held
+            // jump only survives the stick-release path.
+            var jumpStillHeld = touchJumpState.pointerId !== null && !!touchMoveState.jump;
             touchMoveState.pointerId = null;
             touchMoveState.centerX = 0;
             touchMoveState.centerY = 0;
             touchMoveState.dx = 0;
             touchMoveState.dy = 0;
             touchMoveState.sprint = false;
-            touchMoveState.jump = false;
+            touchMoveState.jump = jumpStillHeld;
             setTouchMoveVisual(0, 0);
             setTouchSprintVisual(false);
             var player = playerApi();
             if (player && player.clearMovementInputState) {
                 player.clearMovementInputState();
+            }
+            if (jumpStillHeld) {
+                syncTouchMovementState();
             }
         }
 

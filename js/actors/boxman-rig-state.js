@@ -25,6 +25,7 @@ export function createRigMotionState() {
         lockName: '',
         lockRemaining: 0,
         jumpTriggered: false,
+        jumpTriggeredRemaining: 0,
         lastGroundedSpeed: 0,
         airborneStartFootY: null,
         lastLandingDropDistance: 0,

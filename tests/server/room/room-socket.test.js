@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { handleRoomSocketMessage, handleRoomSocketClose } from '../../../cloudflare/server/room/RoomSocket.js';
+import {
+  handleRoomSocketMessage,
+  handleRoomSocketClose,
+  ROOM_STATE_LOST_CLOSE_CODE
+} from '../../../cloudflare/server/room/RoomSocket.js';
 
 function createSocket() {
   return {
@@ -381,4 +385,60 @@ test('room socket close promotes a replacement socket or marks the player discon
   assert.equal(room.activeSocketByUserId.has('u1'), false);
   assert.equal(room.players.get('u1').disconnectedAt, 1234);
   assert.equal(room.stopTickCalls, 2);
+});
+
+test('room socket message closes sockets with a state-lost code after a hibernation wake', () => {
+  // Fresh DO instance: hibernating sockets (and serialized attachments)
+  // survived eviction, but every in-memory room map restarted empty.
+  const ws = createSocket();
+  ws.attachment = { userId: 'u1', username: 'player-one' };
+  const room = {
+    roomName: 'global',
+    clients: new Map(),
+    activeSocketByUserId: new Map(),
+    players: new Map(),
+    inputCalls: 0,
+    handleInput() { this.inputCalls += 1; },
+    ensureTickCalls: 0,
+    ensureTick() { this.ensureTickCalls += 1; }
+  };
+
+  handleRoomSocketMessage(room, ws, JSON.stringify({ t: 'input', seq: 5 }), {
+    safeJsonParse: JSON.parse,
+    nowMs: () => 123,
+    isPrivateMatchRoom: () => false,
+    roomPhaseActive: 'active',
+    msgC2s: { INPUT: 'input', PING: 'ping' },
+    msgS2c: { PONG: 'pong' }
+  });
+
+  assert.equal(room.inputCalls, 0);
+  assert.equal(ws.closeCalls.length, 1);
+  assert.equal(ws.closeCalls[0].code, ROOM_STATE_LOST_CLOSE_CODE);
+  assert.equal(ws.closeCalls[0].reason, 'room-state-lost');
+});
+
+test('room socket message restarts the tick loop for live gameplay sockets', () => {
+  const ws = createSocket();
+  const room = {
+    roomName: 'global',
+    clients: new Map([[ws, { userId: 'u1' }]]),
+    activeSocketByUserId: new Map([['u1', ws]]),
+    players: new Map([['u1', { id: 'u1' }]]),
+    handleInput() {},
+    ensureTickCalls: 0,
+    ensureTick() { this.ensureTickCalls += 1; }
+  };
+
+  handleRoomSocketMessage(room, ws, JSON.stringify({ t: 'input', seq: 1 }), {
+    safeJsonParse: JSON.parse,
+    nowMs: () => 123,
+    isPrivateMatchRoom: () => false,
+    roomPhaseActive: 'active',
+    msgC2s: { INPUT: 'input', PING: 'ping' },
+    msgS2c: { PONG: 'pong' }
+  });
+
+  assert.equal(room.ensureTickCalls, 1);
+  assert.equal(ws.closeCalls.length, 0);
 });

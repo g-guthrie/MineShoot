@@ -17,6 +17,11 @@ const MAX_GAMEPLAY_MESSAGE_BYTES = 8192;
 const MAX_LOBBY_MESSAGE_BYTES = 1024;
 const RATE_LIMIT_CLOSE_AFTER = 3;
 const MAX_INPUT_BATCH_SAMPLES = 4;
+// App-level close code for sockets that survived Durable Object hibernation
+// while the in-memory room state did not. Clients treat it as a signal to
+// rejoin through the connect path instead of retrying on a dead session.
+export const ROOM_STATE_LOST_CLOSE_CODE = 4801;
+const ROOM_STATE_LOST_CLOSE_REASON = 'room-state-lost';
 
 function consumeCombatRateLimit(player, key, now) {
   if (!player || !key) return true;
@@ -158,10 +163,23 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
   }
 
   if (!meta || !meta.userId) return;
-  if (room.activeSocketByUserId.get(meta.userId) !== ws) return;
 
+  // Hibernating sockets (and their serialized attachments) survive Durable
+  // Object eviction, but the in-memory room maps do not. A socket whose user
+  // has no player or active-socket entry means the room state was lost —
+  // close it with a distinct app-level code so the client's reconnect path
+  // rejoins cleanly instead of the message being silently dropped forever.
+  const activeSocket = room.activeSocketByUserId.get(meta.userId);
   const player = room.players.get(meta.userId);
-  if (!player) return;
+  if (!player || !activeSocket) {
+    closeSocket(ws, ROOM_STATE_LOST_CLOSE_CODE, ROOM_STATE_LOST_CLOSE_REASON);
+    return;
+  }
+  if (activeSocket !== ws) return;
+
+  // The tick loop is in-memory state too: restart it on the message entry
+  // point so a room that woke from hibernation never stays frozen.
+  if (typeof room.ensureTick === 'function') room.ensureTick();
   const now = nowMs ? nowMs() : Date.now();
 
   const type = String(msg.t || '');
@@ -253,6 +271,11 @@ export function handleRoomSocketClose(room, ws, deps) {
   }
 
   room.clients.delete(ws);
+
+  // Restart the tick loop in case this close is the first event after a
+  // hibernation wake; stopTickIfEmpty below clears it again when nothing is
+  // left to simulate.
+  if (typeof room.ensureTick === 'function') room.ensureTick();
 
   if (meta && meta.userId && room.activeSocketByUserId.get(meta.userId) === ws) {
     const replacement = findSocketForUserId ? findSocketForUserId(room.clients, meta.userId, ws) : null;

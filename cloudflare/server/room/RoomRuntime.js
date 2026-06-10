@@ -1,4 +1,4 @@
-import { buildReplayStepsFromPendingInputs } from '../../../shared/authoritative-reconciliation.js';
+import { buildReplayStepsFromPendingInputs, clampReplaySampleDtSec } from '../../../shared/authoritative-reconciliation.js';
 import { stepAuthoritativeMovement } from '../../../shared/authoritative-movement.js';
 import { chooseSpawnPoint } from '../../../shared/spawn-logic.js';
 
@@ -45,6 +45,7 @@ function normalizeInputSample(player, msg, deps) {
     dtMs: Math.max(0, Number(msg.dtMs || 0)),
     yaw: nextYaw,
     pitch: nextPitch,
+    weaponId: String(msg.weaponId || ''),
     movementLocked,
     inputState: cloneInputState({
       forward: !!msg.forward,
@@ -471,6 +472,12 @@ export function consumeQueuedAuthoritativeInputs(entity, dtSec, deps) {
   deps = deps || {};
   const createMovementInputState = deps.createMovementInputState;
   const totalDtSec = Math.max(0, Number(dtSec || 0));
+  // Scale applied to real sample durations when the caller passes a
+  // slow-scaled tick budget (dtSec already includes the scale; this keeps the
+  // backlog-drain branch, which replays samples at their REAL durations,
+  // consistent with it).
+  const rawSampleDtScale = Number(deps.sampleDtScale);
+  const sampleDtScale = (Number.isFinite(rawSampleDtScale) && rawSampleDtScale > 0) ? rawSampleDtScale : 1;
   if (!entity || !(totalDtSec > 0)) {
     return { steps: [], processedSeq: 0 };
   }
@@ -488,13 +495,36 @@ export function consumeQueuedAuthoritativeInputs(entity, dtSec, deps) {
     };
   }
 
-  const samples = queue.slice();
-  queue.length = 0;
+  // Consume only ~one tick's worth of queued input time per tick. Draining the
+  // whole queue would time-compress bursty arrivals (two 16ms samples squeezed
+  // into one 16ms tick), making the authoritative path zigzag around the
+  // client's prediction. Leftover samples carry to the next tick; once the
+  // backlog exceeds a few samples we drain faster to bound added input latency.
+  const maxCarrySamples = 3;
+  const samples = [];
+  let consumedWeightSec = 0;
+  let drainedBacklog = false;
+  while (queue.length > 0) {
+    const candidateWeightSec = clampReplaySampleDtSec(queue[0] && queue[0].dtMs);
+    const exceedsTickBudget = samples.length > 0 &&
+      (consumedWeightSec + candidateWeightSec) > (totalDtSec + 0.0005);
+    if (exceedsTickBudget) {
+      const backlogForcesDrain = queue.length > maxCarrySamples;
+      if (!backlogForcesDrain) break;
+      drainedBacklog = true;
+    }
+    samples.push(queue.shift());
+    consumedWeightSec += candidateWeightSec;
+  }
   const replayPlan = buildReplayStepsFromPendingInputs(samples, {
-    totalDtSec: totalDtSec,
+    // A forced backlog drain consumes more than one tick of input time; replay
+    // those samples at their real durations instead of rescaling (compressing)
+    // them into the tick dt, which would shrink the client's actual movement.
+    totalDtSec: drainedBacklog ? (consumedWeightSec * sampleDtScale) : totalDtSec,
     createMovementInputState,
     fallbackYaw: Number(entity.yaw || 0),
-    fallbackPitch: Number(entity.pitch || 0)
+    fallbackPitch: Number(entity.pitch || 0),
+    fallbackWeaponId: String(entity.weaponId || '')
   });
   if (replayPlan.steps.length === 0) {
     return {
@@ -545,14 +575,22 @@ export function tickAuthoritativePlayerMovement(room, player, dtSec, deps) {
   const movementPlan = consumeQueuedAuthoritativeInputs(
     player,
     Math.max(0, Number(dtSec || 0)) * slowMult,
-    { createMovementInputState }
+    { createMovementInputState, sampleDtScale: slowMult }
   );
   for (let i = 0; i < movementPlan.steps.length; i++) {
     const step = movementPlan.steps[i];
     if (!step || !(Number(step.dtSec || 0) > 0)) continue;
     player.yaw = Number(step.yaw || 0);
     player.pitch = clamp(Number(step.pitch || 0), -1.55, 1.55);
-    const activeWeaponId = String(player.weaponId || 'rifle');
+    // Each input sample was predicted by the client with the weapon it held at
+    // that moment; simulating queued pre-switch samples with the post-switch
+    // move multiplier desyncs every weapon swap made while moving. Only honor
+    // a sample weapon the server knows the player actually has.
+    const sampleWeaponId = String(step.weaponId || '');
+    const weaponLoadout = Array.isArray(player.weaponLoadout) ? player.weaponLoadout : [];
+    const activeWeaponId = (sampleWeaponId && weaponLoadout.indexOf(sampleWeaponId) >= 0)
+      ? sampleWeaponId
+      : String(player.weaponId || 'rifle');
     const activeWeaponStats = weaponStats[activeWeaponId] || weaponStats.rifle || {};
     const collisionHeight = room.isEntityRolling(player, now)
       ? Math.max(playerRadius, playerHeight * rollContactCylinderHeightScale)

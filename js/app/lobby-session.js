@@ -1003,6 +1003,7 @@
             setBusy(true, 'Creating room...');
             return privateRoomRequest('create', {}, 'Creating room...')
                 .then(function (result) {
+                    setPrivateRoomStatus('Room created.', false);
                     setBusy(false, '');
                     return result;
                 })
@@ -1017,6 +1018,7 @@
             setBusy(true, 'Joining private room...');
             return privateRoomRequest('join', { roomCode: roomCode }, 'Joining private room...')
                 .then(function (result) {
+                    setPrivateRoomStatus('Joined room.', false);
                     setBusy(false, '');
                     return result;
                 })

@@ -122,7 +122,7 @@ import { pointInBounds as pt } from './biome-utils.js';
 
     function buildGrandSpanArch(cx, cz, place, mats) {
         // Mid-scale hero arch that seeds a center fight without competing with the corner mesa.
-        place.addBlock(cx - 4.2, 3.3, cz + 0.1, 2.4, 6.6, 2.8, mats.darkRock, true);
+        place.addBlock(cx - 4.2, 3.3, cz + 0.05, 2.4, 6.6, 2.8, mats.darkRock, true);
         place.addBlock(cx + 4.0, 3.0, cz - 0.2, 2.2, 6.0, 2.6, mats.mesa, true);
         place.addBlock(cx, 7.1, cz, 11.8, 1.4, 3.0, mats.sandstone, true);
         place.addBlock(cx - 0.4, 8.2, cz - 0.1, 7.2, 0.56, 2.1, mats.mesa, true);
@@ -154,14 +154,14 @@ import { pointInBounds as pt } from './biome-utils.js';
         place.addBlock(x, h * 0.5, z, 0.5, h, 0.5, mats.cactus, true);
 
         if (tall) {
-            // Right arm, higher up
+            // Right arm, higher up (connectors inset 0.02/side vs the upright)
             place.addBlock(x + 0.55, h * 0.6, z, 0.38, 0.12, 0.38, mats.cactusDark, false);
-            place.addBlock(x + 0.85, h * 0.6, z, 0.12, 0.12, 0.32, mats.cactusDark, false);
+            place.addBlock(x + 0.85, h * 0.6, z, 0.12, 0.12, 0.28, mats.cactusDark, false);
             place.addBlock(x + 0.85, h * 0.75, z, 0.32, h * 0.3, 0.32, mats.cactus, false);
 
             // Left arm, lower
             place.addBlock(x - 0.55, h * 0.38, z, 0.38, 0.12, 0.38, mats.cactusDark, false);
-            place.addBlock(x - 0.85, h * 0.38, z, 0.12, 0.12, 0.32, mats.cactusDark, false);
+            place.addBlock(x - 0.85, h * 0.38, z, 0.12, 0.12, 0.28, mats.cactusDark, false);
             place.addBlock(x - 0.85, h * 0.52, z, 0.32, h * 0.25, 0.32, mats.cactus, false);
         } else {
             // Single short arm
@@ -183,7 +183,7 @@ import { pointInBounds as pt } from './biome-utils.js';
 
     function addDryBush(x, z, place, mats) {
         place.addBlock(x, 0.25, z, 1.2, 0.5, 1.0, mats.dryBush, false);
-        place.addBlock(x + 0.3, 0.39, z - 0.2, 0.6, 0.3, 0.5, mats.dryBushDark, false);
+        place.addBlock(x + 0.28, 0.39, z - 0.2, 0.6, 0.3, 0.5, mats.dryBushDark, false);
     }
 
     function addSmallMesa(x, z, place, mats) {
@@ -207,8 +207,22 @@ import { pointInBounds as pt } from './biome-utils.js';
     }
 
     function addSandDune(x, z, w, d, place, mats) {
-        place.addBlock(x, 0.12, z, w, 0.24, d, mats.sandDune, false);
-        place.addBlock(x + w * 0.15, 0.22, z, w * 0.6, 0.12, d * 0.7, mats.sandDune, false);
+        // Staggered tops (0.27 / 0.32) so dune layers never share a plane with rubble decals.
+        place.addBlock(x, 0.135, z, w, 0.27, d, mats.sandDune, false);
+        place.addBlock(x + w * 0.15, 0.26, z, w * 0.6, 0.12, d * 0.7, mats.sandDune, false);
+    }
+
+    function addRippleField(x, z, alongX, place, mats) {
+        // Wind ripples -- long thin sand strips at staggered 0.03/0.05 heights.
+        if (alongX) {
+            place.addBlock(x, 0.025, z, 6.2, 0.03, 0.6, mats.sandDune, false);
+            place.addBlock(x + 0.8, 0.035, z + 1.2, 5.0, 0.05, 0.5, mats.sandDune, false);
+            place.addBlock(x - 0.6, 0.025, z + 2.4, 6.2, 0.03, 0.6, mats.sandDune, false);
+        } else {
+            place.addBlock(x, 0.025, z, 0.6, 0.03, 6.2, mats.sandDune, false);
+            place.addBlock(x + 1.2, 0.035, z + 0.8, 0.5, 0.05, 5.0, mats.sandDune, false);
+            place.addBlock(x + 2.4, 0.025, z - 0.6, 0.6, 0.03, 6.2, mats.sandDune, false);
+        }
     }
 
     function addTumbleweed(x, z, place, mats) {
@@ -271,7 +285,8 @@ import { pointInBounds as pt } from './biome-utils.js';
         var northSpineD = 6.6;
         var northSpine = {
             x: bounds.maxX - 8.6 - (northSpineW * 0.5),
-            z: bounds.minZ + (northSpineD * 0.5)
+            // 0.05 inset off the -Z edge so the spine face never shares the base slab's plane.
+            z: bounds.minZ + (northSpineD * 0.5) + 0.05
         };
         place.addBlock(northSpine.x, 7.0, northSpine.z, northSpineW, 14.0, northSpineD, mats.mesa, true);
         place.addBlock(northSpine.x - 0.8, 14.2, northSpine.z + 0.5, 3.2, 4.4, 3.6, mats.sandstone, true);
@@ -279,7 +294,8 @@ import { pointInBounds as pt } from './biome-utils.js';
         var eastSpireW = 4.6;
         var eastSpireD = 4.8;
         var eastSpire = {
-            x: bounds.maxX - (eastSpireW * 0.5),
+            // 0.05 inset off the +X edge so the spire face never shares the base slab's plane.
+            x: bounds.maxX - (eastSpireW * 0.5) - 0.05,
             z: bounds.minZ + 7.8 + (eastSpireD * 0.5)
         };
         place.addBlock(eastSpire.x, 8.8, eastSpire.z, eastSpireW, 17.6, eastSpireD, mats.mesa, true);
@@ -304,7 +320,7 @@ import { pointInBounds as pt } from './biome-utils.js';
         place.addBlock(brokenNeedle.x + 0.2, 12.9, brokenNeedle.z + 0.2, 1.5, 1.4, 1.8, mats.sandstone, false);
 
         // Playable shelves exist only on the inner faces.
-        place.addBlock(bounds.maxX - 8.6, 6.8, bounds.minZ + 10.8, 3.8, 0.8, 3.2, mats.sandstone, true);
+        place.addBlock(bounds.maxX - 8.6, 6.83, bounds.minZ + 10.8, 3.8, 0.8, 3.2, mats.sandstone, true);
         place.addBlock(bounds.maxX - 12.2, 10.4, bounds.minZ + 9.6, 3.0, 0.7, 2.4, mats.sandstone, true);
         place.addRamp(bounds.maxX - 11.8, 2.0, bounds.minZ + 12.4, 4.0, 1.2, 6.4, mats.darkRock, 1.02, -0.18, true);
         place.addRamp(bounds.maxX - 9.2, 4.5, bounds.minZ + 12.6, 2.8, 1.0, 4.2, mats.mesa, 0.88, -0.16, true);
@@ -336,7 +352,7 @@ import { pointInBounds as pt } from './biome-utils.js';
             var z = pt(bounds, 0.0, seg.v).z;
             var x = bounds.maxX - (seg.w * 0.5);
             place.addBlock(x, seg.h * 0.5, z, seg.w, seg.h, seg.d, mats.mesa, true);
-            place.addBlock(bounds.maxX - (seg.cut * 0.5), seg.h * 0.52, z - (seg.d * 0.18), seg.cut, seg.h * 0.54, seg.d * 0.7, mats.darkRock, false);
+            place.addBlock(bounds.maxX - (seg.cut * 0.5) - 0.05, seg.h * 0.52, z - (seg.d * 0.18), seg.cut, seg.h * 0.54, seg.d * 0.7, mats.darkRock, false);
             place.addBlock(bounds.maxX - 4.0, seg.shelfY, z + 0.2, 3.4, 0.7, 2.6, mats.sandstone, true);
             place.addRamp(bounds.maxX - 5.6, 1.6 + (i * 0.35), z + 0.9, 3.2, 1.0, 4.2, mats.darkRock, Math.PI * 0.5, -0.18, true);
             place.addBlock(bounds.maxX - 1.8, seg.h + 0.18, z, 1.9, 0.36, seg.d * 0.74, mats.sandstone, true);
@@ -414,6 +430,16 @@ import { pointInBounds as pt } from './biome-utils.js';
         buildInteriorRockOutcrop(southOutcrop.x, southOutcrop.z, place, mats);
         ctx.addExclusion(southOutcrop.x, southOutcrop.z, 5.2);
 
+        // Second small ruin: a collapsed gate in the southwest sand flat.
+        var gatePt = pt(bounds, 0.28, 0.80);
+        buildGateRuins(gatePt.x, gatePt.z, place, mats);
+
+        // Low rubble outcrops give the open mid-field a couple of extra solids.
+        var outcropN = pt(bounds, 0.50, 0.144);
+        addRubbleCluster(outcropN.x, outcropN.z, 0.8, place, mats);
+        var outcropW = pt(bounds, 0.26, 0.66);
+        addRubbleCluster(outcropW.x, outcropW.z, 0.8, place, mats);
+
         // Cacti with character -- arms, spines, flowers
         var cacti = [
             { u: 0.18, v: 0.46, tall: true,  flower: true },
@@ -434,7 +460,10 @@ import { pointInBounds as pt } from './biome-utils.js';
         var bushes = [
             { u: 0.34, v: 0.60 },
             { u: 0.58, v: 0.62 },
-            { u: 0.74, v: 0.56 }
+            { u: 0.74, v: 0.56 },
+            { u: 0.46, v: 0.30 },
+            { u: 0.62, v: 0.44 },
+            { u: 0.88, v: 0.74 }
         ];
         for (var b = 0; b < bushes.length; b++) {
             var bp = pt(bounds, bushes[b].u, bushes[b].v);
@@ -457,6 +486,14 @@ import { pointInBounds as pt } from './biome-utils.js';
         addSandDune(dune2.x, dune2.z, 4.2, 2.6, place, mats);
         var dune3 = pt(bounds, 0.40, 0.22);
         addSandDune(dune3.x, dune3.z, 4.2, 2.2, place, mats);
+
+        // Wind-ripple fields scattered across the open sand.
+        var rippleW = pt(bounds, 0.10, 0.33);
+        addRippleField(rippleW.x, rippleW.z, true, place, mats);
+        var rippleN = pt(bounds, 0.64, 0.30);
+        addRippleField(rippleN.x, rippleN.z, true, place, mats);
+        var rippleE = pt(bounds, 0.70, 0.75);
+        addRippleField(rippleE.x, rippleE.z, false, place, mats);
 
         // Tumbleweeds
         var tw1 = pt(bounds, 0.32, 0.18);
@@ -484,6 +521,8 @@ import { pointInBounds as pt } from './biome-utils.js';
             cover: 2,
             cliffs: 3,
             mesas: 5,
+            ruins: 1,
+            duneRipples: 9,
             centerHeroArchX: centerHero.x,
             centerHeroArchZ: centerHero.z,
             centerHeroArchHeight: centerArchStats.peakHeight,

@@ -1,4 +1,4 @@
-import { pointInBounds as pt } from './biome-utils.js';
+import { pointInBounds as pt, cloneMaterial } from './biome-utils.js';
 
 /**
  * quadrant-arctic.js - Arctic / ice biome quadrant builder.
@@ -137,12 +137,13 @@ import { pointInBounds as pt } from './biome-utils.js';
         var seg2H = height * 0.32;
         var seg3H = height * 0.23;
 
+        var shimmerMat = cloneMaterial(mats.ice);
         place.addBlock(x, seg1H * 0.5, z, baseW, seg1H, baseW, mats.iceDeep, true);
-        place.addBlock(x, seg1H + seg2H * 0.5, z, baseW * 0.7, seg2H, baseW * 0.7, mats.ice, false);
+        place.addBlock(x, seg1H + seg2H * 0.5, z, baseW * 0.7, seg2H, baseW * 0.7, shimmerMat, false);
         var topMesh = place.addBlock(x, seg1H + seg2H + seg3H * 0.5, z, baseW * 0.4, seg3H, baseW * 0.4, mats.frost, false);
 
-        // Shimmer on the top segment
-        ctx.addIceShimmer({ material: mats.ice, baseOpacity: 0.85, phase: x * 1.7 + z * 2.3 });
+        // Shimmer on the mid segment (cloned so phases don't fight over the shared ice material)
+        ctx.addIceShimmer({ material: shimmerMat, baseOpacity: 0.85, phase: x * 1.7 + z * 2.3 });
 
         return topMesh;
     }
@@ -176,9 +177,10 @@ import { pointInBounds as pt } from './biome-utils.js';
         var companions = Array.isArray(pack.companions) ? pack.companions : [];
 
         place.addBlock(centerX, 0.18, centerZ, blockW, 0.36, blockD, mats.iceDeep, false);
+        // Frost rime sits 0.03 proud of the ice base so the two tops never share a plane.
         place.addBlock(
             centerX + (basis.inwardX * 0.18),
-            0.3,
+            0.33,
             centerZ + (basis.inwardZ * 0.18),
             blockW * 0.72,
             0.12,
@@ -226,14 +228,23 @@ import { pointInBounds as pt } from './biome-utils.js';
     }
 
     function addFrozenPool(x, z, place, mats) {
-        place.addBlock(x, -0.08, z, 5.0, 0.16, 4.0, mats.ice, false);
-        // Frost ring around the pool edge
-        place.addBlock(x, 0.04, z, 5.6, 0.04, 4.6, mats.frost, false);
+        // Sheet rides just above ground (top 0.12) so no face is coplanar with y=0.
+        place.addBlock(x, 0.07, z, 5.0, 0.10, 4.0, mats.ice, false);
+        // Frost ring underneath, wider and lower (top 0.06) for a staggered shoreline.
+        place.addBlock(x, 0.035, z, 5.6, 0.05, 4.6, mats.frost, false);
     }
 
     function addSnowDrift(x, z, w, d, place, mats) {
         place.addBlock(x, 0.12, z, w, 0.24, d, mats.snowDrift, false);
         place.addBlock(x + w * 0.12, 0.22, z - d * 0.1, w * 0.6, 0.14, d * 0.5, mats.snow, false);
+    }
+
+    function addBankedDrift(x, z, w, d, place, mats) {
+        // Snow wedge banked against a structure base; staggered tops (0.5 / 0.8 / 1.07)
+        // and shrinking footprints keep every face off the neighbouring planes.
+        place.addBlock(x, 0.25, z, w, 0.5, d, mats.snowDrift, false);
+        place.addBlock(x, 0.4, z, w * 0.72, 0.8, d * 0.78, mats.snow, false);
+        place.addBlock(x, 0.535, z, w * 0.46, 1.07, d * 0.56, mats.snowDrift, false);
     }
 
     function buildIceArch(cx, cz, place, mats, ctx) {
@@ -251,7 +262,8 @@ import { pointInBounds as pt } from './biome-utils.js';
         place.addBlock(cx + 0.4, 0.74, cz - 0.1, 4.6, 0.16, 2.1, mats.ice, false);
 
         addIceSpire(cx - 1.9, cz + 0.8, 2.8, place, mats, ctx);
-        addIceSpire(cx + 2.1, cz - 0.6, 2.4, place, mats, ctx);
+        // Inset 0.05 so the spire base face is not flush with the ice slab's -Z face.
+        addIceSpire(cx + 2.1, cz - 0.55, 2.4, place, mats, ctx);
         place.addBlock(cx + 2.8, 0.24, cz + 0.9, 0.7, 0.48, 0.6, mats.darkRock, false);
         return 2;
     }
@@ -370,7 +382,7 @@ import { pointInBounds as pt } from './biome-utils.js';
                 label: 'inner-east-cluster',
                 u: 0.66, v: 0.34, w: 3.4, d: 2.4,
                 spires: [
-                    { dx: -0.8, dz: 0.4, h: 3.0 },
+                    { dx: -0.8, dz: 0.4, h: 3.04 },
                     { dx: 0.9, dz: -0.7, h: 2.7 }
                 ]
             },
@@ -379,7 +391,7 @@ import { pointInBounds as pt } from './biome-utils.js';
                 u: 0.52, v: 0.66, w: 4.0, d: 2.8,
                 spires: [
                     { dx: -1.2, dz: -0.4, h: 3.2 },
-                    { dx: 0.2, dz: 0.1, h: 3.0 },
+                    { dx: 0.2, dz: 0.1, h: 3.04 },
                     { dx: 1.3, dz: 0.6, h: 2.9 }
                 ]
             },
@@ -396,9 +408,9 @@ import { pointInBounds as pt } from './biome-utils.js';
                 label: 'mid-east-cluster',
                 u: 0.72, v: 0.62, w: 4.0, d: 2.6,
                 spires: [
-                    { dx: -1.2, dz: 0.2, h: 3.0 },
+                    { dx: -1.2, dz: 0.2, h: 3.04 },
                     { dx: 0.2, dz: -0.4, h: 2.8 },
-                    { dx: 1.2, dz: 0.5, h: 3.0 }
+                    { dx: 1.2, dz: 0.5, h: 3.04 }
                 ]
             }
         ];
@@ -408,6 +420,41 @@ import { pointInBounds as pt } from './biome-utils.js';
             var groupCount = addGlacierPatch(groupPt.x, groupPt.z, group.w, group.d, group.spires, place, mats, ctx);
             crystalCount += groupCount;
             groundSpireCount += groupCount;
+        }
+
+        // Small ice-spike clusters fill the otherwise empty cell corners.
+        var cornerSpikeClusters = [
+            {
+                label: 'corner-ne-spikes',
+                u: 0.92, v: 0.07, w: 3.2, d: 2.2,
+                spires: [
+                    { dx: -0.9, dz: 0.3, h: 2.9 },
+                    { dx: 0.8, dz: -0.4, h: 2.5 }
+                ]
+            },
+            {
+                label: 'corner-sw-spikes',
+                u: 0.08, v: 0.90, w: 3.2, d: 2.2,
+                spires: [
+                    { dx: -0.8, dz: -0.3, h: 2.7 },
+                    { dx: 0.9, dz: 0.4, h: 2.5 }
+                ]
+            },
+            {
+                label: 'corner-se-spikes',
+                u: 0.93, v: 0.92, w: 3.0, d: 2.2,
+                spires: [
+                    { dx: -0.8, dz: 0.4, h: 2.8 },
+                    { dx: 0.7, dz: -0.3, h: 2.4 }
+                ]
+            }
+        ];
+        for (var cs = 0; cs < cornerSpikeClusters.length; cs++) {
+            var cornerGroup = cornerSpikeClusters[cs];
+            var cornerPt = pt(rawBounds, cornerGroup.u, cornerGroup.v);
+            var cornerCount = addGlacierPatch(cornerPt.x, cornerPt.z, cornerGroup.w, cornerGroup.d, cornerGroup.spires, place, mats, ctx);
+            crystalCount += cornerCount;
+            groundSpireCount += cornerCount;
         }
 
         // Ice arch on the southern side to create a lower secondary landmark.
@@ -453,12 +500,35 @@ import { pointInBounds as pt } from './biome-utils.js';
             addSnowDrift(dp.x, dp.z, drifts[d].w, drifts[d].d, place, mats);
         }
 
+        // Banked drifts pile snow against structure bases (mountain north and east
+        // faces, ice shelf west face) so the big forms meet the ground softly.
+        var bankedDrifts = [
+            { x: center.x - 5.2, z: center.z - 12.4, w: 4.6, d: 2.2 },
+            { x: center.x + 14.5, z: center.z + 4.1, w: 2.2, d: 4.4 },
+            { x: shelfPt.x - 3.1, z: shelfPt.z + 0.5, w: 1.8, d: 3.2 }
+        ];
+        for (var bd = 0; bd < bankedDrifts.length; bd++) {
+            var bank = bankedDrifts[bd];
+            addBankedDrift(bank.x, bank.z, bank.w, bank.d, place, mats);
+        }
+
         // Aurora planes (high above, very transparent, suggesting northern lights)
         var auroraGeo1 = new THREE.PlaneGeometry(30, 6);
         place.addDecor(center.x - 5, 22, center.z - 8, auroraGeo1, mats.aurora1, 0.3, -0.8, 0.1);
 
         var auroraGeo2 = new THREE.PlaneGeometry(25, 5);
         place.addDecor(center.x + 8, 25, center.z + 5, auroraGeo2, mats.aurora2, -0.2, -0.6, -0.15);
+
+        // Aurora-lit ice fins: thin translucent slabs that catch the shimmer.
+        // Cloned materials so the animation never touches the shared cached ice.
+        var auroraIceA = cloneMaterial(mats.ice);
+        var auroraIceB = cloneMaterial(mats.iceDeep);
+        place.addBlock(archPt.x + 4.2, 1.62, archPt.z + 1.1, 0.3, 3.2, 2.6, auroraIceA, false);
+        place.addBlock(center.x - 11.6, 7.15, center.z - 2.8, 0.3, 2.7, 2.2, auroraIceB, false);
+        var finPt = pt(rawBounds, 0.86, 0.13);
+        place.addBlock(finPt.x, 1.42, finPt.z, 0.3, 2.8, 2.0, auroraIceA, false);
+        ctx.addIceShimmer({ material: auroraIceA, baseOpacity: 0.85, phase: 0.7 });
+        ctx.addIceShimmer({ material: auroraIceB, baseOpacity: 0.75, phase: 2.1 });
 
         // Small scattered ice fragments near clusters
         var fragments = [
@@ -485,10 +555,12 @@ import { pointInBounds as pt } from './biome-utils.js';
             crystals: crystalCount,
             drifts: drifts.length,
             foothillCrystals: fragments.length,
-            foothillDrifts: 0,
+            foothillDrifts: bankedDrifts.length,
             groundSpires: groundSpireCount,
             glacierPatches: borderPacks.length,
             interiorSpireGroups: interiorSpireGroups.length,
+            cornerSpikeClusters: cornerSpikeClusters.length,
+            auroraFins: 3,
             peakHeight: mountain.peakHeight,
             terraceCount: mountain.terraceCount,
             mountainBaseWidth: mountain.baseWidth,

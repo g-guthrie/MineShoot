@@ -21,10 +21,15 @@ if lsof -nP -iTCP:"${WORKER_PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
   exit 1
 fi
 
+D1_NAME="minecraft-fps-db-prod"
+if [[ "$WRANGLER_ENV" == "e2e" ]]; then
+  D1_NAME="minecraft-fps-db-e2e"
+fi
+
 for migration in "$ROOT_DIR"/migrations/*.sql; do
   migration_cmd=(
     "$ROOT_DIR/scripts/wrangler.sh"
-    d1 execute minecraft-fps-db-prod
+    d1 execute "$D1_NAME"
     --config wrangler.toml
     --local
     --persist-to "$PERSIST_DIR"

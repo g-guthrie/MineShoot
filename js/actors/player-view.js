@@ -8,6 +8,14 @@
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var GamePlayerView = {};
 
+    // Frame-rate independent smoothing alpha. The previous min(1, dt*k) form
+    // converges noticeably faster at low frame rates and saturates to a snap
+    // on any frame hitch.
+    function dtBlend(dt, rate) {
+        var alpha = 1 - Math.exp(-Math.max(0, Number(dt || 0)) * Number(rate || 0));
+        return alpha > 0.999 ? 1 : alpha;
+    }
+
     GamePlayerView.create = function (options) {
         options = options || {};
 
@@ -198,21 +206,21 @@
         function applyUnifiedGunOffsets(dt, avatarRigApi) {
             if (!avatarRigApi || !avatarRigApi.rig) return;
 
-            var bobBlend = Math.min(1, dt * 12);
+            var bobBlend = dtBlend(dt, 12);
             gunBobX += (0 - gunBobX) * bobBlend;
             gunBobY += (0 - gunBobY) * bobBlend;
 
             var recoil = activeRecoilProfile || defaultRecoilProfile();
             var gunRecoverScale = Math.max(0.2, (Number(recoil.pitchRecoverScale || 1) + Number(recoil.rollRecoverScale || 1)) * 0.5);
             var palmRecoverScale = Math.max(0.2, (Number(recoil.pitchRecoverScale || 1) + Number(recoil.yawRecoverScale || 1)) * 0.5);
-            var recoilBlend = Math.min(1, dt * 18 * gunRecoverScale);
+            var recoilBlend = dtBlend(dt, 18 * gunRecoverScale);
             gunRecoil += (0 - gunRecoil) * recoilBlend;
-            palmRecoil += (0 - palmRecoil) * Math.min(1, dt * 18 * palmRecoverScale);
-            firePoseKick += (0 - firePoseKick) * Math.min(1, dt * 20 * Math.max(0.2, Number(recoil.pitchRecoverScale || 1)));
+            palmRecoil += (0 - palmRecoil) * dtBlend(dt, 18 * palmRecoverScale);
+            firePoseKick += (0 - firePoseKick) * dtBlend(dt, 20 * Math.max(0.2, Number(recoil.pitchRecoverScale || 1)));
 
-            var cameraKickPitchBlend = Math.min(1, dt * 14 * Math.max(0.2, Number(recoil.pitchRecoverScale || 1)));
-            var cameraKickYawBlend = Math.min(1, dt * 16 * Math.max(0.2, Number(recoil.yawRecoverScale || 1)));
-            var cameraKickRollBlend = Math.min(1, dt * 12 * Math.max(0.2, Number(recoil.rollRecoverScale || 1)));
+            var cameraKickPitchBlend = dtBlend(dt, 14 * Math.max(0.2, Number(recoil.pitchRecoverScale || 1)));
+            var cameraKickYawBlend = dtBlend(dt, 16 * Math.max(0.2, Number(recoil.yawRecoverScale || 1)));
+            var cameraKickRollBlend = dtBlend(dt, 12 * Math.max(0.2, Number(recoil.rollRecoverScale || 1)));
             cameraKickPitch += (0 - cameraKickPitch) * cameraKickPitchBlend;
             cameraKickYaw += (0 - cameraKickYaw) * cameraKickYawBlend;
             cameraKickRoll += (0 - cameraKickRoll) * cameraKickRollBlend;
@@ -276,21 +284,21 @@
                 var sprintBlend = (!state.sniperMode && state.sprinting)
                     ? Math.max(0, Math.min(1, Number(state.speedNorm || 0)))
                     : 0;
-                sprintFovBlend += (sprintBlend - sprintFovBlend) * Math.min(1, dt * 10);
+                sprintFovBlend += (sprintBlend - sprintFovBlend) * dtBlend(dt, 10);
                 if (Math.abs(sprintFovBlend) < 0.001) sprintFovBlend = 0;
                 return false;
             }
 
             var targetScopeBlend = 1;
             var blendSpeed = state.sniperMode ? state.sniperScopeBlendSpeed : state.adsBlendSpeed;
-            scopeBlend += (targetScopeBlend - scopeBlend) * Math.min(1, dt * blendSpeed);
+            scopeBlend += (targetScopeBlend - scopeBlend) * dtBlend(dt, blendSpeed);
             if (Math.abs(scopeBlend) < 0.001) scopeBlend = 0;
             if (Math.abs(1 - scopeBlend) < 0.001) scopeBlend = 1;
 
             var targetSprintFovBlend = (!scopeTargetActive && !state.sniperMode && state.sprinting)
                 ? Math.max(0, Math.min(1, Number(state.speedNorm || 0)))
                 : 0;
-            sprintFovBlend += (targetSprintFovBlend - sprintFovBlend) * Math.min(1, dt * 10);
+            sprintFovBlend += (targetSprintFovBlend - sprintFovBlend) * dtBlend(dt, 10);
             if (Math.abs(sprintFovBlend) < 0.001) sprintFovBlend = 0;
 
             return !!(state.sniperMode && scopeBlend > 0.55);
@@ -375,13 +383,13 @@
                 state.camera.position.copy(viewDesired);
                 thirdCameraInitialized = true;
             } else {
-                state.camera.position.lerp(viewDesired, Math.min(1, dt * (firstPersonPose ? state.firstPersonSmooth : state.thirdSmooth)));
+                state.camera.position.lerp(viewDesired, dtBlend(dt, firstPersonPose ? state.firstPersonSmooth : state.thirdSmooth));
             }
 
             var scopedFov = state.adsFovForWeapon ? state.adsFovForWeapon(state.currentWeaponId) : state.adsFov;
             var sprintFovBoost = Number(state.cameraFov || 75) * 0.04;
             var targetFov = state.cameraFov + (sprintFovBoost * sprintFovBlend) + ((scopedFov - state.cameraFov) * scopeBlend);
-            state.camera.fov += (targetFov - state.camera.fov) * Math.min(1, dt * 16);
+            state.camera.fov += (targetFov - state.camera.fov) * dtBlend(dt, 16);
             state.camera.updateProjectionMatrix();
             state.camera.lookAt(viewTarget);
             state.camera.rotation.z += cameraKickRoll + recoilPatternRoll;
@@ -413,11 +421,11 @@
                 state.camera.position.copy(viewDesired);
                 thirdCameraInitialized = true;
             } else {
-                state.camera.position.lerp(viewDesired, Math.min(1, dt * Number(state.inspectSmooth || 18)));
+                state.camera.position.lerp(viewDesired, dtBlend(dt, Number(state.inspectSmooth || 18)));
             }
 
             var targetFov = Number(state.inspectFov || 58);
-            state.camera.fov += (targetFov - state.camera.fov) * Math.min(1, dt * 16);
+            state.camera.fov += (targetFov - state.camera.fov) * dtBlend(dt, 16);
             state.camera.updateProjectionMatrix();
             state.camera.lookAt(viewTarget);
         }

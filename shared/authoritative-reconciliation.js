@@ -152,6 +152,10 @@ export function shouldReplayAuthoritativeCorrection(options = {}) {
   const horizontalDistSq = Math.max(0, Number(options.horizontalDistSq || 0));
   const replayDistance = Math.max(0, Number(options.replayCorrectionDistance || 0.55));
   const latestPendingAgeMs = Math.max(0, Number(options.latestPendingAgeMs || 0));
+  // Grace gating must measure the OLDEST unacked input: with continuous input
+  // sends the newest pending sample is always only one send-interval old, so
+  // gating on it would block replay corrections for as long as the player moves.
+  const oldestPendingAgeMs = Math.max(latestPendingAgeMs, Number(options.oldestPendingAgeMs || 0));
   const minPendingAgeMs = Math.max(0, Number(options.minPendingAgeMs || 0));
   const movingIntent = !!options.movingIntent;
   const canCorrectWhileMoving = options.canCorrectWhileMoving !== false;
@@ -163,8 +167,8 @@ export function shouldReplayAuthoritativeCorrection(options = {}) {
     authoritativeStateChanged &&
     (ackAdvanced || options.allowReplayWithoutAckAdvance === true) &&
     horizontalDistSq >= (replayDistance * replayDistance) &&
-    (!movingIntent || canCorrectWhileMoving) &&
-    (allowFreshPendingReplay || latestPendingAgeMs >= minPendingAgeMs);
+    (allowFreshPendingReplay || !movingIntent || canCorrectWhileMoving) &&
+    (allowFreshPendingReplay || oldestPendingAgeMs >= minPendingAgeMs);
 }
 
 export function replayMotionState(snapshotState, pendingInputs, options = {}) {
@@ -176,6 +180,11 @@ export function replayMotionState(snapshotState, pendingInputs, options = {}) {
   const resolveStepMovementOptions = typeof options.resolveStepMovementOptions === 'function'
     ? options.resolveStepMovementOptions
     : null;
+  // Mirrors the server's slowed-movement time scaling: while slowUntil is
+  // active the server consumes input time multiplied by slowMultiplier, so
+  // replayed steps must shrink by the same factor to stay in parity.
+  const rawStepDtScale = Number(options.stepDtScale);
+  const stepDtScale = (isFinite(rawStepDtScale) && rawStepDtScale > 0) ? rawStepDtScale : 1;
   const replayPlan = buildReplayStepsFromPendingInputs(pendingInputs, {
     createMovementInputState: options.createMovementInputState,
     fallbackYaw: state.yaw,
@@ -187,11 +196,11 @@ export function replayMotionState(snapshotState, pendingInputs, options = {}) {
   for (let i = 0; i < replayPlan.steps.length; i++) {
     const step = replayPlan.steps[i];
     if (!step || !step.inputState || !(Number(step.dtSec || 0) > 0)) continue;
-    state.yaw = Number(step.yaw || state.yaw);
-    state.pitch = Number(step.pitch || state.pitch);
+    state.yaw = Number.isFinite(Number(step.yaw)) ? Number(step.yaw) : state.yaw;
+    state.pitch = Number.isFinite(Number(step.pitch)) ? Number(step.pitch) : state.pitch;
     const stepMovementOptions = resolveStepMovementOptions ? (resolveStepMovementOptions(step, state) || {}) : {};
     stepMovement(state, step.inputState, {
-      dtSec: Number(step.dtSec || 0),
+      dtSec: Number(step.dtSec || 0) * stepDtScale,
       bounds: bounds,
       collisionBoxes: collisionBoxes,
       getGroundHeightAt: getGroundHeightAt,

@@ -6,7 +6,7 @@ import {
 } from './world-layout.js';
 
 const DEFAULT_WORLD_SEED = 'room-env-v6-static-global';
-const DEFAULT_WORLD_PROFILE_VERSION = 6;
+const DEFAULT_WORLD_PROFILE_VERSION = 7;
 const DEFAULT_WORLD_FLAGS = {
   envV2: true,
   terrainPhysicsV2: true

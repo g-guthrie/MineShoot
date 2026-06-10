@@ -107,6 +107,7 @@ export function chooseSpawnPoint(options = {}) {
   let best = null;
   let bestScore = -Infinity;
   let fallback = null;
+  let softFallback = null;
 
   for (let n = 0; n < candidates.length; n++) {
     const candidate = candidates[n];
@@ -116,8 +117,12 @@ export function chooseSpawnPoint(options = {}) {
 
     const groundY = Number(getGroundHeightAt(x, z) || 0);
     if (groundY < minGroundY) continue;
+    const blocked = isBlocked(x, z, 0);
+    if (!blocked && !softFallback) {
+      softFallback = { x, z };
+    }
     if (isExcluded(x, z, 0)) continue;
-    if (isBlocked(x, z, 0)) continue;
+    if (blocked) continue;
 
     if (!fallback) {
       fallback = { x, z };
@@ -132,6 +137,9 @@ export function chooseSpawnPoint(options = {}) {
 
   if (best) return best;
   if (fallback) return fallback;
+  // Every candidate failed the full checks; prefer a spot that at least has
+  // valid ground and no geometry collision over the blind map center.
+  if (softFallback) return softFallback;
   return {
     x: lerp(min, max, 0.5),
     z: lerp(min, max, 0.5)

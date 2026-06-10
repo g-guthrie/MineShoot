@@ -3,7 +3,7 @@ import {
   PUBLIC_ROOM_SOFT_TARGET,
   PUBLIC_ROOM_HARD_CAP
 } from '../../../shared/matchmaking-config.js';
-import { isRegisteredPrivateRoomId } from '../private-rooms.js';
+import { getPrivateRoomState, isRegisteredPrivateRoomId } from '../private-rooms.js';
 
 const ENABLED_RE = /^(1|true|yes|on)$/i;
 
@@ -168,12 +168,46 @@ function handleLobbyWebSocketRequest(room, request, url) {
   return new Response(null, { status: 101, webSocket: client });
 }
 
+// /private-config is a DO-internal route, but it previously applied any body
+// without validating the caller. For registered private rooms the config is
+// now checked against the authoritative D1 room state: the posted host must
+// match the registered room owner, and when the caller forwards a requester
+// actor id it must be the room owner as well.
+async function rejectUnauthorizedPrivateConfig(room, request, body) {
+  const roomId = sanitizeRoomId(room.roomName || '');
+  if (!isRegisteredPrivateRoomId(roomId)) return null;
+
+  const state = room.env && room.env.DB
+    ? await getPrivateRoomState(room.env, roomId).catch(() => null)
+    : null;
+  if (!state) {
+    return json({ ok: false, error: 'Private room is not registered.' }, 403);
+  }
+
+  const ownerActorId = String(state.host_actor_id || '');
+  const postedHostActorId = String(body && body.hostActorId || '');
+  if (postedHostActorId !== ownerActorId) {
+    return json({ ok: false, error: 'Private room config rejected: host mismatch.' }, 403);
+  }
+
+  const requesterActorId = String(
+    request.headers.get('X-Requester-Actor-Id') || (body && body.requesterActorId) || ''
+  ).trim();
+  if (requesterActorId && requesterActorId !== ownerActorId) {
+    return json({ ok: false, error: 'Private room config rejected: requester is not the room owner.' }, 403);
+  }
+
+  return null;
+}
+
 async function handleHttpRequest(room, request, url) {
   if (url.pathname === '/test-fixture' && request.method === 'POST') {
     return handleTestFixtureRequest(room, request);
   }
   if (url.pathname === '/private-config' && request.method === 'POST') {
     const body = await request.json().catch(() => null);
+    const rejection = await rejectUnauthorizedPrivateConfig(room, request, body);
+    if (rejection) return rejection;
     room.applyPrivateRoomConfig(body || {});
     if (room.broadcastLobbyState) room.broadcastLobbyState();
     return json({ ok: true, roomId: room.roomName, gameMode: room.gameMode || '' });

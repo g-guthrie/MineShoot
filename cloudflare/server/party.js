@@ -24,6 +24,14 @@ import {
   buildPrivateRoomLobbyStateFromRoom
 } from './private-room-lobby-state.js';
 import { notifyPrivateRoomLobbyHub } from './private-room-lobby-hub-sync.js';
+import {
+  buildGuestTokenCookie,
+  guestTokenSecret,
+  mintGuestToken,
+  randomGuestId,
+  readGuestTokenFromRequest,
+  verifyGuestToken
+} from './ws-identity.js';
 
 const PARTY_MAX_MEMBERS = 16;
 const ACTOR_ID_RE = /^[a-zA-Z0-9_-]{3,64}$/;
@@ -151,15 +159,54 @@ export async function resolveActor(env, request, body = null) {
 
   const url = new URL(request.url);
   const source = body && typeof body === 'object' ? body : {};
-  const actorId = normalizeActorId(source.actorId || url.searchParams.get('actorId') || '');
+  const claimedActorId = normalizeActorId(source.actorId || url.searchParams.get('actorId') || '');
   const displayName = normalizeDisplayName(source.displayName || url.searchParams.get('displayName') || '');
-  if (!actorId || !displayName) return null;
+  if (!displayName) return null;
+
+  const secret = guestTokenSecret(env);
+  if (!secret) {
+    // Legacy trust model: no guest token secret configured.
+    if (!claimedActorId) return null;
+    return {
+      id: claimedActorId,
+      displayName,
+      username: displayName,
+      isAccount: false
+    };
+  }
+
+  // Token-bound guest identity: a client-supplied actorId is only honored
+  // when it arrives with a valid server-issued HMAC token. Without one, the
+  // claimed actorId is only accepted if it has never been seen before
+  // (first-come-first-served); otherwise the caller is treated as a brand-new
+  // anonymous guest with a freshly minted id.
+  const token = String(source.guestToken || '').trim() || readGuestTokenFromRequest(env, request, url);
+  const verifiedActorId = normalizeActorId(await verifyGuestToken(secret, token));
+  if (verifiedActorId) {
+    return {
+      id: verifiedActorId,
+      displayName,
+      username: displayName,
+      isAccount: false
+    };
+  }
+
+  let actorId = '';
+  if (claimedActorId) {
+    const existingPresence = await loadPresenceByActorId(env, claimedActorId).catch(() => null);
+    if (!existingPresence) actorId = claimedActorId;
+  }
+  if (!actorId) {
+    actorId = normalizeActorId(randomGuestId());
+  }
+  if (!actorId) return null;
 
   return {
     id: actorId,
     displayName,
     username: displayName,
-    isAccount: false
+    isAccount: false,
+    issuedGuestToken: await mintGuestToken(secret, actorId)
   };
 }
 
@@ -838,6 +885,17 @@ async function handleDismissRoomInvite(env, actor) {
   return { status: 200, body: { ok: true, state } };
 }
 
+function guestCookieHeaders(env, request, actor) {
+  if (!actor || !actor.issuedGuestToken) return {};
+  let secure = false;
+  try {
+    secure = new URL(request.url).protocol === 'https:';
+  } catch (_err) {
+    secure = false;
+  }
+  return { 'Set-Cookie': buildGuestTokenCookie(env, actor.issuedGuestToken, { secure }) };
+}
+
 export async function handleParty(env, request) {
   if (request.method === 'GET') {
     const actor = await resolveActor(env, request, null);
@@ -847,7 +905,7 @@ export async function handleParty(env, request) {
     const url = new URL(request.url);
     await touchPartyPresence(env, actor, normalizeActivityState(url.searchParams.get('activityState') || ACTIVITY_MENU));
     const state = await buildPartyState(env, actor, true);
-    return json({ ok: true, state });
+    return json({ ok: true, state }, 200, guestCookieHeaders(env, request, actor));
   }
 
   if (request.method !== 'POST') {
@@ -891,5 +949,5 @@ export async function handleParty(env, request) {
     return json({ ok: false, error: 'Unsupported party action.' }, 400);
   }
 
-  return json(result.body, result.status);
+  return json(result.body, result.status, guestCookieHeaders(env, request, actor));
 }

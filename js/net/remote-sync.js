@@ -198,7 +198,16 @@
             );
             var remoteTurnRate = 0;
             if (dt > 0 && typeof r._prevAnimationYaw === 'number') {
-                remoteTurnRate = normalizeAngle(renderYaw - Number(r._prevAnimationYaw || 0)) / Math.max(0.0001, Number(dt || 0));
+                var animationYawDelta = normalizeAngle(renderYaw - Number(r._prevAnimationYaw || 0));
+                // A near-half-turn in a single frame is a teleport or
+                // freeze-recovery snap, not a real turn; feeding it through
+                // would spike the rig's turn-rate driven animation.
+                if (Math.abs(animationYawDelta) < 2.0) {
+                    remoteTurnRate = animationYawDelta / Math.max(0.0001, Number(dt || 0));
+                    var maxTurnRate = Math.PI * 4;
+                    if (remoteTurnRate > maxTurnRate) remoteTurnRate = maxTurnRate;
+                    if (remoteTurnRate < -maxTurnRate) remoteTurnRate = -maxTurnRate;
+                }
             }
             r._prevAnimationYaw = renderYaw;
 

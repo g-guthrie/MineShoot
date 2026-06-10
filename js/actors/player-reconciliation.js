@@ -29,9 +29,14 @@
 
     function queueMotionCorrection(state, dx, dz, dy, maxDistance) {
         if (!state || typeof state !== 'object') return;
-        state.x += Number(dx || 0);
-        state.z += Number(dz || 0);
-        state.y += Number(dy || 0);
+        // Each queued correction is a fresh full measurement of the error
+        // against the live position. Any undecayed remainder from the previous
+        // correction is already contained in that measurement, so the new delta
+        // must REPLACE the queue. Accumulating would double-count the remainder
+        // and overshoot, oscillating the player around the authoritative path.
+        state.x = Number(dx || 0);
+        state.z = Number(dz || 0);
+        state.y = Number(dy || 0);
         var cap = Math.max(0.05, Number(maxDistance || 0.75));
         var horizontalLen = Math.sqrt(
             (state.x * state.x) +
@@ -102,7 +107,18 @@
             ? Math.max(replayCorrectionDistance, movingReplayCorrectionDistance)
             : replayCorrectionDistance;
         var movingAckDriftLimit = Math.max(0, Number(adaptiveSelfReconciliation ? reconcileTuning.movingAckDriftLimit : 2) || 2);
-        var movingPendingInputLimit = 2;
+        // The unacked-input backlog scales with RTT: at a 60Hz send rate even a
+        // healthy 100ms connection keeps ~7 inputs pending at all times. A fixed
+        // small limit would therefore disable moving corrections for everyone
+        // except LAN-grade connections, so widen both gates to the backlog a
+        // healthy connection is expected to carry (plus scheduling slack).
+        var inputSendIntervalMs = Number(opts.inputSendIntervalMs || 0) > 0
+            ? Number(opts.inputSendIntervalMs)
+            : (1000 / 60);
+        var rttMs = Math.max(0, Number(opts.rttMs || 0));
+        var expectedPendingInputs = Math.ceil((rttMs + rttJitterMs) / inputSendIntervalMs) + 2;
+        movingAckDriftLimit = Math.max(movingAckDriftLimit, expectedPendingInputs);
+        var movingPendingInputLimit = Math.max(2, expectedPendingInputs, movingAckDriftLimit);
 
         if (airborne) {
             hardSnapDistance = Math.max(
@@ -127,7 +143,7 @@
                 movingAckDriftLimit,
                 Math.max(0, Number(adaptiveSelfReconciliation ? reconcileTuning.airborneMovingAckDriftLimit : movingAckDriftLimit) || movingAckDriftLimit)
             );
-            movingPendingInputLimit = Math.max(2, movingAckDriftLimit);
+            movingPendingInputLimit = Math.max(movingPendingInputLimit, movingAckDriftLimit);
         }
 
         return {

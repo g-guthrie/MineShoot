@@ -21,6 +21,12 @@ class FakeElement {
     this.listeners.set(key, next);
   }
 
+  removeEventListener(type, handler) {
+    const key = String(type || '');
+    const next = (this.listeners.get(key) || []).filter((fn) => fn !== handler);
+    this.listeners.set(key, next);
+  }
+
   focus() {
     if (this.ownerDocument) {
       this.ownerDocument.activeElement = this;
@@ -71,6 +77,12 @@ class FakeDocument {
     this.listeners.set(key, next);
   }
 
+  removeEventListener(type, handler) {
+    const key = String(type || '');
+    const next = (this.listeners.get(key) || []).filter((fn) => fn !== handler);
+    this.listeners.set(key, next);
+  }
+
   getElementById(id) {
     return this.elements[String(id || '')] || null;
   }
@@ -105,6 +117,12 @@ class FakeWindow {
     const key = String(type || '');
     const next = this.listeners.get(key) || [];
     next.push(handler);
+    this.listeners.set(key, next);
+  }
+
+  removeEventListener(type, handler) {
+    const key = String(type || '');
+    const next = (this.listeners.get(key) || []).filter((fn) => fn !== handler);
     this.listeners.set(key, next);
   }
 
@@ -706,6 +724,42 @@ test('phone joined-ready handoff requires a shooting acknowledgement before touc
   assert.equal(entered.entered, true);
   assert.equal(activateTouchCalls, 1);
   assert.equal(harness.session.isPlaying(), true);
+});
+
+test('unbindRuntimeControls removes every bound listener and supports a clean rebind', async () => {
+  const harness = await loadRuntimeSessionHarness();
+  const countListeners = (target) => {
+    let count = 0;
+    target.listeners.forEach((handlers) => {
+      count += handlers.length;
+    });
+    return count;
+  };
+
+  assert.ok(countListeners(harness.document) > 0, 'document listeners bound');
+  assert.ok(countListeners(harness.window) > 0, 'window listeners bound');
+  assert.ok(countListeners(harness.playBtn) > 0, 'play button listeners bound');
+  assert.ok(countListeners(harness.backBtn) > 0, 'back button listeners bound');
+
+  harness.session.unbindRuntimeControls();
+
+  assert.equal(countListeners(harness.document), 0);
+  assert.equal(countListeners(harness.window), 0);
+  assert.equal(countListeners(harness.playBtn), 0);
+  assert.equal(countListeners(harness.backBtn), 0);
+
+  // Unbound controls must no longer drive gameplay entry.
+  harness.playBtn.dispatch('click');
+  await Promise.resolve();
+  assert.equal(harness.session.isPlaying(), false);
+  assert.equal(harness.document.pointerLockElement, null);
+
+  // Rebinding restores exactly one fresh set, and repeat binds do not stack.
+  harness.session.bindRuntimeControls();
+  const docListenersAfterRebind = countListeners(harness.document);
+  assert.ok(docListenersAfterRebind > 0);
+  harness.session.bindRuntimeControls();
+  assert.equal(countListeners(harness.document), docListenersAfterRebind);
 });
 
 test('preparing a fresh launch clears any leftover postgame flow', async () => {

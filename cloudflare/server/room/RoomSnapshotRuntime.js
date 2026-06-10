@@ -147,6 +147,16 @@ function updateConnectionQuality(meta, latestSnapshotSeq, now = Date.now()) {
   };
 }
 
+// Snapshots must be stamped with the simulation clock, not the wall clock at
+// broadcast: entity positions are only ever advanced to simulationNowMs, so a
+// Date.now() stamp adds the accumulator remainder + timer scheduling noise to
+// every serverTime, which clients perceive as network jitter and interpolate
+// across as velocity wobble.
+export function snapshotFrameNowMs(room, fallbackNow = Date.now()) {
+  const simNow = Math.max(0, Number(room && room.simulationNowMs || 0));
+  return simNow > 0 ? simNow : Math.max(0, Number(fallbackNow || 0));
+}
+
 export function collectSnapshotFrame(room, now = Date.now()) {
   const entities = [];
   for (const player of room.players.values()) {
@@ -350,7 +360,9 @@ export function markSnapshotBurst(room, viewerIds, entityIds, now = Date.now(), 
   const normalizedEntityIds = normalizeEntityIds(entityIds);
   if (normalizedEntityIds.length === 0) return false;
 
-  const frame = collectSnapshotFrame(room, now);
+  // Burst frames carry positions from the last completed sim step, so they get
+  // the sim-clock stamp too; `now` stays wall-clock for TTL/rate bookkeeping.
+  const frame = collectSnapshotFrame(room, snapshotFrameNowMs(room, now));
   let sentAny = false;
   for (let i = 0; i < viewerList.length; i++) {
     const viewerId = String(viewerList[i] || '');
@@ -443,7 +455,7 @@ export function markFireEngagement(room, player, msg, now = Date.now(), deps = {
 }
 
 export function broadcastSnapshot(room, forceFull = false, deps = {}) {
-  const frame = collectSnapshotFrame(room, deps.nowMs ? deps.nowMs() : Date.now());
+  const frame = collectSnapshotFrame(room, snapshotFrameNowMs(room, deps.nowMs ? deps.nowMs() : Date.now()));
   for (const [ws, meta] of room.clients.entries()) {
     if (!meta || !meta.userId) continue;
     sendSnapshotToClient(room, ws, meta, frame, {

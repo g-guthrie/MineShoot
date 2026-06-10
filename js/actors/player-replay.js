@@ -199,6 +199,7 @@
             movingIntent: movingIntent,
             canCorrectWhileMoving: canCorrectWhileMoving,
             latestPendingAgeMs: latestPendingAgeMs,
+            oldestPendingAgeMs: Math.max(0, Number(options.oldestPendingAgeMs || 0)),
             minPendingAgeMs: movingIntent ? pendingReplayGraceMs : 0,
             allowFreshPendingReplay: allowFreshPendingReplay
         });

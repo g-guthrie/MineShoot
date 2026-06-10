@@ -16,6 +16,7 @@ import '../js/world/quadrant-quarry.js';
 import '../js/world/quadrant-pirate-cove.js';
 import '../js/world/quadrant-volcano.js';
 import '../js/world/quadrant-urban.js';
+import '../js/world/quadrant-whoville.js';
 import {
   WORLD_MIN,
   WORLD_MAX,

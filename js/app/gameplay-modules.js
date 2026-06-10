@@ -64,6 +64,10 @@ import '../world/quadrant-volcano.js';
 import '../world/quadrant-whoville.js';
 import '../world/quadrant-urban.js';
 import '../world/world.js';
+// Canonical collision build shared with the server (GlobalArenaRoom). Without
+// this import GamePlayerWorld.getCanonicalCollisionBoxes() can never engage and
+// the client predicts against Box3-derived boxes that drift from the server's.
+import '../../shared/world-collision.js';
 import '../combat/hitscan-runtime-bundle.js';
 import '../combat/throwables-trajectory.js';
 import '../combat/throwables-projectile-runtime.js';

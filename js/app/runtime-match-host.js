@@ -129,7 +129,12 @@
         }
 
         function setupGameplaySession() {
-            if (gameSession) return gameSession;
+            if (gameSession) {
+                // teardownRuntime unbinds the session's global listeners;
+                // rebind (idempotent) when the session is reused for a new run.
+                if (gameSession.bindRuntimeControls) gameSession.bindRuntimeControls();
+                return gameSession;
+            }
             var sessionFactory = opts.getRuntimeSessionFactory ? opts.getRuntimeSessionFactory() : null;
             var currentMatchView = opts.getMatchViewApi ? opts.getMatchViewApi() : null;
             var actionsApi = opts.getActionsApi ? opts.getActionsApi() : null;
@@ -232,6 +237,15 @@
         function teardownRuntime(reason) {
             runtimeRunToken += 1;
             animationRunning = false;
+            // Release the session's document/window listeners (and any idle
+            // monitor interval / post-game timer it owns) so torn-down
+            // runtimes do not keep handling global input. The session object
+            // itself is kept: it carries cross-match state (e.g. the
+            // private-room lobby activity override) and rebinding on the next
+            // setupGameplaySession reuse restores a single fresh listener set.
+            if (gameSession && gameSession.unbindRuntimeControls) {
+                gameSession.unbindRuntimeControls();
+            }
             if (animationFrameHandle) {
                 cancelFrame(animationFrameHandle);
                 animationFrameHandle = 0;

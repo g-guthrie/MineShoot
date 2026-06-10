@@ -73,7 +73,12 @@
         if (!state.avatarGroup) return false;
 
         var scopeBlend = asNumber(state.scopeBlend, 0);
-        var avatarVisible = !!state.avatarAliveVisible && (!state.sniperMode || scopeBlend < 0.55);
+        // Mirror player-view's visibility rule: inspect mode always shows the
+        // avatar, first-person view always hides it. Diverging here re-shows
+        // the body inside the first-person camera on visual syncs.
+        var avatarVisible = state.inspectMode
+            ? !!state.avatarAliveVisible
+            : (!!state.avatarAliveVisible && !state.firstPersonView && (!state.sniperMode || scopeBlend < 0.55));
         state.avatarGroup.visible = avatarVisible;
 
         if (!avatarVisible) return false;

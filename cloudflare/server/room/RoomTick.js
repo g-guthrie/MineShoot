@@ -4,6 +4,10 @@ export function ensureRoomTick(room, deps = {}) {
   const setTimer = deps.setInterval || setInterval;
   const tickMs = Math.max(1, Number(deps.tickMs || 1000 / 60));
   room.lastTickAt = nowMs();
+  // Re-anchor the simulation clock to wall time: a room resuming after idle
+  // would otherwise keep a stale simulationNowMs and stamp everything in the
+  // past until the accumulator caught up (which it never does).
+  room.simulationNowMs = room.lastTickAt;
   room.simulationAccumulatorMs = 0;
   room.snapshotAccumulatorMs = 0;
   room.lastSnapshotAt = 0;
@@ -97,6 +101,15 @@ export function tickRoom(room, deps = {}) {
   if (simSteps >= maxSteps && room.simulationAccumulatorMs >= simTickMs) {
     room.simulationAccumulatorMs = Math.min(room.simulationAccumulatorMs, simTickMs);
   }
+
+  // simulationNowMs only ever advances by the dt actually stepped above, so
+  // snapshot stamps always match the simulated state. In steady state it
+  // tracks wall time exactly (simulationNowMs + accumulator === now); when
+  // the maxFrameMs/maxSteps clamps drop time, only the accumulator is
+  // re-anchored (the clamps above) — re-deriving the stamp from
+  // `now - accumulator` here would jump it past the time entities were
+  // simulated to, and clients would read the gap as a backward-velocity
+  // glitch. ensureRoomTick re-anchors the clock when a room resumes.
 
   if (room.snapshotAccumulatorMs >= snapshotTickMs) {
     room.broadcastSnapshot(false);

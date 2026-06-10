@@ -292,6 +292,7 @@
     var isGrounded = true;
     var jumpHoldTimer = 0;
     var jumpPressedLastFrame = false;
+    var pendingDeferredViewSync = false;
 
     var keys = {
         forward: false,
@@ -386,7 +387,9 @@
         stunUntil: 0,
         spawnShieldUntil: 0,
         weaponUntil: 0,
-        throwableUntil: 0
+        throwableUntil: 0,
+        slowUntil: 0,
+        slowMultiplier: 1
     };
     var rollUntil = 0;
     function hasInputCapture() {
@@ -430,8 +433,10 @@
         }
         var state = inputHelperState();
         var result = inputApi.applyLookDelta(state, deltaX, deltaY, multiplier);
-        yaw = Number(state.lookState.yaw || yaw);
-        pitch = Number(state.lookState.pitch || pitch);
+        // Falsy-OR would refuse to copy back a look angle that lands on
+        // exactly 0, sticking the camera for a frame when crossing center.
+        if (Number.isFinite(Number(state.lookState.yaw))) yaw = Number(state.lookState.yaw);
+        if (Number.isFinite(Number(state.lookState.pitch))) pitch = Number(state.lookState.pitch);
         return result;
     }
 
@@ -882,7 +887,9 @@
             avatarGroup: avatarGroup,
             avatarRigApi: avatarRigApi,
             avatarAliveVisible: avatarAliveVisible,
-            sniperMode: !!sniperMode
+            sniperMode: !!sniperMode,
+            firstPersonView: firstPersonCameraViewEnabled(),
+            inspectMode: inspectMode
         };
         if (helper && helper.syncAvatarVisibility) {
             helper.syncAvatarVisibility(resolvedView, payload);
@@ -1290,14 +1297,21 @@
         return true;
     }
 
-    function applyAuthoritativeMotion(state) {
+    function applyAuthoritativeMotion(state, options) {
         if (!camera || !state) return false;
         var x = Number(state.x);
         var z = Number(state.z);
         if (!Number.isFinite(x) || !Number.isFinite(z)) return false;
         var world = worldHelper();
         clearQueuedMotionCorrection();
-        copyMotionStateFields(state, {
+        // Look direction is client-authoritative during prediction corrections:
+        // the server's yaw/pitch is a full RTT stale, so writing it back would
+        // yank the player's aim on every position snap. Forced applications
+        // (respawn/teleport) still take the server's facing.
+        var sourceState = (options && options.preserveLook)
+            ? Object.assign({}, state, { yaw: yaw, pitch: pitch })
+            : state;
+        copyMotionStateFields(sourceState, {
             getGroundHeightAt: world && world.getGroundHeightAt
                 ? world.getGroundHeightAt
                 : null
@@ -1329,7 +1343,7 @@
         var ackSeq = Math.max(0, Number(opts.lastAckedSeq || 0));
         if (ackSeq > 0) lastReplayAckSeq = ackSeq;
         var motionState = computeReplayMotionState(state, pendingInputs, opts);
-        if (!motionState) return applyAuthoritativeMotion(state);
+        if (!motionState) return applyAuthoritativeMotion(state, { preserveLook: true });
         return applyMotionState(motionState, opts.dt);
     }
 
@@ -1362,7 +1376,8 @@
             playerRadius: playerRadius(),
             epsilon: EPSILON,
             fallbackYaw: yaw,
-            fallbackPitch: pitch
+            fallbackPitch: pitch,
+            stepDtScale: predictionSlowMultiplier()
         });
         return motionState || null;
     }
@@ -1498,7 +1513,7 @@
             horizontalDistSq >= (hardSnapDistance * hardSnapDistance) ||
             Math.abs(dy) >= thresholds.hardSnapVerticalDistance
         ) {
-            var snapped = applyAuthoritativeMotion(state);
+            var snapped = applyAuthoritativeMotion(state, { preserveLook: !opts.force });
             if (snapped) lastReconciledMotionKey = motionKey;
             return snapped;
         }
@@ -1538,9 +1553,13 @@
             return replayed;
         }
 
+        // When comparisonState is the replay target the residual error is
+        // already net of unacked inputs, so a non-empty pending buffer (which
+        // is permanent at a continuous send rate) must not block the blends.
+        var comparisonNetOfPending = comparisonState !== state;
         if (
             movingIntent &&
-            pendingInputCount === 0 &&
+            (pendingInputCount === 0 || comparisonNetOfPending) &&
             !hasUnsentInputTail &&
             horizontalDistSq > 0.0004 &&
             horizontalDistSq < (thresholds.movingBlendDistance * thresholds.movingBlendDistance) &&
@@ -1555,7 +1574,7 @@
         }
 
         if (
-            pendingInputCount > 0 ||
+            (pendingInputCount > 0 && !comparisonNetOfPending) ||
             hasUnsentInputTail ||
             movingIntent ||
             horizontalDistSq < (thresholds.idleBlendDistance * thresholds.idleBlendDistance)
@@ -1583,8 +1602,25 @@
             stunUntil: 0,
             spawnShieldUntil: 0,
             weaponUntil: 0,
-            throwableUntil: 0
+            throwableUntil: 0,
+            slowUntil: 0,
+            slowMultiplier: 1
         });
+    }
+
+    // The server scales a slowed player's movement dt by slowMultiplier
+    // (RoomRuntime.tickAuthoritativePlayerMovement). Prediction and replay
+    // must apply the same time scaling or being slowed guarantees
+    // mispredictions and a rubber-band for the whole effect duration.
+    function predictionSlowMultiplier() {
+        var helper = statusBridgeRuntimeApi();
+        if (helper && helper.slowMovementMultiplier) {
+            return Number(helper.slowMovementMultiplier(statusApi || statusState, undefined, { nowMs: nowMs }) || 1);
+        }
+        if (statusApi && statusApi.slowMovementMultiplier) {
+            return Number(statusApi.slowMovementMultiplier() || 1);
+        }
+        return 1;
     }
 
     function destroyPlayerState() {
@@ -1600,6 +1636,16 @@
         lastMoveSpeedNorm = 0;
         lastReplayAckSeq = 0;
         lastReconciledMotionKey = '';
+        // Vertical motion state must not leak into the next match: stale
+        // velocityY/isGrounded from the moment of teardown would spawn the
+        // next session mid-fall or with a phantom launch.
+        velocityY = 0;
+        isGrounded = true;
+        jumpHoldTimer = 0;
+        jumpPressedLastFrame = false;
+        airborneSprintCarry = false;
+        fastBackpedal = false;
+        pendingDeferredViewSync = false;
         resetStatusState();
         if (actorVisual && actorVisual.destroy) {
             actorVisual.destroy();
@@ -1689,7 +1735,7 @@
         var prevVelocityY = Number(velocityY || 0);
         var motionState = buildLocalMotionState();
         helper.stepAuthoritativeMovement(motionState, buildCurrentInputState(), {
-            dtSec: frameDt,
+            dtSec: frameDt * predictionSlowMultiplier(),
             bounds: world.getWorldBounds(),
             collisionBoxes: world.getCollisionBoxes(),
             getGroundHeightAt: world.getGroundHeightAt,
@@ -2068,7 +2114,23 @@
     };
 
     GamePlayer.reconcileAuthoritativeMotion = function (state, options) {
-        return reconcileAuthoritativeMotion(state, options);
+        var applied = reconcileAuthoritativeMotion(state, options);
+        if (applied && options && options.deferViewSync) {
+            pendingDeferredViewSync = true;
+        }
+        return applied;
+    };
+
+    // Completes the deferViewSync contract: callers that reconcile mid-frame
+    // (self-motion-sync) mark the view dirty and the gameplay loop flushes a
+    // single avatar/camera sync at the end of the frame.
+    GamePlayer.flushDeferredViewSync = function (dt) {
+        if (!pendingDeferredViewSync) return false;
+        pendingDeferredViewSync = false;
+        if (!camera) return false;
+        updateAvatarPose();
+        updateCameraFromPlayer(Math.max(1 / 240, Number(dt || (1 / 60))), viewHelper());
+        return true;
     };
 
     GamePlayer.replayAuthoritativeMotion = function (state, pendingInputs, options) {
