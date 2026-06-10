@@ -73,6 +73,7 @@ export function createRemotes(scene) {
   const GameAvatarRig = globalThis.__MAYHEM_RUNTIME.GameAvatarRig;
   const effects = createEffects(scene);
   const players = new Map(); // id -> remote record
+  let localEntityRef = null;
 
   /**
    * Replaces the rig's procedural box gun with the real textured model,
@@ -113,10 +114,20 @@ export function createRemotes(scene) {
 
     scene.add(avatar.root);
 
+    const rig = avatar.rig;
     const record = {
       id: p.id,
       name: p.name || '?',
       avatar,
+      flashMaterials: [
+        rig.bodyMesh.material,
+        rig.headMesh.material,
+        rig.armLMesh.material,
+        rig.legLMesh.material
+      ],
+      flashUntil: 0,
+      flashActive: false,
+      lastHurtAudioAt: 0,
       alive: p.alive !== false,
       hp: p.hp,
       weapon: weaponOrDefault(p.weapon),
@@ -181,7 +192,20 @@ export function createRemotes(scene) {
     record.display.anim = b.anim || {};
   }
 
+  function applyDamageFlash(record, nowMs) {
+    const shouldFlash = nowMs < record.flashUntil;
+    if (shouldFlash === record.flashActive) return;
+    record.flashActive = shouldFlash;
+    for (const material of record.flashMaterials) {
+      material.emissive.setHex(shouldFlash ? 0x9b1f1f : 0x000000);
+    }
+  }
+
   return {
+    setLocalEntity(entity) {
+      localEntityRef = entity;
+    },
+
     reset() {
       for (const id of Array.from(players.keys())) this.remove(id);
     },
@@ -210,13 +234,34 @@ export function createRemotes(scene) {
       if (record) record.hp = hp;
     },
 
+    /** 100ms red tint flash + positional pitched hurt audio on the victim. */
+    damageFeedback(id, localEntity) {
+      const record = players.get(id);
+      if (!record || !record.alive) return;
+      record.flashUntil = performance.now() + 100;
+      const now = performance.now();
+      if (localEntity && now - record.lastHurtAudioAt > 60) {
+        record.lastHurtAudioAt = now;
+        const dist = Math.hypot(
+          record.display.x - localEntity.x,
+          record.display.y - localEntity.y,
+          record.display.z - localEntity.z
+        );
+        audio.playAt('hurt', dist, 18, 0.6, audio.hurtPitch());
+      }
+    },
+
     applySnapshot(p) {
       let record = players.get(p.id);
       if (!record) {
         this.upsert(p);
         record = players.get(p.id);
       }
-      record.alive = p.alive !== false;
+      const aliveNext = p.alive !== false;
+      if (record.alive && aliveNext && Number.isFinite(record.hp) && p.hp < record.hp - 0.001) {
+        this.damageFeedback(p.id, localEntityRef);
+      }
+      record.alive = aliveNext;
       record.hp = p.hp;
       const weapon = weaponOrDefault(p.weapon);
       if (weapon !== record.weapon) {
@@ -336,6 +381,7 @@ export function createRemotes(scene) {
     update(dt, nowMs) {
       const renderAt = nowMs - INTERP_DELAY_MS;
       for (const record of players.values()) {
+        applyDamageFlash(record, nowMs);
         if (!record.alive) {
           // Minecraft-style death: tip over sideways, then disappear.
           if (record.dying > 0) {

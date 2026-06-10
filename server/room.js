@@ -75,7 +75,8 @@ export class GlobalArenaRoom {
       blocksCarried: BLOCKS.startCarried,
       lastBlockRegenAt: now(),
       lastFireAt: 0,
-      diedAt: 0
+      diedAt: 0,
+      lastSeenAt: now()
     };
     this.players.set(id, player);
 
@@ -97,6 +98,7 @@ export class GlobalArenaRoom {
       return;
     }
     if (!msg || typeof msg.t !== 'string') return;
+    player.lastSeenAt = now();
 
     switch (msg.t) {
       case 'join': return this.handleJoin(player, msg);
@@ -292,6 +294,14 @@ export class GlobalArenaRoom {
     if (this.snapshotTimer) return;
     this.snapshotTimer = setInterval(() => {
       if (this.players.size === 0) return;
+      // Abrupt disconnects don't always fire a close event, so kick anyone
+      // who has gone silent (live clients send state at 20Hz).
+      const cutoff = now() - 15000;
+      for (const player of Array.from(this.players.values())) {
+        if (player.joined && player.lastSeenAt < cutoff) {
+          this.removePlayer(player.id);
+        }
+      }
       this.broadcast({ t: 'snap', players: this.publicPlayers() });
     }, Math.round(1000 / SNAPSHOT_HZ));
   }

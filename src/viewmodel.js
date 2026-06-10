@@ -117,7 +117,7 @@ export function createViewmodel(camera) {
 
     kick(strength = 1) {
       recoil = Math.min(1.6, recoil + 0.55 * strength);
-      flashTimer = 0.045;
+      flashTimer = 0.035; // HYTOPIA-style quick muzzle blink
       flash.material.opacity = 1;
       flash.material.rotation = Math.random() * Math.PI;
     },

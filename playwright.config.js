@@ -7,7 +7,16 @@ export default defineConfig({
   workers: 1,
   use: {
     baseURL: 'http://127.0.0.1:3000',
-    viewport: { width: 1280, height: 720 }
+    viewport: { width: 1280, height: 720 },
+    launchOptions: {
+      // Multi-client tests need every page ticking at full rate; Chrome
+      // otherwise throttles timers/rAF in occluded headless pages.
+      args: [
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding'
+      ]
+    }
   },
   webServer: [
     {

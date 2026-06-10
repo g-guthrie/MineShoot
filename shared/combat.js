@@ -19,7 +19,7 @@ export const WEAPONS = {
   shotgun: {
     name: 'Shotgun',
     damage: 9,
-    pellets: 8,
+    pellets: 7,
     cooldownMs: 900,
     range: 26,
     headshotMult: 1.3,
@@ -27,6 +27,17 @@ export const WEAPONS = {
     reloadMs: 2200,
     auto: false,
     spreadDeg: 5.5,
+    // Deterministic center + ring pattern (fractions of spreadDeg),
+    // adapted from the MIT-licensed HYTOPIA example games.
+    pelletPattern: [
+      { x: 0, y: 0 },
+      { x: 0.71, y: 0.71 },
+      { x: -0.71, y: 0.71 },
+      { x: 1, y: 0 },
+      { x: -1, y: 0 },
+      { x: 0.71, y: -0.71 },
+      { x: -0.71, y: -0.71 }
+    ],
     sound: 'shotgun'
   },
   sniper: {

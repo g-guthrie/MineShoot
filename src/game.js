@@ -71,6 +71,7 @@ const weapons = createWeapons({
   camera, scene, player, blocks, remotes, viewmodel, net, hud
 });
 const input = createInput({ canvas });
+remotes.setLocalEntity(player.entity);
 
 scene.add(camera);
 
@@ -233,12 +234,13 @@ net.on('damage', (msg) => {
   state.hp = msg.hp;
   hud.setHp(state.hp);
   hud.damageFlash();
-  audio.play('hurt', 0.5);
+  audio.play('hurt', 0.5, audio.hurtPitch());
 });
 
 net.on('hit_confirm', (msg) => {
   hud.hitmarker(msg.head);
   remotes.setHp(msg.target, msg.hp);
+  remotes.damageFeedback(msg.target, player.entity);
 });
 
 net.on('death', (msg) => {
@@ -330,6 +332,27 @@ function respawnSelf() {
   input.requestPointerLock();
 }
 
+// State is sent on a timer rather than from the render loop: browsers
+// throttle requestAnimationFrame in background tabs, which would freeze
+// this player on everyone else's screen.
+setInterval(() => {
+  if (state.mode !== 'playing') return;
+  net.send({
+    t: 'state',
+    x: player.entity.x, y: player.entity.y, z: player.entity.z,
+    yaw: player.entity.yaw, pitch: player.pitch,
+    weapon: weapons.currentId(),
+    anim: {
+      speedNorm: player.entity.moveSpeedNorm || 0,
+      sprinting: !!player.entity.sprinting,
+      airborne: !player.entity.isGrounded,
+      movingForward: input.movementState().forward,
+      movingBackward: input.movementState().backward,
+      reloading: weapons.isReloading()
+    }
+  });
+}, Math.round(1000 / STATE_SEND_HZ));
+
 let lastFrameAt = performance.now();
 
 function frame(nowMs) {
@@ -368,25 +391,6 @@ function frame(nowMs) {
       weapons.setGhostVisible(false);
     }
     player.syncCamera(camera);
-
-    const sendInterval = 1000 / STATE_SEND_HZ;
-    if (state.mode === 'playing' && nowMs - state.lastStateSentAt > sendInterval) {
-      state.lastStateSentAt = nowMs;
-      net.send({
-        t: 'state',
-        x: player.entity.x, y: player.entity.y, z: player.entity.z,
-        yaw: player.entity.yaw, pitch: player.pitch,
-        weapon: weapons.currentId(),
-        anim: {
-          speedNorm: player.entity.moveSpeedNorm || 0,
-          sprinting: !!player.entity.sprinting,
-          airborne: !player.entity.isGrounded,
-          movingForward: input.movementState().forward,
-          movingBackward: input.movementState().backward,
-          reloading: weapons.isReloading()
-        }
-      });
-    }
   }
 
   weapons.updateEffects(dt);

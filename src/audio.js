@@ -44,9 +44,15 @@ export const audio = {
     } catch (err) { /* autoplay restrictions */ }
   },
 
-  playAt(name, distance, maxDistance = 80, baseVolume = 1) {
+  playAt(name, distance, maxDistance = 80, baseVolume = 1, rate = 1) {
     if (distance > maxDistance) return;
     const falloff = 1 - (distance / maxDistance);
-    this.play(name, baseVolume * falloff * falloff);
+    this.play(name, baseVolume * falloff * falloff, rate);
+  },
+
+  /** Random per-hit pitch between -200 and +600 cents, HYTOPIA-style. */
+  hurtPitch() {
+    const cents = -200 + Math.random() * 800;
+    return Math.pow(2, cents / 1200);
   }
 };

@@ -10,8 +10,12 @@ import { audio } from './audio.js';
 
 const THREE = globalThis.THREE;
 
-/** Ray vs AABB slab test. Returns { t, normal } or null. */
-function rayBox(origin, dir, box, maxDist) {
+/**
+ * Ray vs AABB slab test. Returns { t, normal } or null. allowInside treats
+ * a ray starting inside the box as a point-blank hit (used for player
+ * hitboxes, never for world geometry).
+ */
+function rayBox(origin, dir, box, maxDist, allowInside) {
   let tMin = 0;
   let tMax = maxDist;
   let normalAxis = -1;
@@ -44,7 +48,10 @@ function rayBox(origin, dir, box, maxDist) {
     tMax = Math.min(tMax, t2);
     if (tMin > tMax) return null;
   }
-  if (normalAxis < 0) return null; // started inside
+  if (normalAxis < 0) {
+    if (allowInside) return { t: 0.001, normal: { x: 0, y: 1, z: 0 } };
+    return null;
+  }
   const normal = { x: 0, y: 0, z: 0 };
   normal[axes[normalAxis]] = normalSign;
   return { t: tMin, normal };
@@ -105,7 +112,7 @@ export function createWeapons({ camera, scene, player, blocks, remotes, viewmode
     return slot().reloadUntil > performance.now();
   }
 
-  function rayDir(spreadDeg) {
+  function rayDir(spreadDeg, pelletIndex, pattern) {
     const base = player.forwardDir();
     if (!spreadDeg) return base;
     const spread = (spreadDeg * Math.PI) / 180;
@@ -115,11 +122,24 @@ export function createWeapons({ camera, scene, player, blocks, remotes, viewmode
       : new THREE.Vector3(0, 1, 0);
     const right = new THREE.Vector3().crossVectors(forward, up).normalize();
     const trueUp = new THREE.Vector3().crossVectors(right, forward);
-    const angle = Math.random() * Math.PI * 2;
-    const radius = Math.sqrt(Math.random()) * Math.tan(spread);
+
+    let offsetX;
+    let offsetY;
+    if (pattern && pattern.length) {
+      // Deterministic pellet pattern with a touch of jitter.
+      const entry = pattern[pelletIndex % pattern.length];
+      const jitter = 0.07 * Math.tan(spread);
+      offsetX = entry.x * Math.tan(spread) + (Math.random() - 0.5) * jitter;
+      offsetY = entry.y * Math.tan(spread) + (Math.random() - 0.5) * jitter;
+    } else {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = Math.sqrt(Math.random()) * Math.tan(spread);
+      offsetX = Math.cos(angle) * radius;
+      offsetY = Math.sin(angle) * radius;
+    }
     forward
-      .addScaledVector(right, Math.cos(angle) * radius)
-      .addScaledVector(trueUp, Math.sin(angle) * radius)
+      .addScaledVector(right, offsetX)
+      .addScaledVector(trueUp, offsetY)
       .normalize();
     return { x: forward.x, y: forward.y, z: forward.z };
   }
@@ -169,13 +189,13 @@ export function createWeapons({ camera, scene, player, blocks, remotes, viewmode
     }
 
     for (const target of remotes.targets()) {
-      const headHit = rayBox(origin, dir, target.head, limit);
+      const headHit = rayBox(origin, dir, target.head, limit, true);
       if (headHit && headHit.t < limit) {
         limit = headHit.t;
         result = { kind: 'player', id: target.id, head: true, t: headHit.t, point: pointAt(origin, dir, headHit.t) };
         continue;
       }
-      const bodyHit = rayBox(origin, dir, target.body, limit);
+      const bodyHit = rayBox(origin, dir, target.body, limit, true);
       if (bodyHit && bodyHit.t < limit) {
         limit = bodyHit.t;
         result = { kind: 'player', id: target.id, head: false, t: bodyHit.t, point: pointAt(origin, dir, bodyHit.t) };
@@ -208,7 +228,7 @@ export function createWeapons({ camera, scene, player, blocks, remotes, viewmode
     let firstPoint = null;
 
     for (let p = 0; p < w.pellets; p++) {
-      const dir = rayDir(w.spreadDeg);
+      const dir = rayDir(w.spreadDeg, p, w.pelletPattern);
       const result = resolveShot(origin, dir, w.range);
       if (!firstPoint) firstPoint = result.point;
 
