@@ -604,10 +604,61 @@
         renderMap.delete(id);
     };
 
+    var REMOTE_DAMAGE_FLASH_MS = 100;
+    var REMOTE_HURT_AUDIO_MIN_INTERVAL_MS = 60;
+
+    function triggerRemoteDamageFlash(r) {
+        var visual = r.actorVisual;
+        if (!visual || !visual.setDamageFlash) return;
+        var stamp = Date.now() + REMOTE_DAMAGE_FLASH_MS;
+        r.damageFlashUntil = stamp;
+        visual.setDamageFlash(true);
+        setTimeout(function () {
+            if (r.damageFlashUntil !== stamp) return;
+            r.damageFlashUntil = 0;
+            if (r.actorVisual && r.actorVisual.setDamageFlash) r.actorVisual.setDamageFlash(false);
+        }, REMOTE_DAMAGE_FLASH_MS);
+    }
+
+    function playRemoteHurtAudio(r) {
+        var RT = globalThis.__MAYHEM_RUNTIME || {};
+        if (!RT.GameAudio || !RT.GameAudio.play) return;
+        if (!RT.GamePlayer || !RT.GamePlayer.getPosition) return;
+        if (!r.group || !r.group.position) return;
+        var now = Date.now();
+        if (r.lastHurtAudioAtMs && (now - r.lastHurtAudioAtMs) < REMOTE_HURT_AUDIO_MIN_INTERVAL_MS) return;
+        r.lastHurtAudioAtMs = now;
+        var listener = RT.GamePlayer.getPosition();
+        if (!listener) return;
+        // Hurt pitch varies -200..+600 cents per hit
+        var cents = -200 + Math.random() * 800;
+        RT.GameAudio.play('playerHit', {
+            playbackRate: Math.pow(2, cents / 1200),
+            sourcePosition: { x: r.group.position.x, y: r.group.position.y, z: r.group.position.z },
+            listenerPosition: { x: listener.x, y: listener.y, z: listener.z },
+            nearDistance: 5,
+            referenceDistance: 5,
+            distanceRolloff: 1.8,
+            maxDistance: 15
+        });
+    }
+
+    function maybeTriggerRemoteDamageFeedback(r, entity) {
+        var prevHp = Number(r.hp);
+        if (!isFinite(prevHp) || r.hp == null) return;
+        if (r.alive === false || entity.alive === false) return;
+        var prevVitals = prevHp + (isFinite(Number(r.armor)) ? Number(r.armor) : 0);
+        var nextVitals = Number(entity.hp || 0) + Number(entity.armor || 0);
+        if (!(nextVitals < prevVitals - 0.001)) return;
+        triggerRemoteDamageFlash(r);
+        playRemoteHurtAudio(r);
+    }
+
     GameNetEntities.updateFromSnapshot = function (entity, snapshotMeta) {
         if (!sceneRef) return;
         var r = GameNetEntities.ensureRemote(entity, snapshotMeta);
         if (!r || !r.group) return;
+        maybeTriggerRemoteDamageFeedback(r, entity);
         r.targetX = entity.x;
         r.targetY = entity.y || 1.6;
         r.targetFootY = snapshotFootY(entity);

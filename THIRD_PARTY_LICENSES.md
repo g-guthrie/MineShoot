@@ -12,8 +12,10 @@ its example games (`hygrounds`, `zombies-fps`):
 
 Adapted material includes weapon handling profiles (fire cadence, magazine
 sizes, reload timings, scope zoom levels), the 35ms muzzle-flash blink
-behavior, the deterministic 7-pellet shotgun spread pattern, and the
-positional gunshot audio falloff envelope. The adaptation is a rewrite
+behavior, the deterministic 7-pellet shotgun spread pattern, the positional
+gunshot audio falloff envelope, and damage feedback behavior (100ms red
+tint flash on damaged players, hurt audio with per-hit pitch variation of
+-200 to +600 cents). The adaptation is a rewrite
 against MineShoot's own engine; no HYTOPIA art, audio, or model assets are
 included.
 

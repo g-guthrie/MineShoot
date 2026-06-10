@@ -890,11 +890,13 @@
         }
     }
 
-    function playPlayerHit(c) {
-        playNoiseBurst(c, { duration: 0.024, vol: 0.11, frequency: 3200, q: 1.9, filterType: 'highpass' });
-        playNoiseBurst(c, { duration: 0.09, vol: 0.16, frequency: 1100, q: 1.05, filterType: 'bandpass', delay: 0.001 });
-        playOscBurst(c, { type: 'triangle', startFreq: 156, endFreq: 82, duration: 0.12, vol: 0.095, delay: 0.001 });
-        playOscBurst(c, { type: 'square', startFreq: 240, endFreq: 130, duration: 0.065, vol: 0.05, delay: 0.004 });
+    function playPlayerHit(c, options) {
+        var rate = Number(options && options.playbackRate);
+        if (!isFinite(rate) || rate <= 0) rate = 1;
+        playNoiseBurst(c, { duration: 0.024 / rate, vol: 0.11, frequency: 3200 * rate, q: 1.9, filterType: 'highpass' });
+        playNoiseBurst(c, { duration: 0.09 / rate, vol: 0.16, frequency: 1100 * rate, q: 1.05, filterType: 'bandpass', delay: 0.001 });
+        playOscBurst(c, { type: 'triangle', startFreq: 156 * rate, endFreq: 82 * rate, duration: 0.12 / rate, vol: 0.095, delay: 0.001 });
+        playOscBurst(c, { type: 'square', startFreq: 240 * rate, endFreq: 130 * rate, duration: 0.065 / rate, vol: 0.05, delay: 0.004 });
     }
 
     function playFireIgnite(c) {
@@ -1048,7 +1050,7 @@
                         playBulletImpact(c, options);
                         break;
                     case 'playerHit':
-                        playPlayerHit(c);
+                        playPlayerHit(c, options);
                         break;
                     case 'fireIgnite':
                         playFireIgnite(c);
