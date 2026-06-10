@@ -5,11 +5,25 @@
 import { EYE_HEIGHT } from '../shared/entity-constants.js';
 import { WEAPONS, weaponOrDefault } from '../shared/combat.js';
 import { createEffects } from './effects.js';
+import { createGunModel } from './gun-models.js';
 import { audio } from './audio.js';
 
 const THREE = globalThis.THREE;
 const INTERP_DELAY_MS = 120;
 const BUFFER_LIMIT = 30;
+const DEATH_FALL_SECONDS = 0.85;
+
+// How long each weapon should be in an avatar's hands, in world units
+// (the avatar is ~2.5 units tall, so a rifle spans roughly half its height,
+// like Minecraft gun mods).
+const AVATAR_GUN_LENGTH = {
+  machinegun: 1.05,
+  shotgun: 1.0,
+  sniper: 1.3,
+  pistol: 0.5
+};
+
+const PROCEDURAL_GUN_PARTS = ['gunBody', 'gunBarrel', 'gunStock', 'gunGrip', 'scope', 'pump', 'coil'];
 
 // Minecraft-ish skin palette; deterministic per player id.
 const SKINS = [
@@ -60,6 +74,26 @@ export function createRemotes(scene) {
   const effects = createEffects(scene);
   const players = new Map(); // id -> remote record
 
+  /**
+   * Replaces the rig's procedural box gun with the real textured model,
+   * grip-aligned to the hand mount.
+   */
+  function attachGunModel(record, weaponId) {
+    const rig = record.avatar.rig;
+    for (const part of PROCEDURAL_GUN_PARTS) {
+      if (rig[part]) rig[part].visible = false;
+    }
+    const token = (record.gunToken = (record.gunToken || 0) + 1);
+    createGunModel(weaponId, AVATAR_GUN_LENGTH[weaponId] || 1, 0.75).then((model) => {
+      if (record.gunToken !== token || record.removed) return;
+      if (record.gunModel) rig.gun.remove(record.gunModel);
+      // Seat the grip into the palm rather than floating at the mount origin.
+      model.position.set(0, -0.03, 0.08);
+      record.gunModel = model;
+      rig.gun.add(model);
+    }).catch(() => {});
+  }
+
   function createRecord(p) {
     const skin = skinFor(p.id);
     const avatar = GameAvatarRig.create({
@@ -93,9 +127,14 @@ export function createRemotes(scene) {
         anim: p.anim || {}
       },
       lastDisplay: { x: p.x, y: p.y, z: p.z },
-      worldSpeed: 0
+      worldSpeed: 0,
+      dying: 0,
+      gunModel: null,
+      gunToken: 0,
+      removed: false
     };
     avatar.root.visible = record.alive;
+    attachGunModel(record, record.weapon);
     placeAvatar(record);
     return record;
   }
@@ -109,7 +148,15 @@ export function createRemotes(scene) {
   function interpolate(record, renderAtMs) {
     const buffer = record.buffer;
     if (buffer.length === 0) return;
-    if (buffer.length === 1 || renderAtMs <= buffer[0].at) {
+    if (buffer.length === 1) {
+      Object.assign(record.display, buffer[0].state);
+      return;
+    }
+    if (renderAtMs <= buffer[0].at) {
+      Object.assign(record.display, buffer[0].state);
+      return;
+    }
+    if (renderAtMs >= buffer[buffer.length - 1].at) {
       Object.assign(record.display, buffer[buffer.length - 1].state);
       return;
     }
@@ -147,6 +194,7 @@ export function createRemotes(scene) {
     remove(id) {
       const record = players.get(id);
       if (!record) return;
+      record.removed = true;
       scene.remove(record.avatar.root);
       record.avatar.dispose();
       players.delete(id);
@@ -174,6 +222,7 @@ export function createRemotes(scene) {
       if (weapon !== record.weapon) {
         record.weapon = weapon;
         record.avatar.setWeapon(weapon);
+        attachGunModel(record, weapon);
       }
       record.buffer.push({
         at: performance.now(),
@@ -207,7 +256,7 @@ export function createRemotes(scene) {
       const record = players.get(id);
       if (!record) return;
       record.alive = false;
-      record.avatar.root.visible = false;
+      record.dying = DEATH_FALL_SECONDS;
       record.buffer.length = 0;
       const pos = record.avatar.root.position;
       effects.addImpact({ x: pos.x, y: pos.y + 1.2, z: pos.z }, 0xc23b3b);
@@ -218,11 +267,16 @@ export function createRemotes(scene) {
       if (!record) return;
       record.alive = true;
       record.hp = msg.hp;
+      record.dying = 0;
       record.avatar.root.visible = true;
+      record.avatar.root.rotation.z = 0;
       record.buffer.length = 0;
       record.display.x = msg.x;
       record.display.y = msg.y;
       record.display.z = msg.z;
+      record.lastDisplay.x = msg.x;
+      record.lastDisplay.y = msg.y;
+      record.lastDisplay.z = msg.z;
       placeAvatar(record);
     },
 
@@ -261,10 +315,37 @@ export function createRemotes(scene) {
       return players.size;
     },
 
+    debugInfo() {
+      const out = [];
+      const v = new THREE.Vector3();
+      for (const r of players.values()) {
+        r.avatar.rig.gun.getWorldPosition(v);
+        out.push({
+          id: r.id,
+          weapon: r.weapon,
+          hasGunModel: !!r.gunModel,
+          gunScale: r.gunModel ? +r.gunModel.scale.x.toFixed(3) : 0,
+          gunWorld: v.toArray().map((n) => +n.toFixed(2)),
+          rootPos: r.avatar.root.position.toArray().map((n) => +n.toFixed(2)),
+          gunRot: ['x', 'y', 'z'].map((ax) => +r.avatar.rig.gun.rotation[ax].toFixed(2))
+        });
+      }
+      return out;
+    },
+
     update(dt, nowMs) {
       const renderAt = nowMs - INTERP_DELAY_MS;
       for (const record of players.values()) {
-        if (!record.alive) continue;
+        if (!record.alive) {
+          // Minecraft-style death: tip over sideways, then disappear.
+          if (record.dying > 0) {
+            record.dying -= dt;
+            const progress = 1 - Math.max(0, record.dying) / DEATH_FALL_SECONDS;
+            record.avatar.root.rotation.z = (Math.PI / 2) * Math.min(1, progress * 1.6);
+            if (record.dying <= 0) record.avatar.root.visible = false;
+          }
+          continue;
+        }
         interpolate(record, renderAt);
         placeAvatar(record);
 
@@ -287,6 +368,8 @@ export function createRemotes(scene) {
           reloading: !!anim.reloading,
           aimPitch: record.display.pitch
         });
+        // Head follows the player's look pitch, like Minecraft.
+        record.avatar.rig.headMesh.rotation.x = -record.display.pitch * 0.85;
       }
       effects.update(dt);
     },

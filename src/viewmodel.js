@@ -1,55 +1,67 @@
 /**
- * viewmodel.js - First-person weapon rendered from the shared weapon
- * platform definitions (toon-shooter GLTF assets with tuned offsets).
- * Shows the procedural box gun instantly and swaps in the GLTF when loaded.
+ * viewmodel.js - First-person weapon + blocky arm, Minecraft style. Uses
+ * the textured low-poly weapon models, normalized to consistent on-screen
+ * lengths, with bob, recoil, reload dip, and a muzzle flash.
  */
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { createGunModel } from './gun-models.js';
 
 const THREE = globalThis.THREE;
-const VIEW_SCALE = 0.5;
-const HOLD_POSITION = { x: 0.42, y: -0.36, z: -0.55 };
+const HOLD_POSITION = { x: 0.33, y: -0.27, z: -0.46 };
 const DEG = Math.PI / 180;
+const SKIN_COLOR = 0xd2a77d;
 
-const gltfCache = new Map();
-const loader = new GLTFLoader();
+// Per-weapon view tuning: target on-screen barrel length and optional hold
+// offsets relative to HOLD_POSITION.
+const VIEW_TUNING = {
+  machinegun: { length: 0.6 },
+  shotgun: { length: 0.56 },
+  sniper: { length: 0.74, dy: 0.02 },
+  pistol: { length: 0.3, dy: 0.03, dx: -0.02 }
+};
 
-function loadGltf(url) {
-  if (!gltfCache.has(url)) {
-    gltfCache.set(url, new Promise((resolve, reject) => {
-      loader.load(url, (gltf) => resolve(gltf.scene), undefined, reject);
-    }));
-  }
-  return gltfCache.get(url);
-}
-
-function buildProceduralGun(visual) {
+function buildArms(weaponId, gunLength) {
+  // Classic Minecraft first-person arm: one chunky arm running from the gun
+  // grip down past the bottom-right screen edge. The grip end and the
+  // off-screen shoulder end are defined in holder space and the box is
+  // oriented between them, so the arm always connects.
   const group = new THREE.Group();
-  // Legacy visual parts use short keys: p(osition), s(ize), c(olor).
-  const parts = (visual && visual.parts) || {};
-  for (const name of ['body', 'barrel', 'stock', 'grip']) {
-    const part = parts[name];
-    if (!part || !part.s) continue;
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(part.s[0], part.s[1], part.s[2]),
-      new THREE.MeshLambertMaterial({ color: part.c })
-    );
-    mesh.position.set(part.p[0], part.p[1], part.p[2]);
-    group.add(mesh);
-  }
+  const skin = new THREE.MeshLambertMaterial({ color: SKIN_COLOR });
+
+  const grip = new THREE.Vector3(0.005, -0.1, -gunLength * 0.22);
+  // Down, right, and toward the camera: ends up clipped by the frame edge.
+  const shoulder = new THREE.Vector3(0.3, -0.55, 0.45);
+
+  const direction = shoulder.clone().sub(grip);
+  const armLength = direction.length() + 0.3;
+  const geometry = new THREE.BoxGeometry(0.17, 0.17, armLength);
+  geometry.translate(0, 0, armLength / 2);
+  const arm = new THREE.Mesh(geometry, skin);
+  arm.position.copy(grip);
+  arm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), direction.normalize());
+  group.add(arm);
+
+  const hand = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.13, 0.15), skin);
+  hand.position.copy(grip).add(new THREE.Vector3(0, 0.02, 0));
+  group.add(hand);
   return group;
 }
 
 export function createViewmodel(camera) {
-  const visualsApi = globalThis.__MAYHEM_RUNTIME.GameWeaponVisuals;
-
   const holder = new THREE.Group();
   holder.position.set(HOLD_POSITION.x, HOLD_POSITION.y, HOLD_POSITION.z);
-  holder.rotation.y = -4 * DEG;
+  // Slight inward yaw so the barrel converges toward the crosshair.
+  holder.rotation.y = 6 * DEG;
   camera.add(holder);
 
   const gunRoot = new THREE.Group();
-  gunRoot.scale.setScalar(VIEW_SCALE);
   holder.add(gunRoot);
+
+  let arms = null;
+  function setArms(weaponId, gunLength) {
+    if (arms) holder.remove(arms);
+    arms = buildArms(weaponId, gunLength);
+    holder.add(arms);
+  }
 
   const muzzleAnchor = new THREE.Object3D();
   gunRoot.add(muzzleAnchor);
@@ -61,12 +73,13 @@ export function createViewmodel(camera) {
     depthTest: false,
     blending: THREE.AdditiveBlending
   }));
-  flash.scale.setScalar(0.55);
+  flash.scale.setScalar(0.5);
   muzzleAnchor.add(flash);
 
   let currentWeaponId = null;
   let currentModel = null;
   let loadToken = 0;
+  let holdOffset = { x: 0, y: 0, z: 0 };
 
   let bobPhase = 0;
   let recoil = 0;
@@ -90,27 +103,16 @@ export function createViewmodel(camera) {
       switchDip = 1;
       reloadTimer = 0;
 
-      const entry = visualsApi.get(weaponId);
-      const asset = entry.platform.asset;
-      const zones = entry.platform.zones;
-      muzzleAnchor.position.set(zones.muzzle[0], zones.muzzle[1], zones.muzzle[2]);
-
-      setModel(buildProceduralGun(entry.visual));
+      const tuning = VIEW_TUNING[weaponId] || VIEW_TUNING.machinegun;
+      holdOffset = { x: tuning.dx || 0, y: tuning.dy || 0, z: tuning.dz || 0 };
+      muzzleAnchor.position.set(0, 0.02, -tuning.length - 0.03);
+      setArms(weaponId, tuning.length);
 
       const token = ++loadToken;
-      loadGltf(asset.url).then((sceneRoot) => {
+      createGunModel(weaponId, tuning.length, 1).then((model) => {
         if (token !== loadToken) return;
-        const model = sceneRoot.clone(true);
-        model.scale.setScalar(asset.scale);
-        model.rotation.set(
-          asset.rotationDeg[0] * DEG,
-          asset.rotationDeg[1] * DEG,
-          asset.rotationDeg[2] * DEG
-        );
         setModel(model);
-      }).catch(() => {
-        // Procedural fallback already in place.
-      });
+      }).catch(() => {});
     },
 
     kick(strength = 1) {
@@ -150,9 +152,9 @@ export function createViewmodel(camera) {
       }
 
       holder.position.set(
-        HOLD_POSITION.x + bobX,
-        HOLD_POSITION.y - bobY - switchDip * 0.35,
-        HOLD_POSITION.z + recoil * 0.06
+        HOLD_POSITION.x + holdOffset.x + bobX,
+        HOLD_POSITION.y + holdOffset.y - bobY - switchDip * 0.35,
+        HOLD_POSITION.z + holdOffset.z + recoil * 0.06
       );
       holder.rotation.x = recoil * 0.05 + reloadAngle * -0.8;
     },

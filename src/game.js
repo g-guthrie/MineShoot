@@ -27,6 +27,7 @@ import { createWeapons } from './weapons.js';
 import { createViewmodel } from './viewmodel.js';
 import { createNet } from './net.js';
 import { createHud } from './hud.js';
+import { createGunModel } from './gun-models.js';
 import { audio } from './audio.js';
 import { PLAYER_MAX_HP, RESPAWN_DELAY_MS, STATE_SEND_HZ } from '../shared/combat.js';
 
@@ -84,6 +85,41 @@ const state = {
   lastStateSentAt: 0
 };
 
+// Temporary asset-orientation debug: ?gundebug=1 lays the raw weapon GLBs
+// out in front of the camera with an axes helper.
+if (new URLSearchParams(location.search).get('gundebug')) {
+  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+  const gltfLoader = new GLTFLoader();
+  const texLoader = new THREE.TextureLoader();
+  const files = ['ak-47', 'shotgun', 'm24', 'm1911'];
+  files.forEach((file, index) => {
+    gltfLoader.load(`/assets/weapons/low-poly-fps/models/${file}.glb`, (gltf) => {
+      const tex = texLoader.load(`/assets/weapons/low-poly-fps/textures/${file}.png`);
+      tex.flipY = false;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const mat = new THREE.MeshLambertMaterial({ map: tex });
+      gltf.scene.traverse((node) => { if (node.isMesh) node.material = mat; });
+      const box = new THREE.Box3().setFromObject(gltf.scene);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const scale = 1.6 / Math.max(size.x, size.y, size.z);
+      gltf.scene.scale.setScalar(scale);
+      gltf.scene.position.set(worldCenter - 4.5 + index * 3, 26, worldCenter - 6);
+      gltf.scene.add(new THREE.AxesHelper(1.5));
+      scene.add(gltf.scene);
+      globalThis.__GUNDEBUG_MODELS = globalThis.__GUNDEBUG_MODELS || {};
+      globalThis.__GUNDEBUG_MODELS[file] = gltf.scene;
+      console.log('gundebug', file, 'size', size.toArray().map((v) => v.toFixed(2)).join(','));
+    });
+  });
+  camera.position.set(worldCenter, 26.5, worldCenter);
+  camera.lookAt(worldCenter, 26, worldCenter - 6);
+  globalThis.__GUNDEBUG_CAM = () => {
+    camera.position.set(worldCenter, 26.5, worldCenter);
+    camera.lookAt(worldCenter, 26, worldCenter - 6);
+  };
+}
+
 // Debug/automation hook used by the e2e smoke test.
 globalThis.__MINESHOOT = {
   state,
@@ -92,6 +128,7 @@ globalThis.__MINESHOOT = {
   blocks,
   net,
   weapons,
+  createGunModel,
   join: (name) => joinGame(name || 'TestBot')
 };
 
@@ -305,6 +342,11 @@ function frame(nowMs) {
   remotes.update(dt, nowMs);
 
   if (state.mode === 'menu') {
+    if (globalThis.__GUNDEBUG_CAM) {
+      globalThis.__GUNDEBUG_CAM();
+      renderer.render(scene, camera);
+      return;
+    }
     state.menuOrbit += dt * 0.045;
     const radius = worldSize * 0.34;
     camera.position.set(

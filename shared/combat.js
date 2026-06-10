@@ -43,7 +43,7 @@ export const WEAPONS = {
     sound: 'sniper'
   },
   pistol: {
-    name: 'Revolver',
+    name: 'Pistol',
     damage: 30,
     pellets: 1,
     cooldownMs: 250,
