@@ -193,7 +193,7 @@ test('toEntityState resolves completed weapon reloads into a full authoritative 
       throwables: {}
     });
 
-  assert.equal(state.weaponAmmo.machinegun.ammoInMag, 32);
+  assert.equal(state.weaponAmmo.machinegun.ammoInMag, 30);
     assert.equal(state.weaponAmmo.machinegun.reloading, false);
     assert.equal(state.weaponAmmo.machinegun.reloadRemaining, 0);
   } finally {

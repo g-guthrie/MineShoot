@@ -1803,6 +1803,20 @@
         return { yaw: yaw, pitch: pitch };
     };
 
+    var damageFlashToken = 0;
+
+    GamePlayer.triggerDamageFlash = function (durationMs) {
+        if (!actorVisual || !actorVisual.setDamageFlash) return false;
+        var holdMs = Math.max(16, Number(durationMs || 100));
+        var token = ++damageFlashToken;
+        actorVisual.setDamageFlash(true);
+        setTimeout(function () {
+            if (token !== damageFlashToken) return;
+            if (actorVisual && actorVisual.setDamageFlash) actorVisual.setDamageFlash(false);
+        }, holdMs);
+        return true;
+    };
+
     GamePlayer.getMuzzleWorldPosition = function (outVec3) {
         var view = viewHelper();
         return view && view.getMuzzleWorldPosition

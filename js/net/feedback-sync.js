@@ -342,10 +342,10 @@
                 y: camera.position.y,
                 z: camera.position.z
             },
-            nearDistance: 5.5,
-            referenceDistance: 10.5,
+            nearDistance: 8,
+            referenceDistance: 46,
             distanceRolloff: 1.8,
-            maxDistance: 105
+            maxDistance: 100
         });
     }
 

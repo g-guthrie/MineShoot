@@ -177,6 +177,7 @@
                 bodyDamage: Number(stats.bodyDamage || 0),
                 headDamage: Number(stats.headDamage || 0),
                 pellets: Number(stats.pellets || 1),
+                pelletPattern: Array.isArray(stats.pelletPattern) ? stats.pelletPattern : null,
                 hipfireSpread: Number(hipAim.spread || 0),
                 adsSpread: Number(adsAim.spread || 0),
                 adsFovDeg: Number(stats.adsFovDeg || 0),

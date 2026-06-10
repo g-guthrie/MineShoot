@@ -638,6 +638,17 @@
         applyWeaponLoadout(defaultWeaponLoadout(), '');
     }
 
+    function playerHurtFeedback() {
+        if (RT.GameAudio && RT.GameAudio.play) {
+            // Hurt pitch varies -200..+600 cents per hit
+            var cents = -200 + Math.random() * 800;
+            RT.GameAudio.play('playerHit', { playbackRate: Math.pow(2, cents / 1200) });
+        }
+        if (RT.GamePlayer && RT.GamePlayer.triggerDamageFlash) {
+            RT.GamePlayer.triggerDamageFlash(100);
+        }
+    }
+
     function consumeDamage(rawDamage, hitType, attackerEnemy) {
         if (effectiveSpawnShieldUntil(nowMs()) > nowMs() || !isPlaying()) return;
 
@@ -649,8 +660,8 @@
             playerHP = playerTarget.hp;
             playerArmor = playerTarget.armor;
             armorRegenDelay = playerTarget.armorRegenDelay;
-            if (result.hpLost > 0 && RT.GameAudio && RT.GameAudio.play) {
-                RT.GameAudio.play('playerHit');
+            if (result.hpLost > 0) {
+                playerHurtFeedback();
             }
         } else {
             armorRegenDelay = DEFAULT_ARMOR_REGEN_DELAY;
@@ -661,9 +672,7 @@
             }
             if (damage > 0) {
                 playerHP -= damage;
-                if (RT.GameAudio && RT.GameAudio.play) {
-                    RT.GameAudio.play('playerHit');
-                }
+                playerHurtFeedback();
             }
         }
 
@@ -795,9 +804,7 @@
     }
 
     function showIncomingFeedback(sourcePos, rawDamage, hitType) {
-        if (RT.GameAudio && RT.GameAudio.play) {
-            RT.GameAudio.play('playerHit');
-        }
+        playerHurtFeedback();
         if (sourcePos && RT.GamePlayer && RT.GamePlayer.getPosition && RT.GamePlayer.getRotation) {
             var playerPos = RT.GamePlayer.getPosition(playerDamagePosScratch);
             var rot = RT.GamePlayer.getRotation();
