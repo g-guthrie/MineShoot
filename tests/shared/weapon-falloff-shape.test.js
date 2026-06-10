@@ -16,6 +16,6 @@ test('primary weapon falloff shapes mirror their intended roles', () => {
 });
 
 test('hand cannon damage is bumped to carry its weight as a primary weapon', () => {
-  assert.equal(gameplayTuning.weaponStats.pistol.bodyDamage, 68);
-  assert.equal(gameplayTuning.weaponStats.pistol.headDamage, 102);
+  assert.equal(gameplayTuning.weaponStats.pistol.bodyDamage, 79);
+  assert.equal(gameplayTuning.weaponStats.pistol.headDamage, 119);
 });

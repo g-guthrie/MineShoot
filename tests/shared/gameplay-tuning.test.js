@@ -41,7 +41,7 @@ function ttkMs(weapon, hitType) {
 test('weapon tuning exposes a valid fastest perfect-ttk weapon', () => {
   const shotgun = gameplayTuning.weaponStats.shotgun;
   assert.equal(FULL_HEALTH_DURABILITY, gameplayTuning.survivability.hpMax + gameplayTuning.survivability.armorMax);
-  assert.equal(shotsToKill(shotgun, 'body'), 5);
+  assert.equal(shotsToKill(shotgun, 'body'), 6);
   assert.equal(shotsToKill(shotgun, 'head'), 5);
 
   let fastestWeaponId = null;
@@ -107,7 +107,7 @@ test('weapon presentation tuning exposes shared tracer, recoil, and sample knobs
   };
 
   assert.equal(rifle.tracer.speed, 280);
-  assert.equal(rifle.recoil.muzzleMs, 60);
+  assert.equal(rifle.recoil.muzzleMs, 35);
   assert.equal(rifle.recoil.pattern, 'push');
   assert.equal(rifle.recoil.pitchKickScale, 1.25);
   assert.equal(rifle.audioSample.url, '/assets/audio/weapons/rifle.mp3');
@@ -189,8 +189,8 @@ test('ADS aim profiles can tighten spread independently from hipfire', () => {
     assert.equal(typeof weapon.moveSpeedMultiplier, 'number');
     assert.equal(typeof weapon.adsMoveMultiplier, 'number');
   }
-  assert.equal(resolveWeaponAdsFovDeg(shotgun), 56);
-  assert.equal(resolveWeaponAdsFovDeg(sniper), 24);
+  assert.equal(resolveWeaponAdsFovDeg(shotgun), 75);
+  assert.equal(resolveWeaponAdsFovDeg(sniper), 17.5);
 });
 
 test('survivability tuning exposes the tanky baseline and slower armor reset window', () => {
@@ -271,7 +271,7 @@ test('network tuning exposes the canonical ping, reconcile, burst, and feedback 
   assert.equal(gameplayTuning.network.remoteInterpolation.presentationClockMaxStepMs, 250);
   assert.equal(gameplayTuning.network.remoteInterpolation.presentationClockMaxLagMs, 250);
   assert.equal(gameplayTuning.network.remoteInterpolation.animationStateBlendMs, 80);
-  assert.equal(gameplayTuning.network.remoteInterpolation.muzzleFlashPresentationMs, 70);
+  assert.equal(gameplayTuning.network.remoteInterpolation.muzzleFlashPresentationMs, 35);
   assert.equal(gameplayTuning.network.remoteInterpolation.hitboxLeadMs, 0);
   assert.equal(gameplayTuning.network.remoteInterpolation.serverOffsetSnapDeltaMs, 180);
   assert.equal(gameplayTuning.network.ping.pessimisticRttAlpha, 0.05);

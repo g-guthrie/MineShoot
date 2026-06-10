@@ -21,7 +21,7 @@ const DEFAULT_WEAPON_PRESENTATION = {
     roll: 0.006,
     armR: 0.22,
     armL: 0.1,
-    muzzleMs: 60,
+    muzzleMs: 35,
     pitchKickScale: 1,
     yawKickScale: 1,
     rollKickScale: 1,
@@ -120,7 +120,7 @@ export const gameplayTuning = {
       presentationClockMaxStepMs: 250,
       presentationClockMaxLagMs: 250,
       animationStateBlendMs: 80,
-      muzzleFlashPresentationMs: 70,
+      muzzleFlashPresentationMs: 35,
       serverOffsetSnapDeltaMs: 180,
       offsetLerpAlpha: 0.08,
       fallbackCatchupRemainingPerSecond: 0.001,
@@ -171,10 +171,15 @@ export const gameplayTuning = {
   classPresets: {
     ffa: { armorMax: 100, wallhackRadius: 90 }
   },
+  // Weapon handling profiles (cadence, magazines, reloads, scope zooms,
+  // pellet pattern, muzzle flash timing) adapted from the MIT-licensed
+  // HYTOPIA examples (hygrounds, zombies-fps) — see THIRD_PARTY_LICENSES.md.
+  // Damage values are rescaled to preserve MineShoot's per-weapon DPS
+  // against its 1000 HP pool.
   weaponStats: {
     rifle: {
-      name: 'Scout Rifle', displayName: 'Scout Rifle', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 400, reloadMs: 1850, magazineSize: 14,
-      bodyDamage: 50, headDamage: 78, maxRange: 90, pellets: 1, hipfireSpread: 0.024, adsSpread: 0, adsFovDeg: 56, adsMaxRange: 110,
+      name: 'Scout Rifle', displayName: 'Scout Rifle', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 200, reloadMs: 2200, magazineSize: 25,
+      bodyDamage: 25, headDamage: 39, maxRange: 90, pellets: 1, hipfireSpread: 0.024, adsSpread: 0, adsFovDeg: 42, adsMaxRange: 110,
       moveSpeedMultiplier: 0.96, adsMoveMultiplier: 0.75,
       hipfireBloomScale: 2.5, adsBloomScale: 1,
       falloff: { start: 24, end: 48, minScalar: 0.72 },
@@ -190,7 +195,7 @@ export const gameplayTuning = {
           roll: 0.006,
           armR: 0.22,
           armL: 0.1,
-          muzzleMs: 60,
+          muzzleMs: 35,
           pitchKickScale: 1.25,
           yawKickScale: 1.05,
           rollKickScale: 1.10,
@@ -216,8 +221,8 @@ export const gameplayTuning = {
       }
     },
     pistol: {
-      name: 'Hand Cannon', displayName: 'Hand Cannon', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 430, reloadMs: 2050, magazineSize: 10,
-      bodyDamage: 68, headDamage: 102, maxRange: 52, pellets: 1, hipfireSpread: 0.105, adsSpread: 0.105, adsFovDeg: 56, adsMaxRange: 52,
+      name: 'Hand Cannon', displayName: 'Hand Cannon', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 500, reloadMs: 2000, magazineSize: 6,
+      bodyDamage: 79, headDamage: 119, maxRange: 52, pellets: 1, hipfireSpread: 0.105, adsSpread: 0.105, adsFovDeg: 75, adsMaxRange: 52,
       moveSpeedMultiplier: 1.1, adsMoveMultiplier: 0.9,
       falloff: { start: 7.5, end: 23, minScalar: 0.6 },
       aimProfile: { hipfire: { spread: 0.105, maxRange: 52 }, ads: { spread: 0.105, maxRange: 52 } },
@@ -232,7 +237,7 @@ export const gameplayTuning = {
           roll: 0.005,
           armR: 0.2,
           armL: 0.08,
-          muzzleMs: 60,
+          muzzleMs: 35,
           pitchKickScale: 1.40,
           yawKickScale: 1.15,
           rollKickScale: 1.35,
@@ -258,8 +263,8 @@ export const gameplayTuning = {
       }
     },
     machinegun: {
-      name: 'Auto Rifle', displayName: 'Auto Rifle', primitiveType: 'hitscan_single', automatic: true, cooldownMs: 133, reloadMs: 1800, magazineSize: 32,
-      bodyDamage: 18, headDamage: 27, maxRange: 70, pellets: 1, hipfireSpread: 0.045, adsSpread: 0.035, adsFovDeg: 56, adsMaxRange: 78,
+      name: 'Auto Rifle', displayName: 'Auto Rifle', primitiveType: 'hitscan_single', automatic: true, cooldownMs: 100, reloadMs: 1500, magazineSize: 30,
+      bodyDamage: 14, headDamage: 21, maxRange: 70, pellets: 1, hipfireSpread: 0.045, adsSpread: 0.035, adsFovDeg: 59, adsMaxRange: 78,
       moveSpeedMultiplier: 1.04, adsMoveMultiplier: 0.95,
       falloff: { start: 18, end: 36, minScalar: 0.72 },
       aimProfile: { hipfire: { spread: 0.045, maxRange: 70 }, ads: { spread: 0.035, maxRange: 78 } },
@@ -274,7 +279,7 @@ export const gameplayTuning = {
           roll: 0.004,
           armR: 0.14,
           armL: 0.06,
-          muzzleMs: 55,
+          muzzleMs: 35,
           pitchKickScale: 1.15,
           yawKickScale: 1.10,
           rollKickScale: 1.10,
@@ -300,8 +305,17 @@ export const gameplayTuning = {
       }
     },
     shotgun: {
-      name: 'Shotgun', displayName: 'Shotgun', primitiveType: 'hitscan_multi', automatic: false, cooldownMs: 900, reloadMs: 2100, magazineSize: 5,
-      bodyDamage: 20, headDamage: 22, maxRange: 24, pellets: 12, hipfireSpread: 0.185, adsSpread: 0.185, adsFovDeg: 56, adsMaxRange: 24,
+      name: 'Shotgun', displayName: 'Shotgun', primitiveType: 'hitscan_multi', automatic: false, cooldownMs: 770, reloadMs: 3000, magazineSize: 4,
+      bodyDamage: 29, headDamage: 32, maxRange: 24, pellets: 7, hipfireSpread: 0.185, adsSpread: 0.185, adsFovDeg: 75, adsMaxRange: 24,
+      pelletPattern: [
+        { x: 0, y: 0 },
+        { x: 0.132, y: 0.132 },
+        { x: -0.132, y: 0.132 },
+        { x: 0.185, y: 0 },
+        { x: -0.185, y: 0 },
+        { x: 0.132, y: -0.132 },
+        { x: -0.132, y: -0.132 }
+      ],
       moveSpeedMultiplier: 1.0, adsMoveMultiplier: 0.9,
       falloff: { start: 7.5, end: 12.5, minScalar: 0.35 },
       aimProfile: { hipfire: { spread: 0.185, maxRange: 24 }, ads: { spread: 0.185, maxRange: 24 } },
@@ -316,7 +330,7 @@ export const gameplayTuning = {
           roll: 0.008,
           armR: 0.26,
           armL: 0.12,
-          muzzleMs: 70,
+          muzzleMs: 35,
           pitchKickScale: 1.45,
           yawKickScale: 1.20,
           rollKickScale: 1.40,
@@ -342,8 +356,8 @@ export const gameplayTuning = {
       }
     },
     sniper: {
-      name: 'Sniper', displayName: 'Sniper', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 1800, reloadMs: 2400, magazineSize: 4,
-      bodyDamage: 180, headDamage: 420, maxRange: 170, pellets: 1, hipfireSpread: 0.32, adsSpread: 0, adsFovDeg: 24, adsMaxRange: 170,
+      name: 'Sniper', displayName: 'Sniper', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 2000, reloadMs: 2200, magazineSize: 1,
+      bodyDamage: 220, headDamage: 515, maxRange: 170, pellets: 1, hipfireSpread: 0.32, adsSpread: 0, adsFovDeg: 17.5, adsMaxRange: 170,
       moveSpeedMultiplier: 0.85, adsMoveMultiplier: 0.6,
       falloff: { start: 9999, end: 10000, minScalar: 1.0 },
       aimProfile: { hipfire: { spread: 0.32, maxRange: 170 }, ads: { spread: 0, maxRange: 170 } }, infiniteRange: true,
@@ -358,7 +372,7 @@ export const gameplayTuning = {
           roll: 0.007,
           armR: 0.3,
           armL: 0.12,
-          muzzleMs: 90,
+          muzzleMs: 35,
           pitchKickScale: 1.65,
           yawKickScale: 1.05,
           rollKickScale: 1.20,

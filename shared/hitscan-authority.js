@@ -158,6 +158,14 @@ function resolveViewFovDeg(weaponStats, viewFovDeg) {
 }
 
 export function sampleSpreadOffset(weaponStats, adsActive, pelletIndex, shotToken) {
+  const pattern = weaponStats && Array.isArray(weaponStats.pelletPattern) ? weaponStats.pelletPattern : null;
+  if (pattern && pattern.length) {
+    const entry = pattern[Math.abs(Math.trunc(Number(pelletIndex || 0))) % pattern.length] || {};
+    return {
+      x: Number(entry.x || 0) / DEFAULT_ASPECT,
+      y: Number(entry.y || 0)
+    };
+  }
   const aim = resolveWeaponAimProfile(weaponStats, adsActive);
   const spread = Math.max(0, Number(aim && aim.spread || 0));
   if (spread <= 0.00001) return { x: 0, y: 0 };

@@ -70,7 +70,9 @@ test('shared pistol tuning now uses the normal single-ray hitscan values', () =>
   assert.equal(pistol.primitiveType, 'hitscan_single');
   assert.equal(pistol.pellets, 1);
   assert.ok(Math.abs(hitAreaAtDistance(pistol.hipfireSpread, 75, 24) - 11.76) < 0.1);
-  assert.ok(Math.abs(hitAreaAtDistance(pistol.adsSpread, pistol.adsFovDeg, 24) - 5.64) < 0.1);
+  // ADS no longer zooms the pistol (HYTOPIA-style sidearm, scopeZoom 1),
+  // so the ADS hit area matches hipfire.
+  assert.ok(Math.abs(hitAreaAtDistance(pistol.adsSpread, pistol.adsFovDeg, 24) - 11.76) < 0.1);
 });
 
 test('hitscan view FOV clamps to the weapon zoom range', () => {
