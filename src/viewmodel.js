@@ -10,14 +10,19 @@ const HOLD_POSITION = { x: 0.3, y: -0.24, z: -0.38 };
 const DEG = Math.PI / 180;
 const SKIN_COLOR = 0xd2a77d;
 
-// Per-weapon view tuning: target on-screen barrel length and optional hold
-// offsets relative to HOLD_POSITION.
+// Per-weapon view tuning: target on-screen barrel length, optional hold
+// offsets relative to HOLD_POSITION, muzzle flash size, and the fire
+// action (pump/bolt/slide motion played after the recoil kick).
 const VIEW_TUNING = {
-  machinegun: { length: 0.88 },
-  shotgun: { length: 0.82 },
-  sniper: { length: 1.05, dy: 0.02 },
-  pistol: { length: 0.42, dy: 0.02, dx: -0.02 }
+  machinegun: { length: 0.88, flash: 0.5 },
+  shotgun: { length: 0.82, flash: 0.75, action: { type: 'pump', delayMs: 220, durationMs: 320 } },
+  sniper: { length: 1.05, dy: 0.02, flash: 0.6, action: { type: 'bolt', delayMs: 200, durationMs: 420 } },
+  pistol: { length: 0.42, dy: 0.02, dx: -0.02, flash: 0.4, action: { type: 'slide', delayMs: 0, durationMs: 110 } }
 };
+
+const SWAY_LOOK_SCALE = 0.045;
+const SWAY_RETURN_SPEED = 9;
+const SWAY_MAX = 0.07;
 
 function buildArms(weaponId, gunLength) {
   // Classic Minecraft first-person arm: one chunky arm running from the gun
@@ -80,13 +85,24 @@ export function createViewmodel(camera) {
   let currentModel = null;
   let loadToken = 0;
   let holdOffset = { x: 0, y: 0, z: 0 };
+  let currentTuning = VIEW_TUNING.machinegun;
 
   let bobPhase = 0;
   let recoil = 0;
+  let recoilSnap = 0;
   let switchDip = 0;
   let reloadTimer = 0;
   let reloadDuration = 0;
   let flashTimer = 0;
+
+  // Look sway: the gun lags behind quick camera turns and springs back.
+  let swayX = 0;
+  let swayY = 0;
+  // Landing dip.
+  let wasGrounded = true;
+  let landDip = 0;
+  // Per-weapon fire action (pump/bolt/slide) timeline, in seconds.
+  let actionClock = -1;
 
   function setModel(object) {
     if (currentModel) {
@@ -104,8 +120,11 @@ export function createViewmodel(camera) {
       reloadTimer = 0;
 
       const tuning = VIEW_TUNING[weaponId] || VIEW_TUNING.machinegun;
+      currentTuning = tuning;
+      actionClock = -1;
       holdOffset = { x: tuning.dx || 0, y: tuning.dy || 0, z: tuning.dz || 0 };
       muzzleAnchor.position.set(0, 0.02, -tuning.length - 0.03);
+      flash.scale.setScalar(tuning.flash || 0.5);
       setArms(weaponId, tuning.length);
 
       const token = ++loadToken;
@@ -116,10 +135,17 @@ export function createViewmodel(camera) {
     },
 
     kick(strength = 1) {
-      recoil = Math.min(1.6, recoil + 0.55 * strength);
+      recoil = Math.min(1.8, recoil + 0.7 * strength);
+      recoilSnap = 1; // instant rotational snap that decays fast
       flashTimer = 0.035; // HYTOPIA-style quick muzzle blink
       flash.material.opacity = 1;
       flash.material.rotation = Math.random() * Math.PI;
+      if (currentTuning.action) actionClock = 0;
+    },
+
+    onLook(dx, dy) {
+      swayX = Math.max(-SWAY_MAX, Math.min(SWAY_MAX, swayX - dx * 0.0001));
+      swayY = Math.max(-SWAY_MAX, Math.min(SWAY_MAX, swayY - dy * 0.0001));
     },
 
     startReload(durationMs) {
@@ -141,7 +167,18 @@ export function createViewmodel(camera) {
       const bobX = Math.sin(bobPhase) * 0.012 * speedNorm;
       const bobY = Math.abs(Math.cos(bobPhase)) * 0.016 * speedNorm;
 
-      recoil = Math.max(0, recoil - dt * 6);
+      // Landing dip on grounded transition.
+      if (player.entity.isGrounded && !wasGrounded) landDip = 1;
+      wasGrounded = player.entity.isGrounded;
+      landDip = Math.max(0, landDip - dt * 5);
+
+      // Look sway springs back to center.
+      const swayDecay = Math.min(1, dt * SWAY_RETURN_SPEED);
+      swayX -= swayX * swayDecay;
+      swayY -= swayY * swayDecay;
+
+      recoil = Math.max(0, recoil - dt * 5);
+      recoilSnap = Math.max(0, recoilSnap - dt * 14);
       switchDip = Math.max(0, switchDip - dt * 4);
       if (reloadTimer > 0) reloadTimer = Math.max(0, reloadTimer - dt);
 
@@ -151,12 +188,45 @@ export function createViewmodel(camera) {
         reloadAngle = Math.sin(Math.min(1, progress) * Math.PI) * 0.7;
       }
 
+      // Per-weapon fire action: pump/bolt/slide motion on the gun itself.
+      let actionZ = 0;
+      let actionRoll = 0;
+      let actionPitch = 0;
+      const action = currentTuning.action;
+      if (action && actionClock >= 0) {
+        actionClock += dt;
+        const start = action.delayMs / 1000;
+        const span = action.durationMs / 1000;
+        const phase = (actionClock - start) / span;
+        if (phase >= 1) {
+          actionClock = -1;
+        } else if (phase > 0) {
+          const pulse = Math.sin(phase * Math.PI);
+          if (action.type === 'pump') {
+            actionZ = pulse * 0.09;
+            actionPitch = pulse * 0.06;
+          } else if (action.type === 'bolt') {
+            actionRoll = pulse * 0.3;
+            actionZ = pulse * 0.05;
+          } else if (action.type === 'slide') {
+            actionZ = pulse * 0.05;
+            actionPitch = pulse * 0.12;
+          }
+        }
+      }
+
       holder.position.set(
-        HOLD_POSITION.x + holdOffset.x + bobX,
-        HOLD_POSITION.y + holdOffset.y - bobY - switchDip * 0.35,
-        HOLD_POSITION.z + holdOffset.z + recoil * 0.06
+        HOLD_POSITION.x + holdOffset.x + bobX + swayX * 0.6,
+        HOLD_POSITION.y + holdOffset.y - bobY - switchDip * 0.35
+          - landDip * 0.07 + swayY * 0.5,
+        HOLD_POSITION.z + holdOffset.z + recoil * 0.07 + actionZ
       );
-      holder.rotation.x = recoil * 0.05 + reloadAngle * -0.8;
+      holder.rotation.set(
+        recoil * 0.04 + recoilSnap * 0.05 + reloadAngle * -0.8
+          + swayY * 1.4 - landDip * 0.06 + actionPitch,
+        6 * DEG + swayX * 1.6,
+        swayX * 0.8 + actionRoll
+      );
     },
 
     updateEffects(dt) {

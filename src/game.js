@@ -29,6 +29,7 @@ import { createNet } from './net.js';
 import { createHud } from './hud.js';
 import { createGunModel } from './gun-models.js';
 import { audio } from './audio.js';
+import { sfx } from './sfx.js';
 import { PLAYER_MAX_HP, RESPAWN_DELAY_MS, STATE_SEND_HZ } from '../shared/combat.js';
 
 const THREE = globalThis.THREE;
@@ -206,6 +207,7 @@ net.on('welcome', (msg) => {
   hud.setScores(msg.scores, state.selfId);
   input.requestPointerLock();
   audio.unlock();
+  sfx.unlock();
 });
 
 net.on('join', (msg) => {
@@ -234,13 +236,17 @@ net.on('damage', (msg) => {
   state.hp = msg.hp;
   hud.setHp(state.hp);
   hud.damageFlash();
-  audio.play('hurt', 0.5, audio.hurtPitch());
+  sfx.hurt(audio.hurtPitch());
 });
 
 net.on('hit_confirm', (msg) => {
   hud.hitmarker(msg.head);
+  if (msg.head) sfx.headshot();
+  else sfx.hitmarker();
   remotes.setHp(msg.target, msg.hp);
   remotes.damageFeedback(msg.target, player.entity);
+  const headPos = remotes.headPosition(msg.target);
+  if (headPos) remotes.effects.addDamageNumber(headPos, msg.amount, msg.head);
 });
 
 net.on('death', (msg) => {
@@ -257,7 +263,10 @@ net.on('death', (msg) => {
     input.releasePointerLock();
   } else {
     remotes.onDeath(msg.id);
-    if (msg.by === state.selfId) hud.toast('You eliminated ' + victimName + '!');
+    if (msg.by === state.selfId) {
+      sfx.kill();
+      hud.toast('You eliminated ' + victimName + '!');
+    }
   }
 });
 
@@ -288,6 +297,7 @@ net.on('disconnect', () => {
 input.onLook((dx, dy) => {
   if (state.mode !== 'playing') return;
   player.look(dx, dy);
+  viewmodel.onLook(dx, dy);
 });
 
 input.onFireDown(() => {

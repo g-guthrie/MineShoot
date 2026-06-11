@@ -27,6 +27,35 @@ export function createEffects(scene) {
     live.push({ object: puff, age: 0, ttl: 0.18, fade: true, grow: 6 });
   }
 
+  function addDamageNumber(point, amount, head) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.font = `bold ${head ? 44 : 36}px Trebuchet MS, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.fillStyle = head ? '#ff5252' : '#ffd35c';
+    ctx.strokeText(String(amount), 64, 32);
+    ctx.fillText(String(amount), 64, 32);
+    const texture = new THREE.CanvasTexture(canvas);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false
+    }));
+    sprite.scale.set(0.9, 0.45, 1);
+    sprite.position.set(
+      point.x + (Math.random() - 0.5) * 0.3,
+      point.y + 0.25,
+      point.z + (Math.random() - 0.5) * 0.3
+    );
+    scene.add(sprite);
+    live.push({ object: sprite, age: 0, ttl: 0.7, fade: true, rise: 1.1 });
+  }
+
   function update(dt) {
     for (let i = live.length - 1; i >= 0; i--) {
       const fx = live[i];
@@ -39,6 +68,9 @@ export function createEffects(scene) {
         const scale = 1 + fx.age * fx.grow;
         fx.object.scale.set(scale, scale, scale);
       }
+      if (fx.rise) {
+        fx.object.position.y += fx.rise * dt;
+      }
       if (fx.age >= fx.ttl) {
         scene.remove(fx.object);
         if (fx.object.geometry) fx.object.geometry.dispose();
@@ -48,5 +80,5 @@ export function createEffects(scene) {
     }
   }
 
-  return { addTracer, addImpact, update };
+  return { addTracer, addImpact, addDamageNumber, update };
 }

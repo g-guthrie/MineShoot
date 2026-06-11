@@ -9,8 +9,9 @@ import { createGunModel } from './gun-models.js';
 import { audio } from './audio.js';
 
 const THREE = globalThis.THREE;
-const INTERP_DELAY_MS = 120;
-const BUFFER_LIMIT = 30;
+const INTERP_DELAY_MS = 100;
+const EXTRAPOLATION_MS = 120;
+const BUFFER_LIMIT = 40;
 const DEATH_FALL_SECONDS = 0.85;
 
 // How long each weapon should be in an avatar's hands, in world units
@@ -168,7 +169,19 @@ export function createRemotes(scene) {
       return;
     }
     if (renderAtMs >= buffer[buffer.length - 1].at) {
-      Object.assign(record.display, buffer[buffer.length - 1].state);
+      // Buffer underrun: extrapolate briefly along the last velocity so
+      // remotes glide instead of stalling between late snapshots.
+      const newest = buffer[buffer.length - 1];
+      Object.assign(record.display, newest.state);
+      if (buffer.length >= 2) {
+        const prev = buffer[buffer.length - 2];
+        const span = Math.max(1, newest.at - prev.at);
+        const ahead = Math.min(EXTRAPOLATION_MS, renderAtMs - newest.at);
+        const k = ahead / span;
+        record.display.x += (newest.state.x - prev.state.x) * k;
+        record.display.y += (newest.state.y - prev.state.y) * k;
+        record.display.z += (newest.state.z - prev.state.z) * k;
+      }
       return;
     }
     let older = buffer[0];
@@ -232,6 +245,17 @@ export function createRemotes(scene) {
     setHp(id, hp) {
       const record = players.get(id);
       if (record) record.hp = hp;
+    },
+
+    /** World position of a remote's head, for floating damage numbers. */
+    headPosition(id) {
+      const record = players.get(id);
+      if (!record) return null;
+      return {
+        x: record.display.x,
+        y: record.display.y - EYE_HEIGHT + 2.6,
+        z: record.display.z
+      };
     },
 
     /** 100ms red tint flash + positional pitched hurt audio on the victim. */

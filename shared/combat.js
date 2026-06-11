@@ -81,7 +81,7 @@ export const BLOCKS = {
 
 export const PLAYER_MAX_HP = 100;
 export const RESPAWN_DELAY_MS = 2500;
-export const SNAPSHOT_HZ = 15;
+export const SNAPSHOT_HZ = 20;
 export const STATE_SEND_HZ = 20;
 
 export function weaponOrDefault(weaponId) {
