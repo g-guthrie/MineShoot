@@ -745,8 +745,14 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     setTimeout(() => {
       if (!this.isSpawned) return;
 
-      if (this.position.y < -100 && !this._dead) {
-        this.takeDamage(MAX_HEALTH + MAX_SHIELD, { x: 0, y: 0, z: -1 });
+      try {
+        if (this.position.y < -100 && !this._dead) {
+          this.takeDamage(MAX_HEALTH + MAX_SHIELD, { x: 0, y: 0, z: -1 });
+        }
+      } catch {
+        // Physics body tore down between the isSpawned check and the
+        // position read (despawn race); stop ticking for this entity.
+        return;
       }
 
       this._outOfWorldTicker();

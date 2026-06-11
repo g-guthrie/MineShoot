@@ -9,3 +9,5 @@ test-results/
 tmp-e2e/
 hytopia-game/node_modules/
 hytopia-game/dev/persistence/
+hytopia-client/node_modules/
+hytopia-game/tmp-e2e/

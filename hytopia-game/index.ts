@@ -1,3 +1,12 @@
+// Game servers should survive stray entity races instead of dying mid
+// match; log and continue.
+process.on('uncaughtException', (err) => {
+  console.error('[keepalive] uncaught exception:', err?.stack || err);
+});
+process.on('unhandledRejection', (err) => {
+  console.error('[keepalive] unhandled rejection:', err);
+});
+
 // Some sandboxes (and a few hosts) have no IPv6; the SDK's web server
 // calls listen(port) which defaults to "::". Force IPv4 in that case.
 // Harmless elsewhere.

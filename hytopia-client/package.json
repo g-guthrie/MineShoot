@@ -1,0 +1,35 @@
+{
+  "name": "client",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "docs:hytopia": "npm run docs:hytopia:declaration && npm run docs:hytopia:extractor && npm run docs:hytopia:generate",
+    "docs:hytopia:declaration": "tsc --declaration --emitDeclarationOnly --noEmit false --outDir build || true",
+    "docs:hytopia:extractor": "npx api-extractor run --local || true",
+    "docs:hytopia:generate": "npx api-documenter markdown --input-folder=./temp --output-folder ../sdk/client-docs"
+  },
+  "devDependencies": {
+    "@microsoft/api-documenter": "^7.25.21",
+    "@microsoft/api-extractor": "^7.47.11",
+    "@types/mixpanel-browser": "^2.54.0",
+    "@types/three": "^0.167.2",
+    "typescript": "^5.5.3",
+    "vite": "^5.4.1"
+  },
+  "dependencies": {
+    "@hytopia.com/lib": "^0.0.113",
+    "@hytopia.com/server-protocol": "^1.4.56",
+    "@hytopia.com/translations": "^1.0.13",
+    "@msgpack/msgpack": "^3.1.1",
+    "fflate": "^0.8.2",
+    "is-mobile": "^5.0.0",
+    "msgpackr": "^1.11.4",
+    "nipplejs": "^0.10.2",
+    "obscenity": "^0.4.3",
+    "three": "^0.167.1"
+  }
+}
