@@ -103,6 +103,10 @@ export function createViewmodel(camera) {
   let landDip = 0;
   // Per-weapon fire action (pump/bolt/slide) timeline, in seconds.
   let actionClock = -1;
+  // ADS blend: 0 = hip, 1 = aimed (gun centered under the crosshair).
+  let adsTarget = 0;
+  let adsBlend = 0;
+  let scoped = false;
 
   function setModel(object) {
     if (currentModel) {
@@ -146,6 +150,16 @@ export function createViewmodel(camera) {
     onLook(dx, dy) {
       swayX = Math.max(-SWAY_MAX, Math.min(SWAY_MAX, swayX - dx * 0.0001));
       swayY = Math.max(-SWAY_MAX, Math.min(SWAY_MAX, swayY - dy * 0.0001));
+    },
+
+    setAds(active) {
+      adsTarget = active ? 1 : 0;
+    },
+
+    /** Fully hides the viewmodel (sniper scope view). */
+    setScoped(active) {
+      scoped = !!active;
+      holder.visible = !scoped;
     },
 
     startReload(durationMs) {
@@ -215,17 +229,25 @@ export function createViewmodel(camera) {
         }
       }
 
+      // ADS blends the hold toward screen center and damps bob/sway.
+      adsBlend += (adsTarget - adsBlend) * Math.min(1, dt * 12);
+      const ads = adsBlend;
+      const damp = 1 - ads * 0.7;
+
+      const baseX = HOLD_POSITION.x * (1 - ads) + 0.0 * ads;
+      const baseY = (HOLD_POSITION.y + holdOffset.y) * (1 - ads) + -0.16 * ads;
+      const baseZ = (HOLD_POSITION.z + holdOffset.z) * (1 - ads) + -0.32 * ads;
+
       holder.position.set(
-        HOLD_POSITION.x + holdOffset.x + bobX + swayX * 0.6,
-        HOLD_POSITION.y + holdOffset.y - bobY - switchDip * 0.35
-          - landDip * 0.07 + swayY * 0.5,
-        HOLD_POSITION.z + holdOffset.z + recoil * 0.07 + actionZ
+        baseX + (holdOffset.x + bobX + swayX * 0.6) * damp,
+        baseY + (-bobY - switchDip * 0.35 - landDip * 0.07 + swayY * 0.5) * damp,
+        baseZ + recoil * 0.07 + actionZ
       );
       holder.rotation.set(
         recoil * 0.04 + recoilSnap * 0.05 + reloadAngle * -0.8
-          + swayY * 1.4 - landDip * 0.06 + actionPitch,
-        6 * DEG + swayX * 1.6,
-        swayX * 0.8 + actionRoll
+          + (swayY * 1.4 - landDip * 0.06) * damp + actionPitch,
+        (6 * DEG) * (1 - ads) + swayX * 1.6 * damp,
+        swayX * 0.8 * damp + actionRoll
       );
     },
 

@@ -14,6 +14,8 @@ export const WEAPONS = {
     reloadMs: 1800,
     auto: true,
     spreadDeg: 1.1,
+    adsSpreadDeg: 0.35,
+    adsFovDeg: 55,
     sound: 'rifle'
   },
   shotgun: {
@@ -27,6 +29,8 @@ export const WEAPONS = {
     reloadMs: 2200,
     auto: false,
     spreadDeg: 5.5,
+    adsSpreadDeg: 4.2,
+    adsFovDeg: 60,
     // Deterministic center + ring pattern (fractions of spreadDeg),
     // adapted from the MIT-licensed HYTOPIA example games.
     pelletPattern: [
@@ -50,7 +54,10 @@ export const WEAPONS = {
     magSize: 5,
     reloadMs: 2400,
     auto: false,
-    spreadDeg: 0.05,
+    spreadDeg: 2.4,
+    adsSpreadDeg: 0,
+    adsFovDeg: 16,
+    scope: true,
     sound: 'sniper'
   },
   pistol: {
@@ -64,6 +71,8 @@ export const WEAPONS = {
     reloadMs: 1400,
     auto: false,
     spreadDeg: 0.6,
+    adsSpreadDeg: 0.2,
+    adsFovDeg: 58,
     sound: 'pistol'
   }
 };

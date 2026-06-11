@@ -150,6 +150,25 @@
     font-size: 14px; opacity: 0; transition: opacity 0.3s;
   }
 
+  /* Sniper scope: black screen with a circular viewport + hairlines. */
+  #scope { position: absolute; inset: 0; display: none; }
+  #scope .hole {
+    position: absolute; left: 50%; top: 50%;
+    width: min(78vh, 78vw); height: min(78vh, 78vw);
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    box-shadow: 0 0 0 200vmax #000, inset 0 0 60px rgba(0,0,0,0.95);
+  }
+  #scope .hairline-h, #scope .hairline-v {
+    position: absolute; left: 50%; top: 50%; background: rgba(0,0,0,0.9);
+  }
+  #scope .hairline-h { width: min(78vh, 78vw); height: 2px; transform: translate(-50%, -50%); }
+  #scope .hairline-v { height: min(78vh, 78vw); width: 2px; transform: translate(-50%, -50%); }
+  #scope .dot {
+    position: absolute; left: 50%; top: 50%; width: 6px; height: 6px;
+    background: #ff3b30; border-radius: 50%; transform: translate(-50%, -50%);
+  }
+
   #pause-hint {
     position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
     background: rgba(8,12,20,0.6); z-index: 25; color: #fff; font-size: 20px;
@@ -167,8 +186,8 @@
     <button id="play-btn">PLAY</button>
     <div id="menu-status"></div>
     <div class="controls">
-      <b>WASD</b> move &nbsp; <b>Shift</b> sprint &nbsp; <b>Space</b> jump &nbsp; <b>Mouse</b> aim/shoot<br>
-      <b>Right-click</b> place block &nbsp; <b>1-4</b> / <b>wheel</b> weapons &nbsp; <b>R</b> reload &nbsp; <b>Tab</b> scores
+      <b>WASD</b> move &nbsp; <b>Shift</b> sprint &nbsp; <b>Space</b> jump &nbsp; <b>Click</b> shoot &nbsp; <b>Right-click</b> aim<br>
+      <b>Q</b> place block &nbsp; <b>1-4</b> / <b>wheel</b> weapons &nbsp; <b>R</b> reload &nbsp; <b>Tab</b> scores
     </div>
   </div>
 
@@ -179,6 +198,12 @@
 
   <div id="hud">
     <div id="damage-vignette"></div>
+    <div id="scope">
+      <div class="hole"></div>
+      <div class="hairline-h"></div>
+      <div class="hairline-v"></div>
+      <div class="dot"></div>
+    </div>
     <div id="crosshair"></div>
     <div id="hitmarker"></div>
     <div id="vitals">

@@ -294,11 +294,44 @@ net.on('disconnect', () => {
 // Input wiring
 // ---------------------------------------------------------------------------
 
+const BASE_FOV = 75;
+let scopeShown = false;
+
 input.onLook((dx, dy) => {
   if (state.mode !== 'playing') return;
-  player.look(dx, dy);
+  // Scale sensitivity with zoom so scoped aiming stays controllable.
+  const zoomScale = camera.fov / BASE_FOV;
+  player.look(dx * zoomScale, dy * zoomScale);
   viewmodel.onLook(dx, dy);
 });
+
+input.onAds((active) => {
+  if (state.mode !== 'playing') {
+    weapons.setAds(false);
+    viewmodel.setAds(false);
+    return;
+  }
+  weapons.setAds(active);
+  viewmodel.setAds(active);
+});
+
+function updateAds(dt) {
+  const w = weapons.currentWeapon();
+  const aiming = weapons.isAds() && state.mode === 'playing';
+  const targetFov = aiming && w.adsFovDeg ? w.adsFovDeg : BASE_FOV;
+  const next = camera.fov + (targetFov - camera.fov) * Math.min(1, dt * 12);
+  if (Math.abs(next - camera.fov) > 0.01) {
+    camera.fov = next;
+    camera.updateProjectionMatrix();
+  }
+  // Sniper scope overlay kicks in once the zoom is mostly there.
+  const wantScope = !!(aiming && w.scope && camera.fov < BASE_FOV * 0.55);
+  if (wantScope !== scopeShown) {
+    scopeShown = wantScope;
+    hud.setScope(wantScope);
+    viewmodel.setScoped(wantScope);
+  }
+}
 
 input.onFireDown(() => {
   if (state.mode !== 'playing' || !input.isLocked()) return;
@@ -394,6 +427,7 @@ function frame(nowMs) {
       weapons.update(dt, input.isFireHeld());
       viewmodel.update(dt, player);
       weapons.updateGhost();
+      updateAds(dt);
     } else if (state.mode === 'dead') {
       const waited = performance.now() - state.diedAt;
       hud.deathCountdown(Math.max(0, RESPAWN_DELAY_MS - waited));

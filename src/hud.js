@@ -23,6 +23,8 @@ export function createHud() {
   const deathBy = el('death-by');
   const deathHint = el('death-hint');
   const toastEl = el('toast');
+  const scopeEl = el('scope');
+  const crosshairEl = el('crosshair');
 
   let hitmarkerTimer = null;
   let vignetteTimer = null;
@@ -89,6 +91,11 @@ export function createHud() {
 
     toggleScoreboard(shown) {
       scoreboard.style.display = shown ? 'block' : 'none';
+    },
+
+    setScope(shown) {
+      scopeEl.style.display = shown ? 'block' : 'none';
+      crosshairEl.style.display = shown ? 'none' : 'block';
     },
 
     hitmarker(head) {

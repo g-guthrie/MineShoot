@@ -21,6 +21,7 @@ export function createInput({ canvas }) {
   let weaponHandler = null;
   let reloadHandler = null;
   let scoreboardHandler = null;
+  let adsHandler = null;
 
   const KEY_MAP = {
     KeyW: 'forward',
@@ -46,6 +47,10 @@ export function createInput({ canvas }) {
     }
     if (event.code === 'KeyR' && reloadHandler) {
       reloadHandler();
+      return;
+    }
+    if (event.code === 'KeyQ' && placeHandler && locked) {
+      placeHandler();
       return;
     }
     if (event.code.startsWith('Digit') && weaponHandler) {
@@ -75,7 +80,9 @@ export function createInput({ canvas }) {
     locked = document.pointerLockElement === canvas;
     if (!locked) {
       fireHeld = false;
+      movement.adsActive = false;
       if (fireUpHandler) fireUpHandler();
+      if (adsHandler) adsHandler(false);
     }
   });
 
@@ -93,7 +100,8 @@ export function createInput({ canvas }) {
       fireHeld = true;
       if (fireDownHandler) fireDownHandler();
     } else if (event.button === 2) {
-      if (placeHandler) placeHandler();
+      movement.adsActive = true;
+      if (adsHandler) adsHandler(true);
     }
   });
 
@@ -101,6 +109,9 @@ export function createInput({ canvas }) {
     if (event.button === 0) {
       fireHeld = false;
       if (fireUpHandler) fireUpHandler();
+    } else if (event.button === 2) {
+      movement.adsActive = false;
+      if (adsHandler) adsHandler(false);
     }
   });
 
@@ -127,6 +138,7 @@ export function createInput({ canvas }) {
     onPlaceBlock: (fn) => { placeHandler = fn; },
     onWeaponSelect: (fn) => { weaponHandler = fn; },
     onReload: (fn) => { reloadHandler = fn; },
-    onScoreboard: (fn) => { scoreboardHandler = fn; }
+    onScoreboard: (fn) => { scoreboardHandler = fn; },
+    onAds: (fn) => { adsHandler = fn; }
   };
 }

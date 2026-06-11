@@ -83,6 +83,7 @@ export function createWeapons({ camera, scene, player, blocks, remotes, viewmode
     lastFireAt: 0
   }));
   let currentSlot = 0;
+  let adsActive = false;
 
   hud.setWeapon(slots[0].id);
   hud.setAmmo(slots[0].ammo, false);
@@ -226,9 +227,10 @@ export function createWeapons({ camera, scene, player, blocks, remotes, viewmode
     const playerHits = new Map(); // id -> { pellets, head }
     const blockHits = new Map();  // key -> count
     let firstPoint = null;
+    const spread = adsActive && w.adsSpreadDeg != null ? w.adsSpreadDeg : w.spreadDeg;
 
     for (let p = 0; p < w.pellets; p++) {
-      const dir = rayDir(w.spreadDeg, p, w.pelletPattern);
+      const dir = rayDir(spread, p, w.pelletPattern);
       const result = resolveShot(origin, dir, w.range);
       if (!firstPoint) firstPoint = result.point;
 
@@ -328,7 +330,13 @@ export function createWeapons({ camera, scene, player, blocks, remotes, viewmode
 
   return {
     currentId: () => slot().id,
+    currentWeapon: () => weapon(),
     isReloading,
+
+    setAds(active) {
+      adsActive = !!active;
+    },
+    isAds: () => adsActive,
 
     selectSlot(which) {
       let next = currentSlot;
