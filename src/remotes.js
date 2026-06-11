@@ -1,47 +1,29 @@
 /**
- * remotes.js - Other players, rendered with the classic blocky avatar rig
- * and interpolated between server snapshots.
+ * remotes.js - Other players: keyframe-animated toon characters (CC0
+ * Quaternius kit) interpolated between server snapshots, with an
+ * animation state machine over the clip set (idle/walk/run/shoot/jump/
+ * land/death).
  */
 import { EYE_HEIGHT } from '../shared/entity-constants.js';
 import { WEAPONS, weaponOrDefault } from '../shared/combat.js';
 import { createEffects } from './effects.js';
-import { createGunModel } from './gun-models.js';
+import { createCharacter } from './character.js';
 import { audio } from './audio.js';
 
 const THREE = globalThis.THREE;
 const INTERP_DELAY_MS = 100;
 const EXTRAPOLATION_MS = 120;
 const BUFFER_LIMIT = 40;
-const DEATH_FALL_SECONDS = 0.85;
+const DEATH_LINGER_SECONDS = 1.6;
+const RECENT_FIRE_MS = 450;
 
-// How long each weapon should be in an avatar's hands, in world units
-// (the avatar is ~2.5 units tall, so a rifle spans roughly half its height,
-// like Minecraft gun mods).
-const AVATAR_GUN_LENGTH = {
-  machinegun: 1.05,
-  shotgun: 1.0,
-  sniper: 1.3,
-  pistol: 0.5
-};
+// Per-player outfit tints, deterministic by id.
+const TINTS = [0x3aa655, 0x4a7fc1, 0xc14a4a, 0xc1a04a, 0x8e4ac1, 0x4ac1b4, 0xd4742c, 0x97a2ad];
 
-const PROCEDURAL_GUN_PARTS = ['gunBody', 'gunBarrel', 'gunStock', 'gunGrip', 'scope', 'pump', 'coil'];
-
-// Minecraft-ish skin palette; deterministic per player id.
-const SKINS = [
-  { body: 0x3aa655, leg: 0x365426 }, // creeper green
-  { body: 0x4a7fc1, leg: 0x2d3a56 }, // steve blue
-  { body: 0xc14a4a, leg: 0x4a2323 },
-  { body: 0xc1a04a, leg: 0x564a23 },
-  { body: 0x8e4ac1, leg: 0x3d2356 },
-  { body: 0x4ac1b4, leg: 0x235650 },
-  { body: 0xd4742c, leg: 0x5e3413 },
-  { body: 0x97a2ad, leg: 0x3d4248 }
-];
-
-function skinFor(id) {
+function tintFor(id) {
   let hash = 0;
   for (const ch of String(id)) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
-  return SKINS[Math.abs(hash) % SKINS.length];
+  return TINTS[Math.abs(hash) % TINTS.length];
 }
 
 function makeNameSprite(name) {
@@ -71,64 +53,27 @@ function lerpAngle(a, b, t) {
 }
 
 export function createRemotes(scene) {
-  const GameAvatarRig = globalThis.__MAYHEM_RUNTIME.GameAvatarRig;
   const effects = createEffects(scene);
   const players = new Map(); // id -> remote record
   let localEntityRef = null;
-
-  /**
-   * Replaces the rig's procedural box gun with the real textured model,
-   * grip-aligned to the hand mount.
-   */
-  function attachGunModel(record, weaponId) {
-    const rig = record.avatar.rig;
-    for (const part of PROCEDURAL_GUN_PARTS) {
-      if (rig[part]) rig[part].visible = false;
-    }
-    const token = (record.gunToken = (record.gunToken || 0) + 1);
-    createGunModel(weaponId, AVATAR_GUN_LENGTH[weaponId] || 1, 0.75).then((model) => {
-      if (record.gunToken !== token || record.removed) return;
-      if (record.gunModel) rig.gun.remove(record.gunModel);
-      // Seat the grip into the palm rather than floating at the mount origin.
-      model.position.set(0, -0.03, 0.08);
-      record.gunModel = model;
-      rig.gun.add(model);
-    }).catch(() => {});
-  }
+  const scratch = new THREE.Vector3();
 
   function createRecord(p) {
-    const skin = skinFor(p.id);
-    const avatar = GameAvatarRig.create({
-      bodyColor: skin.body,
-      legColor: skin.leg
-    });
-    avatar.root.traverse((node) => {
-      if (node.isMesh) {
-        node.castShadow = true;
-      }
-    });
-    avatar.setWeapon(weaponOrDefault(p.weapon));
-
+    const root = new THREE.Group();
     const nameSprite = makeNameSprite(p.name || '?');
     nameSprite.position.set(0, 3.15, 0);
-    avatar.root.add(nameSprite);
+    root.add(nameSprite);
+    scene.add(root);
 
-    scene.add(avatar.root);
-
-    const rig = avatar.rig;
     const record = {
       id: p.id,
       name: p.name || '?',
-      avatar,
-      flashMaterials: [
-        rig.bodyMesh.material,
-        rig.headMesh.material,
-        rig.armLMesh.material,
-        rig.legLMesh.material
-      ],
+      root,
+      char: null,
       flashUntil: 0,
       flashActive: false,
       lastHurtAudioAt: 0,
+      lastFireAt: 0,
       alive: p.alive !== false,
       hp: p.hp,
       weapon: weaponOrDefault(p.weapon),
@@ -140,24 +85,33 @@ export function createRemotes(scene) {
       },
       lastDisplay: { x: p.x, y: p.y, z: p.z },
       worldSpeed: 0,
-      lateralLean: 0,
       wasAirborne: false,
-      landSquash: 0,
+      landingUntil: 0,
       dying: 0,
-      gunModel: null,
-      gunToken: 0,
       removed: false
     };
-    avatar.root.visible = record.alive;
-    attachGunModel(record, record.weapon);
+    root.visible = record.alive;
     placeAvatar(record);
+
+    createCharacter(tintFor(p.id)).then((char) => {
+      if (record.removed) {
+        char.dispose();
+        return;
+      }
+      record.char = char;
+      char.play('Idle', 0);
+      root.add(char.root);
+    }).catch((err) => {
+      console.error('character load failed', err);
+    });
+
     return record;
   }
 
   function placeAvatar(record) {
     const d = record.display;
-    record.avatar.root.position.set(d.x, d.y - EYE_HEIGHT, d.z);
-    record.avatar.root.rotation.y = d.yaw;
+    record.root.position.set(d.x, d.y - EYE_HEIGHT, d.z);
+    record.root.rotation.y = d.yaw + Math.PI; // model faces +Z
   }
 
   function interpolate(record, renderAtMs) {
@@ -209,12 +163,44 @@ export function createRemotes(scene) {
   }
 
   function applyDamageFlash(record, nowMs) {
+    if (!record.char) return;
     const shouldFlash = nowMs < record.flashUntil;
     if (shouldFlash === record.flashActive) return;
     record.flashActive = shouldFlash;
-    for (const material of record.flashMaterials) {
-      material.emissive.setHex(shouldFlash ? 0x9b1f1f : 0x000000);
+    for (const material of record.char.materials) {
+      if (material.emissive) material.emissive.setHex(shouldFlash ? 0x9b1f1f : 0x000000);
     }
+  }
+
+  /** Picks the right clip for the current movement/combat state. */
+  function chooseAnimation(record, nowMs) {
+    const anim = record.display.anim || {};
+    const airborne = !!anim.airborne;
+    const shooting = !!anim.ads || nowMs - record.lastFireAt < RECENT_FIRE_MS;
+    const speed = record.worldSpeed;
+
+    // One-shot transitions for takeoff and landing.
+    if (airborne && !record.wasAirborne) {
+      record.wasAirborne = true;
+      return 'Jump';
+    }
+    if (!airborne && record.wasAirborne) {
+      record.wasAirborne = false;
+      record.landingUntil = nowMs + 200;
+      return 'Jump_Land';
+    }
+    record.wasAirborne = airborne;
+
+    if (airborne) {
+      // Let the takeoff clip finish before settling into the air loop.
+      return record.char.currentAnimation() === 'Jump' && record.char.isPlayingOneShot()
+        ? 'Jump'
+        : 'Jump_Idle';
+    }
+    if (nowMs < record.landingUntil) return 'Jump_Land';
+    if (speed > 6.5) return shooting ? 'Run_Shoot' : 'Run';
+    if (speed > 0.8) return shooting ? 'Walk_Shoot' : 'Walk';
+    return shooting ? 'Idle_Shoot' : 'Idle';
   }
 
   return {
@@ -235,8 +221,8 @@ export function createRemotes(scene) {
       const record = players.get(id);
       if (!record) return;
       record.removed = true;
-      scene.remove(record.avatar.root);
-      record.avatar.dispose();
+      scene.remove(record.root);
+      if (record.char) record.char.dispose();
       players.delete(id);
     },
 
@@ -290,12 +276,7 @@ export function createRemotes(scene) {
       }
       record.alive = aliveNext;
       record.hp = p.hp;
-      const weapon = weaponOrDefault(p.weapon);
-      if (weapon !== record.weapon) {
-        record.weapon = weapon;
-        record.avatar.setWeapon(weapon);
-        attachGunModel(record, weapon);
-      }
+      record.weapon = weaponOrDefault(p.weapon);
       record.buffer.push({
         at: performance.now(),
         state: {
@@ -312,9 +293,10 @@ export function createRemotes(scene) {
       const weapon = WEAPONS[weaponOrDefault(msg.weapon)];
       let from = { x: msg.ox, y: msg.oy, z: msg.oz };
       if (record && record.alive) {
-        record.avatar.triggerAction('fire', { duration: 0.12 });
-        const muzzle = record.avatar.getMuzzleWorldPosition();
-        if (muzzle) from = { x: muzzle.x, y: muzzle.y, z: muzzle.z };
+        record.lastFireAt = performance.now();
+        if (record.char && record.char.handWorldPosition(scratch)) {
+          from = { x: scratch.x, y: scratch.y, z: scratch.z };
+        }
       }
       effects.addMuzzleFlash(from, weapon.pellets > 1 ? 1.2 : 0.9);
       effects.addTracer(from, { x: msg.tx, y: msg.ty, z: msg.tz });
@@ -329,9 +311,10 @@ export function createRemotes(scene) {
       const record = players.get(id);
       if (!record) return;
       record.alive = false;
-      record.dying = DEATH_FALL_SECONDS;
+      record.dying = DEATH_LINGER_SECONDS;
       record.buffer.length = 0;
-      const pos = record.avatar.root.position;
+      if (record.char) record.char.play('Death', 0.08);
+      const pos = record.root.position;
       effects.addImpact({ x: pos.x, y: pos.y + 1.2, z: pos.z }, 0xc23b3b);
     },
 
@@ -341,8 +324,7 @@ export function createRemotes(scene) {
       record.alive = true;
       record.hp = msg.hp;
       record.dying = 0;
-      record.avatar.root.visible = true;
-      record.avatar.root.rotation.z = 0;
+      record.root.visible = true;
       record.buffer.length = 0;
       record.display.x = msg.x;
       record.display.y = msg.y;
@@ -350,6 +332,7 @@ export function createRemotes(scene) {
       record.lastDisplay.x = msg.x;
       record.lastDisplay.y = msg.y;
       record.lastDisplay.z = msg.z;
+      if (record.char) record.char.play('Idle', 0);
       placeAvatar(record);
     },
 
@@ -390,17 +373,13 @@ export function createRemotes(scene) {
 
     debugInfo() {
       const out = [];
-      const v = new THREE.Vector3();
       for (const r of players.values()) {
-        r.avatar.rig.gun.getWorldPosition(v);
         out.push({
           id: r.id,
           weapon: r.weapon,
-          hasGunModel: !!r.gunModel,
-          gunScale: r.gunModel ? +r.gunModel.scale.x.toFixed(3) : 0,
-          gunWorld: v.toArray().map((n) => +n.toFixed(2)),
-          rootPos: r.avatar.root.position.toArray().map((n) => +n.toFixed(2)),
-          gunRot: ['x', 'y', 'z'].map((ax) => +r.avatar.rig.gun.rotation[ax].toFixed(2))
+          hasChar: !!r.char,
+          animation: r.char ? r.char.currentAnimation() : null,
+          rootPos: r.root.position.toArray().map((n) => +n.toFixed(2))
         });
       }
       return out;
@@ -411,12 +390,10 @@ export function createRemotes(scene) {
       for (const record of players.values()) {
         applyDamageFlash(record, nowMs);
         if (!record.alive) {
-          // Minecraft-style death: tip over sideways, then disappear.
           if (record.dying > 0) {
             record.dying -= dt;
-            const progress = 1 - Math.max(0, record.dying) / DEATH_FALL_SECONDS;
-            record.avatar.root.rotation.z = (Math.PI / 2) * Math.min(1, progress * 1.6);
-            if (record.dying <= 0) record.avatar.root.visible = false;
+            if (record.char) record.char.update(dt);
+            if (record.dying <= 0) record.root.visible = false;
           }
           continue;
         }
@@ -431,41 +408,11 @@ export function createRemotes(scene) {
         record.lastDisplay.y = record.display.y;
         record.lastDisplay.z = record.display.z;
 
-        const anim = record.display.anim || {};
-
-        // Jump anticipation pose on takeoff, squash-and-stretch on landing.
-        const airborne = !!anim.airborne;
-        if (airborne && !record.wasAirborne) {
-          record.avatar.triggerAction('jump', { duration: 0.22 });
-        } else if (!airborne && record.wasAirborne) {
-          record.landSquash = 1;
+        if (record.char) {
+          record.char.play(chooseAnimation(record, nowMs));
+          record.char.setHeadPitch(-record.display.pitch * 0.8);
+          record.char.update(dt);
         }
-        record.wasAirborne = airborne;
-        record.landSquash = Math.max(0, record.landSquash - dt * 6);
-        const squash = Math.sin(record.landSquash * Math.PI) * 0.12;
-        const stretch = airborne ? 0.05 : 0;
-        record.avatar.root.scale.set(1 + squash * 0.6, 1 - squash + stretch, 1 + squash * 0.6);
-
-        // Lean into strafes: lateral velocity in the avatar's facing frame.
-        const yaw = record.display.yaw;
-        const lateral = (dx * Math.cos(yaw) - dz * Math.sin(yaw)) / Math.max(0.0001, dt);
-        const targetLean = Math.max(-0.12, Math.min(0.12, -lateral * 0.012));
-        record.lateralLean += (targetLean - record.lateralLean) * Math.min(1, dt * 8);
-        if (record.alive) record.avatar.root.rotation.z = record.lateralLean;
-
-        record.avatar.updateAnimation(dt, {
-          speedNorm: Math.min(1.4, record.worldSpeed / 14),
-          worldSpeed: record.worldSpeed,
-          sprinting: !!anim.sprinting,
-          airborne,
-          movingForward: !!anim.movingForward,
-          movingBackward: !!anim.movingBackward,
-          reloading: !!anim.reloading,
-          adsActive: !!anim.ads,
-          aimPitch: record.display.pitch
-        });
-        // Head follows the player's look pitch, like Minecraft.
-        record.avatar.rig.headMesh.rotation.x = -record.display.pitch * 0.85;
       }
       effects.update(dt);
     },

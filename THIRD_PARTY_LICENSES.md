@@ -1,5 +1,18 @@
 # Third-Party Licenses
 
+## Quaternius Toon Shooter Game Kit
+
+The animated player characters in `public/assets/characters/toon-shooter/`
+(Character_Soldier, Character_Enemy, Character_Hazmat) are from the
+Quaternius "Toon Shooter Game Kit":
+
+- Source: https://quaternius.com/packs/toonshootergamekit.html
+- License: CC0 1.0 Universal (public domain)
+  https://creativecommons.org/publicdomain/zero/1.0/
+
+No attribution is required by the license; credit to Quaternius is given
+with thanks.
+
 ## HYTOPIA game engine and example games
 
 Portions of MineShoot's combat presentation behavior are adapted from the

@@ -41,22 +41,11 @@ function buildArms(weaponId, gunLength, gunBox) {
   const gripZ = -gunLength * (LONG_GUNS[weaponId] ? 0.24 : 0.18);
 
   function addHand(z, bottomY) {
-    const hand = new THREE.Group();
-    // Palm wraps under and around the grip.
-    const palm = new THREE.Mesh(new THREE.BoxGeometry(gunWidth + 0.07, 0.075, 0.13), skin);
-    palm.position.set(0, bottomY - 0.025, 0);
-    hand.add(palm);
-    // Fingers curl over the far (left) side of the grip.
-    const fingers = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.085, 0.12), skin);
-    fingers.position.set(-(gunWidth / 2 + 0.035), bottomY + 0.02, 0);
-    hand.add(fingers);
-    // Thumb on the near side.
-    const thumb = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.06, 0.09), skin);
-    thumb.position.set(gunWidth / 2 + 0.03, bottomY + 0.01, 0.02);
-    hand.add(thumb);
-    hand.position.z = z;
-    group.add(hand);
-    return new THREE.Vector3(0, bottomY - 0.03, z);
+    // One clean mitt cupping the grip from below, Minecraft style.
+    const mitt = new THREE.Mesh(new THREE.BoxGeometry(gunWidth + 0.08, 0.11, 0.15), skin);
+    mitt.position.set(0, bottomY - 0.035, z);
+    group.add(mitt);
+    return new THREE.Vector3(0, bottomY - 0.04, z);
   }
 
   function addArm(anchor, shoulder) {
