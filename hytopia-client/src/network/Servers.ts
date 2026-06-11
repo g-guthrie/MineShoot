@@ -7,11 +7,10 @@ const MINIMUM_SUPPORTED_SERVER_VERSION = '0.10.0';
 // on HYTOPIA's infrastructure. Literal IPv4 because the dev server binds
 // 0.0.0.0 and "localhost" resolves to ::1 first in Chromium.
 const DEV_LOCAL_HOSTNAME = '127.0.0.1:8081';
-const DEV_LEGACY_HOSTNAME = 'localhost:8080';
 const SERVER_HEALTH_CHECK_TIMEOUT_MS = 8000;
 
 export function isLocalServer(hostname: string): boolean {
-  return /^(\d+\.\d+\.\d+\.\d+|localhost)(:\d+)?$/.test(hostname);
+  return /^(([\w-]+\.)*localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[::1\])(:\d+)?$/.test(hostname);
 }
 
 export function getHttpProtocol(hostname: string): 'http' | 'https' {
@@ -21,14 +20,6 @@ export function getHttpProtocol(hostname: string): 'http' | 'https' {
 export function getWebSocketProtocol(hostname: string): 'ws' | 'wss' {
   return isLocalServer(hostname) ? 'ws' : 'wss';
 }
-
-// Compatible client URLs, ordered newest to oldest.
-// First entry with version <= server version wins.
-// 'LATEST' means the current client (play.hytopia.com) is compatible.
-const CLIENT_COMPAT_VERSIONS: { version: string, url: string }[] = [
-  { version: '0.15', url: 'LATEST' },
-  { version: '0.0',  url: 'https://compat-0-14.play.hytopia.com/' }, // fallback for all lesser versions.
-];
 
 // Some poor mobile networks can drop TCP connections silently,
 // this can cause no response for our fetch, so we use fetch with a timeout.
@@ -64,34 +55,19 @@ export default class Servers {
       const isLocal = isLocalServer(hostname);
 
       try {
-        const candidates = hostname === DEV_LOCAL_HOSTNAME
-          ? [ DEV_LOCAL_HOSTNAME, DEV_LEGACY_HOSTNAME ]
-          : [ hostname ];
+        const response = await fetchWithTimeout(`${getHttpProtocol(hostname)}://${hostname}`, {
+          targetAddressSpace: isLocal ? 'loopback' : undefined,
+        } as RequestInit, SERVER_HEALTH_CHECK_TIMEOUT_MS);
 
-        let response: Response | undefined;
-
-        for (const candidate of candidates) {
-          try {
-            response = await fetchWithTimeout(`${getHttpProtocol(candidate)}://${candidate}`, {
-              targetAddressSpace: isLocal ? 'loopback' : undefined,
-            } as RequestInit, SERVER_HEALTH_CHECK_TIMEOUT_MS);
-          } catch { /* ignore network errors (including timeout); try next candidate */ }
-
-          if (response?.ok) {
-            hostname = candidate;
-            break;
-          }
-        }
-
-        if (!response?.ok) {
+        if (!response.ok) {
           throw new Error(`Could not connect to server: ${hostname}`);
         }
 
         const serverDetails = await response.json();
-        
+
         version = serverDetails.version;
 
-        await this._validateServerVersionCompat(version, hostname);
+        await this._validateServerVersionCompat(version);
       } catch {
         console.error('Could not connect to server', hostname);
 
@@ -141,12 +117,12 @@ export default class Servers {
     return hostname.includes('hytopiahosting.com');
   }
 
-  private static async _validateServerVersionCompat(version: string, hostname: string): Promise<void> {
+  private static async _validateServerVersionCompat(version: string): Promise<void> {
+    version = version || '0.0.0'; // needs update, legacy servers don't have a version field.
+
     if (version.includes('DEV')) {
       return; // SDK dev servers are ignored, ran from the internal hytopia team `server` repo.
     }
-
-    version = version || '0.0.0'; // needs update, legacy servers don't have a version field.
 
     const [majorServer, minorServer, patchServer] = version.split('.').map(Number);
     const [majorMin, minorMin, patchMin] = MINIMUM_SUPPORTED_SERVER_VERSION.split('.').map(Number);
@@ -163,23 +139,7 @@ export default class Servers {
         'If you are not the developer of this game, please contact the developer to update the sdk version of their game.'
       );
 
-      return;
-    }
-
-    // Redirect to compatible client if server is running an older SDK version.
-    for (const compat of CLIENT_COMPAT_VERSIONS) {
-      const [majorCompat, minorCompat] = compat.version.split('.').map(Number);
-
-      if (majorServer > majorCompat || (majorServer === majorCompat && minorServer >= minorCompat)) {
-        if (compat.url !== 'LATEST') {
-          const redirectParams = new URLSearchParams(window.location.search);
-          redirectParams.set('join', hostname); // handles if user typed url via modal prompt
-          window.location.href = `${compat.url}?${redirectParams.toString()}`;
-          await new Promise(() => {}); // halt execution during redirect
-        }
-
-        break;
-      }
+      throw new Error(`Unsupported server version: ${version}`);
     }
   }
 }

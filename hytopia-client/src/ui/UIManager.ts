@@ -86,7 +86,7 @@ export default class UIManager {
    */
   private _setupReliableClicks(): void {
     let target: EventTarget | null = null;
-    let timeout: NodeJS.Timeout | undefined;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     
     const reset = () => {
       clearTimeout(timeout);
@@ -148,7 +148,12 @@ export default class UIManager {
 
     if (deserializedUI.htmlUri) {
       this._uiLoadPromise = fetch(Assets.toAssetUri(deserializedUI.htmlUri, true))
-        .then(response => response.text())
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`UIManager: Failed to load UI HTML ${deserializedUI.htmlUri} with ${response.status} ${response.statusText}.`);
+          }
+          return response.text();
+        })
         .then(html => {
           // cleanup for any previously loaded UI.
           // this load/unload pattern could become problematic or fragicle in the
@@ -167,6 +172,11 @@ export default class UIManager {
           
           // Process any pending SceneUIs now that templates may be registered
           this._processPendingSceneUIs();
+        })
+        .catch(error => {
+          // Resolve the chain on failure so one failed load doesn't permanently
+          // poison _uiLoadPromise and block all subsequent UI loads/data packets.
+          console.error('UIManager._onUIPacket(): Failed to load UI HTML.', error);
         });
     }
 
@@ -177,7 +187,13 @@ export default class UIManager {
 
       this._uiLoadPromise = this._uiLoadPromise.then(async () => {
         for (const htmlUri of appendHtmlUris) {
-          const html = await fetch(Assets.toAssetUri(htmlUri, true)).then(response => response.text());
+          const response = await fetch(Assets.toAssetUri(htmlUri, true));
+
+          if (!response.ok) {
+            throw new Error(`UIManager: Failed to load appended UI HTML ${htmlUri} with ${response.status} ${response.statusText}.`);
+          }
+
+          const html = await response.text();
           const wrapper = document.createElement('div');
 
           wrapper.innerHTML = html.replace(/\{\{CDN_ASSETS_URL\}\}/g, Assets.getCdnBaseUrl());
@@ -196,6 +212,10 @@ export default class UIManager {
           // Process any pending SceneUIs after each append now that templates may be registered
           this._processPendingSceneUIs();
         }
+      }).catch(error => {
+        // Resolve the chain on failure so one failed load doesn't permanently
+        // poison _uiLoadPromise and block all subsequent UI loads/data packets.
+        console.error('UIManager._onUIPacket(): Failed to append UI HTML.', error);
       });
     }
 
@@ -210,7 +230,14 @@ export default class UIManager {
   }
 
   private _onUIDatasPacket = async (payload: NetworkManagerEventPayload.IUIDatasPacket): Promise<void> => {
-    await this._uiLoadPromise;
+    try {
+      await this._uiLoadPromise;
+    } catch (error) {
+      // _uiLoadPromise should never reject (load chains catch their own errors), but
+      // guard anyway and reset it so UI data handling and later loads can still proceed.
+      console.error('UIManager._onUIDatasPacket(): UI load failed.', error);
+      this._uiLoadPromise = Promise.resolve();
+    }
 
     for (const data of payload.deserializedUIDatas) {
       hytopia.emitData(data);

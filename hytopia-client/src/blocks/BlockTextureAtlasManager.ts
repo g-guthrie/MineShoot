@@ -1,10 +1,10 @@
 import {
   CanvasTexture,
-  CompressedTexture,
   MinificationTextureFilter,
   NearestFilter,
   NearestMipMapNearestFilter,
   SRGBColorSpace,
+  Texture,
 } from 'three';
 import {
   BLOCK_TEXTURE_ATLAS_PATH,
@@ -24,7 +24,7 @@ export default class BlockTextureAtlasManager {
   private _game: Game;
   private _canvas: HTMLCanvasElement | null = null;
   private _bitmapRenderer: ImageBitmapRenderingContext | null = null;
-  private _texture: CompressedTexture | CanvasTexture | null = null;
+  private _texture: Texture | null = null;
   private _metadata: Map<BlockTextureUri, BlockTextureAtlasMetadata> = new Map();
 
   public constructor(game: Game) {
@@ -88,9 +88,10 @@ export default class BlockTextureAtlasManager {
       console.warn(`BlockTextureAtlasManager: KTX2 atlas failed (${error}), falling back to PNG atlas.`);
       const pngPath = Assets.toAssetUri(BLOCK_TEXTURE_ATLAS_PATH.replace(/\.ktx2$/, '.png'));
       try {
-        this._texture = await Assets.textureLoader.loadAsync(pngPath);
-        this._texture.flipY = false;
-        this._texture.colorSpace = SRGBColorSpace;
+        const pngTexture = await Assets.textureLoader.loadAsync(pngPath);
+        pngTexture.flipY = false;
+        pngTexture.colorSpace = SRGBColorSpace;
+        this._texture = pngTexture;
       } catch (pngError) {
         console.error(pngError);
         throw new Error(`BlockTextureAtlasManager: Fatal Error! Failed to load ${assetPath} and PNG fallback.`);
@@ -143,7 +144,7 @@ export default class BlockTextureAtlasManager {
     EventRouter.instance.emit(BlockTextureAtlasEventType.Ready, {});
   }
 
-  public get texture(): CompressedTexture | CanvasTexture {
+  public get texture(): Texture {
     return this._texture!;
   }
 

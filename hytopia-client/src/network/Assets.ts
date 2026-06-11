@@ -89,20 +89,22 @@ export default class Assets {
 
   public static async urlExists(url: string): Promise<boolean> {
     if (!ErrorCache.has(url)) {
-      ErrorCache.set(url, new Promise(async (resolve, reject) => {
+      ErrorCache.set(url, (async () => {
         try {
           // TODO: Is there a way to suppress the console error log?
           const res = await fetch(url, { method: 'head' });
           if (res.ok) {
-            resolve(true);
-          } else {
-            // We check 403 as well, since the cosmetics CDN returns a 403 for non-existent files
-            resolve(res.status !== 404 && res.status !== 403); 
+            return true;
           }
+
+          // We check 403 as well, since the cosmetics CDN returns a 403 for non-existent files
+          return res.status !== 404 && res.status !== 403;
         } catch (e) {
-          reject(e);
+          // Don't cache transient network failures, allow later calls to retry
+          ErrorCache.delete(url);
+          throw e;
         }
-      }));
+      })());
     }
     return await ErrorCache.get(url)!;
   }

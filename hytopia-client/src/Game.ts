@@ -21,6 +21,7 @@ import PerformanceMetricsManager from './core/PerformanceMetricsManager';
 import PlayerManager from './players/PlayerManager';
 import Renderer from './core/Renderer';
 import SettingsManager from './settings/SettingsManager';
+import { modalAlert } from './ui/Modal';
 import UIManager from './ui/UIManager';
 import ChunkWorkerClient from './workers/ChunkWorkerClient';
 
@@ -123,6 +124,17 @@ export default class Game {
   public async start(): Promise<void> {
     this._renderer.start();
     await this._networkManager.connect();
-    this._blockTextureAtlasManager.init();
+
+    try {
+      await this._blockTextureAtlasManager.init();
+    } catch (error) {
+      // Without the block texture atlas the world renders untextured, so surface
+      // the failure instead of silently swallowing it.
+      // Note: init() is not retried here because it posts the ChunkWorker init
+      // message before loading, and the worker fatally rejects a second init.
+      console.error('Game.start(): Failed to initialize the Block Texture Atlas.', error);
+      modalAlert('Failed to load block textures. Please refresh the page or reload the app to continue playing.');
+      throw error;
+    }
   }
 }

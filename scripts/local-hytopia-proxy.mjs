@@ -31,8 +31,18 @@ const server = http.createServer((clientReq, clientRes) => {
   });
 
   proxyReq.on('error', (error) => {
-    clientRes.writeHead(502, { 'content-type': 'text/plain' });
+    if (!clientRes.headersSent) {
+      clientRes.writeHead(502, { 'content-type': 'text/plain' });
+    }
     clientRes.end(`Local Hytopia proxy error: ${error.message}`);
+  });
+
+  clientReq.on('error', () => {
+    proxyReq.destroy();
+  });
+
+  clientRes.on('error', () => {
+    proxyReq.destroy();
   });
 
   clientReq.pipe(proxyReq);
@@ -49,7 +59,16 @@ server.on('upgrade', (clientReq, clientSocket, head) => {
     rejectUnauthorized: false,
   });
 
+  clientSocket.on('error', () => {
+    proxyReq.destroy();
+  });
+
   proxyReq.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
+    clientSocket.on('error', () => proxySocket.destroy());
+    clientSocket.on('close', () => proxySocket.destroy());
+    proxySocket.on('error', () => clientSocket.destroy());
+    proxySocket.on('close', () => clientSocket.destroy());
+
     clientSocket.write(
       `HTTP/${proxyRes.httpVersion} ${proxyRes.statusCode} ${proxyRes.statusMessage}\r\n` +
       Object.entries(proxyRes.headers)
@@ -67,6 +86,13 @@ server.on('upgrade', (clientReq, clientSocket, head) => {
 
     proxySocket.pipe(clientSocket);
     clientSocket.pipe(proxySocket);
+  });
+
+  proxyReq.on('response', () => {
+    if (clientSocket.writable) {
+      clientSocket.write('HTTP/1.1 502 Bad Gateway\r\nconnection: close\r\ncontent-length: 0\r\n\r\n');
+    }
+    clientSocket.destroy();
   });
 
   proxyReq.on('error', () => {

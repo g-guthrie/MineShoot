@@ -150,6 +150,11 @@ export default class BridgeManager {
   }
 
   private _onParentMessage = (event: MessageEvent): void => {
+    // Ignore messages when not embedded in a parent frame (e.g. self-hosted, top-level).
+    if (window.self === window.top) {
+      return;
+    }
+
     const { type, message } = event.data;
 
     switch (type) {
@@ -217,6 +222,13 @@ export default class BridgeManager {
   }
 
   private _sendParentMessage = <T extends BridgeMessageType>(message: BridgeMessage<T>): void => {
-    window.parent.postMessage(message, '*');
+    // Only message the parent frame when actually embedded, and target the embedding
+    // origin when it's known rather than broadcasting to any origin.
+    if (window.self === window.top) {
+      return;
+    }
+
+    const targetOrigin = document.referrer ? new URL(document.referrer).origin : '*';
+    window.parent.postMessage(message, targetOrigin);
   }
 }

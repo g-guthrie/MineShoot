@@ -5,6 +5,7 @@ import Deserializer from './Deserializer';
 import EventRouter from '../events/EventRouter';
 import Game from '../Game';
 import Servers, { getWebSocketProtocol, isLocalServer } from './Servers';
+import { modalAlert } from '../ui/Modal';
 
 import type {
   DeserializedAudios,
@@ -28,8 +29,8 @@ import type {
 
 const packr = new Packr({ useFloat32: FLOAT32_OPTIONS.ALWAYS });
 
-const HEARTBEAT_INTERVAL_MS = 5000;
-let heartbeatReported = false;
+const RECONNECT_MAX_ATTEMPTS = 5;
+const RECONNECT_MAX_DELAY_MS = 10000;
 
 type ServerFeatures = {
   supportsSceneInteract?: boolean;
@@ -90,7 +91,6 @@ export default class NetworkManager {
   private _lastPacketServerTick: number = 0;
   private _lastSendProtocol: 'wt' | 'ws' | 'none' = 'none';
   private _lastReceiveProtocol: 'wt' | 'ws' | 'none' = 'none';
-  private _lastHeartbeat: number = 0;
   private _lastInputSequenceNumber: number = 0;
   private _roundTripTimeS: number = 0;
   private _roundTripTimeMaxS: number = 0;
@@ -99,6 +99,8 @@ export default class NetworkManager {
   private _serverLobbyId: string | undefined;
   private _serverVersion: string | undefined;
   private _syncStartTimeS: number = 0;
+  private _syncInterval: ReturnType<typeof setInterval> | undefined;
+  private _heartbeatInterval: ReturnType<typeof setInterval> | undefined;
 
   // Whether the World Packet has been received. This is intended to be used, for example,
   // as a reference point to determine whether game initialization has started.
@@ -158,8 +160,9 @@ export default class NetworkManager {
     }
 
     // Start synchronization and heartbeat intervals
-    setInterval(() => this._synchronize(), 2000);
-    setInterval(() => this._heartbeat(), 5000);
+    this._clearIntervals();
+    this._syncInterval = setInterval(() => this._synchronize(), 2000);
+    this._heartbeatInterval = setInterval(() => this._heartbeat(), 5000);
 
     performance.mark('NetworkManager:connected');
     performance.measure('NetworkManager:connected-time', 'NetworkManager:connecting', 'NetworkManager:connected');
@@ -271,6 +274,8 @@ export default class NetworkManager {
 
       await wt.ready;
 
+      this._clearReconnectAttempts();
+
       this._wt = wt; // assign after ready, to prevent sendPacket() from sending before ready
       this._wtOnClose = () => this._reconnect();
       this._wt.closed.catch(() => { /* NOOP */ }).finally(() => this._wtOnClose());
@@ -321,6 +326,7 @@ export default class NetworkManager {
       console.log('NetworkManager._connectWebTransport(): WebTransport connection successful!');
     } catch (error) {
       console.log('NetworkManager._connectWebTransport(): WebTransport connection failed:', error);
+      this._wtOnClose = () => {};
       this._wt?.close();
       this._wt = undefined;
       return;
@@ -331,14 +337,30 @@ export default class NetworkManager {
     return new Promise(resolve => {
       console.log('NetworkManager._connectWebSocket(): Attempting to connect using WebSocket...');
 
+      let settled = false;
+      const settle = () => {
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
+      };
+
       this._ws = new WebSocket(`${getWebSocketProtocol(this._serverHostname!)}://${this._serverHostname}${window.location.search}`);
       this._ws.binaryType = 'arraybuffer';
       this._ws.onopen = () => {
         console.log('NetworkManager._connectWebSocket(): WebSocket connection successful!');
-        resolve();
+        this._clearReconnectAttempts();
+        settle();
       };
       this._ws.onerror = () => this._ws!.close();
-      this._ws.onclose = () => this._reconnect();
+      this._ws.onclose = () => {
+        if (!settled) {
+          this._ws = undefined; // never opened, let connect() report the failure
+        }
+
+        settle();
+        void this._reconnect();
+      };
       this._ws.onmessage = (event: MessageEvent) => {
         this._lastReceiveProtocol = 'ws';
         this._onMessage(new Uint8Array(event.data as ArrayBuffer));
@@ -347,6 +369,8 @@ export default class NetworkManager {
   }
 
   private _killConnection(): void {
+    this._clearIntervals();
+
     try {
       if (this._ws) {
         this._ws.onclose = () => {};
@@ -365,12 +389,22 @@ export default class NetworkManager {
   }
 
   private _heartbeat(): void {
-    const heartbeatLag = performance.now() - this._lastHeartbeat;
-    if (this._lastHeartbeat && !heartbeatReported && heartbeatLag > HEARTBEAT_INTERVAL_MS * 2) {
-      heartbeatReported = true;
-    }
-
     this.sendPacket(protocol.createPacket(protocol.heartbeatPacketDefinition, null), true);
+  }
+
+  private _clearIntervals(): void {
+    clearInterval(this._syncInterval);
+    clearInterval(this._heartbeatInterval);
+    this._syncInterval = undefined;
+    this._heartbeatInterval = undefined;
+  }
+
+  private _reconnectAttemptsKey(): string {
+    return `NetworkManager:reconnectAttempts:${this._serverHostname ?? ''}`;
+  }
+
+  private _clearReconnectAttempts(): void {
+    sessionStorage.removeItem(this._reconnectAttemptsKey());
   }
 
   private _isGzip(data: Uint8Array): boolean {
@@ -470,7 +504,6 @@ export default class NetworkManager {
           });
           break;
         case protocol.PacketId.HEARTBEAT:
-          this._lastHeartbeat = performance.now();
           break;
         case protocol.PacketId.LIGHTS:
           // NOOP - PointLight/SpotLight not supported with switch to MeshBasicMaterial, Reimplement later.
@@ -578,6 +611,17 @@ export default class NetworkManager {
   private async _reconnect(): Promise<void> {
     // Check if server is still up - if not, it's an unexpected disconnect (crash)
     const serverHealthy = await Servers.isCurrentServerHealthy().catch(() => false);
+
+    const attempts = Number(sessionStorage.getItem(this._reconnectAttemptsKey()) ?? '0') + 1;
+    sessionStorage.setItem(this._reconnectAttemptsKey(), String(attempts));
+
+    if (!serverHealthy || attempts > RECONNECT_MAX_ATTEMPTS) {
+      this._clearReconnectAttempts();
+      await modalAlert('Connection to the server was lost and could not be re-established.\nPlease refresh the page to try again.');
+      return;
+    }
+
+    await new Promise(resolve => setTimeout(resolve, Math.min(1000 * 2 ** (attempts - 1), RECONNECT_MAX_DELAY_MS)));
 
     const url = new URL(window.location.href);
 

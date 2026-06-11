@@ -16,7 +16,6 @@ export const enum DistantBlockViewMode {
 };
 
 type QualityPerfTradeoff = {
-  antialias: boolean,
   resolution: {
     multiplier: number,
   },
@@ -56,7 +55,6 @@ export type ClientSettings = {
 // TODO: Consider allowing users to opt out of the automatic switching feature.
 export const QUALITY_PRESETS: Record<string, QualityPerfTradeoff> = {
   ULTRA: {
-    antialias: true,
     resolution: { multiplier: 2.0 },
     viewDistance: {
       enabled: true,
@@ -70,7 +68,6 @@ export const QUALITY_PRESETS: Record<string, QualityPerfTradeoff> = {
     },
   },
   HIGH: {
-    antialias: true,
     resolution: { multiplier: 1.5 },
     viewDistance: {
       enabled: true,
@@ -84,7 +81,6 @@ export const QUALITY_PRESETS: Record<string, QualityPerfTradeoff> = {
     },
   },
   MEDIUM: {
-    antialias: true,
     resolution: { multiplier: 1.0 },
     viewDistance: {
       enabled: true,
@@ -101,13 +97,6 @@ export const QUALITY_PRESETS: Record<string, QualityPerfTradeoff> = {
     },
   },
   LOW: {
-    // In performance-prioritized settings, setting antialias to false is preferable as it reduces
-    // GPU load. However, there is currently a crash issue on mobile platforms that appears to be
-    // triggered during WebGL renderer recreation. Since the current implementation recreates
-    // the renderer when the antialias setting is toggled, we avoid this by keeping antialias
-    // always true. Once the root cause of the crash is resolved, we can revisit the option
-    // of setting antialias to false.
-    antialias: true,
     resolution: { multiplier: 0.85 },
     viewDistance: {
       enabled: true,
@@ -122,7 +111,6 @@ export const QUALITY_PRESETS: Record<string, QualityPerfTradeoff> = {
     },
   },
   POWER_SAVING: {
-    antialias: true,
     resolution: { multiplier: 0.5 },
     viewDistance: {
       enabled: true,
@@ -269,7 +257,7 @@ export default class SettingsManager {
         if (stats.duration >= stats.durationThreshold) {
           this._updateQualitySettings(change);
           stats.thresholdExceeded = false;
-        } {
+        } else {
           resetDuration = false;
         }
       } else {

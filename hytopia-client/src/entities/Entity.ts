@@ -174,7 +174,7 @@ export default class Entity {
   protected _game: Game;
   private _id: EntityId;
   private _animationTargets: Set<Object3D> = new Set();
-  private _animationFadeTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  private _animationFadeTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private _attached: boolean = false;
   private _blockHalfExtents: Vector3Like | undefined;
   private _blockTextureRequestVersion: number = 0;

@@ -1,9 +1,6 @@
 import Game from './Game';
 import PerformanceMetricsManager from './core/PerformanceMetricsManager';
 
-// Start mathcmaking heartbeat
-import './services/hytopia/heartbeat';
-
 // Load UI Library Global, for dev-provided UI
 import './ui/globals/hytopia';
 
@@ -23,5 +20,5 @@ import './services/hytopia/profanityFilter';
   // Test potential cause of game join -> ready failure?
   void PerformanceMetricsManager.measureRefreshRate().catch(console.error);
 
-  Game.instance.start();
+  Game.instance.start().catch(console.error);
 })();

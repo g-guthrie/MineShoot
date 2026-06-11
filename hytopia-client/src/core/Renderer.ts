@@ -280,7 +280,7 @@ export default class Renderer {
     EventRouter.instance.emit(RendererEventType.Animate, { frameDeltaS });
 
     this._game.arrowManager.update(frameDeltaS);
-    this._game.blockMaterialManager.update();
+    this._game.blockMaterialManager.update(frameDeltaS);
     this._game.camera.update(frameDeltaS);
     this._game.audioManager.update();
     this._updateSkybox(frameDeltaS);
@@ -451,7 +451,9 @@ export default class Renderer {
     this._clampTargetFogNearAndFar();
 
     if (deserializedWorld.skyboxUri) {
-      this._loadSkybox(deserializedWorld.skyboxUri);
+      this._loadSkybox(deserializedWorld.skyboxUri).catch(error => {
+        console.error('Renderer: Failed to load skybox.', error);
+      });
     }
 
     if (deserializedWorld.skyboxIntensity !== undefined) {
@@ -616,11 +618,12 @@ export default class Renderer {
       return a.id - b.id;
     });
 
-    // Handle error throwing for context loss
+    // Handle context loss by reloading the page, the simplest reliable recovery.
     this._renderer.domElement.addEventListener('webglcontextlost', e => {
       e.preventDefault();
-      modalAlert('WebGL Context has been lost, this likely means a low memory or excessive GPU usage situation. Please report this error. You may refresh the page or reload the app to continue playing.');
-      throw new Error('WebGL Context Lost & Caught!');
+      console.error('Renderer: WebGL Context lost, reloading the page to recover.');
+      modalAlert('WebGL Context has been lost, this likely means a low memory or excessive GPU usage situation. The page will now reload to continue playing.')
+        .then(() => window.location.reload());
     }, false);
 
     document.body.appendChild(this._renderer.domElement);

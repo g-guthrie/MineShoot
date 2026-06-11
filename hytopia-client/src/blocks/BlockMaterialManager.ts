@@ -90,11 +90,32 @@ class MeshBlockMaterial extends MeshBasicMaterial {
         `,
       );
   }
+
+  clone(): this {
+    return new (this.constructor as typeof MeshBlockMaterial)(
+      this._game,
+      this.transparent,
+      this.defines![DEFINE_HAS_LIGHT_LEVEL],
+    ).copy(this) as this; // type-check hack
+  }
+
+  copy(source: MeshBlockMaterial): this {
+    super.copy(source);
+    // Material.copy() doesn't carry custom fields or defines, so copy them
+    // explicitly to avoid producing a corrupt material.
+    this._game = source._game;
+    this.defines = { ...source.defines };
+    return this;
+  }
 }
 
 const UNIFORM_TIME = 'time';
 const UNIFORM_TEXTURE_ATLAS = 'textureAtlas';
 const UNIFORM_AMBIENT_LIGHT_COLOR = 'ambientLightColor';
+
+// Water animation speed in time-uniform units per second. Chosen so behavior at
+// 60fps matches the previous fixed per-frame increment (0.0075 * 60 = 0.45/s).
+const LIQUID_TIME_SCALE_PER_SECOND = 0.45;
 const ATTRIBUTE_FOAM_LEVEL = 'foamLevel';
 const ATTRIBUTE_FOAM_LEVEL_DIAG = 'foamLevelDiag';
 
@@ -268,8 +289,8 @@ class MeshLiquidMaterial extends ShaderMaterial {
     });
   }
 
-  public update(ambientLightColor: Color, ambientLightIntensity: number): void {
-    this.uniforms[UNIFORM_TIME].value += 0.0075;
+  public update(frameDeltaS: number, ambientLightColor: Color, ambientLightIntensity: number): void {
+    this.uniforms[UNIFORM_TIME].value += frameDeltaS * LIQUID_TIME_SCALE_PER_SECOND;
     this.uniforms[UNIFORM_AMBIENT_LIGHT_COLOR].value.copy(ambientLightColor).multiplyScalar(ambientLightIntensity);
   }
 }
@@ -327,11 +348,11 @@ export default class BlockMaterialManager {
   public get transparentNonLitMaterial(): MeshBlockMaterial { return this._transparentNonLitMaterial; }
   public get liquidMaterial(): MeshLiquidMaterial { return this._liquidMaterial; }
 
-  public update(): void {
+  public update(frameDeltaS: number): void {
     // Block materials (MeshBlockMaterial) directly reference ambientLight via getters,
     // so they don't need explicit updates. Only liquid material needs updating for time animation.
     const ambientLight = this._game.renderer.ambientLight;
-    this._liquidMaterial.update(ambientLight.color, ambientLight.intensity);
+    this._liquidMaterial.update(frameDeltaS, ambientLight.color, ambientLight.intensity);
   }
 
   public cloneTransparentNonLitMaterial(): MeshBlockMaterial {

@@ -274,7 +274,15 @@ export default class InputManager {
   }
 
   private _setupInputListeners(): void {
-    window.addEventListener('keydown', (event) => this._onKeyboardInputChange(event.code, true));
+    window.addEventListener('keydown', (event) => {
+      // Prevent default browser behavior (e.g. Tab moving focus out of the game)
+      // for keys that are bound game inputs while game input is enabled.
+      const key = CODE_TO_KEY_MAP[event.code];
+      if (this._inputEnabled && key && SUPPORTED_INPUT_MAP[key]) {
+        event.preventDefault();
+      }
+      this._onKeyboardInputChange(event.code, true);
+    });
     window.addEventListener('keyup', (event) => this._onKeyboardInputChange(event.code, false));
     window.addEventListener('mousedown', (event) => this._onInputChange(`mouse${event.button}`, true));
     window.addEventListener('mouseup', (event) => this._onInputChange(`mouse${event.button}`, false));

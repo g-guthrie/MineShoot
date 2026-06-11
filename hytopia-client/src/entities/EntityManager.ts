@@ -234,7 +234,12 @@ export default class EntityManager {
 
   private _onEntitiesPacket = (payload: NetworkManagerEventPayload.IEntitiesPacket): void => {
     for (const deserializedEntity of payload.deserializedEntities) {
-      this._updateEntity(deserializedEntity, payload.serverTick);
+      try {
+        this._updateEntity(deserializedEntity, payload.serverTick);
+      } catch (error) {
+        // Skip the failing entity so one bad entity doesn't abort the rest of the batch.
+        console.error(`EntityManager._onEntitiesPacket(): Failed to update entity ${deserializedEntity.id}.`, error);
+      }
     }
   }
 
@@ -322,6 +327,10 @@ export default class EntityManager {
         this._entities.delete(entity.id);
         this._dynamicEntities.delete(entity.id);
         this._outlines.delete(entity.id);
+
+        // The entity has been released and is no longer tracked; applying any further
+        // packet fields would resurrect an untracked mesh.
+        return;
       }
 
       if (entity.isBlockEntity && deserializedEntity.blockTextureUri !== undefined) {

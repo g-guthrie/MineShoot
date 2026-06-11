@@ -311,42 +311,49 @@ class ChunkWorker {
       }
     }
 
-    const maybePromise = this._process(data);
+    try {
+      const maybePromise = this._process(data);
 
-    if (maybePromise instanceof Promise) {
-      const pending = [maybePromise];
+      if (maybePromise instanceof Promise) {
+        const pending = [maybePromise];
 
-      // Special fast path
-      // Downloading each BlockTexture individually can take a significant amount of
-      // time. To improve efficiency, batch consecutive BlockType initialization
-      // requests (which trigger BlockTexture loading) and perform downloads in
-      // parallel.
-      if (data.type === 'block_type') {
-        while (true) {
-          if (this._receiveQueue.length === 0) {
-            break;
+        // Special fast path
+        // Downloading each BlockTexture individually can take a significant amount of
+        // time. To improve efficiency, batch consecutive BlockType initialization
+        // requests (which trigger BlockTexture loading) and perform downloads in
+        // parallel.
+        if (data.type === 'block_type') {
+          while (true) {
+            if (this._receiveQueue.length === 0) {
+              break;
+            }
+
+            const data = this._receiveQueue[0].data as ToChunkWorkerMessage;
+
+            if (data.type !== 'block_type') {
+              break;
+            }
+
+            this._receiveQueue.shift();
+            pending.push(this._process(data) as Promise<void>);
           }
-
-          const data = this._receiveQueue[0].data as ToChunkWorkerMessage;
-
-          if (data.type !== 'block_type') {
-            break;
-          }
-
-          this._receiveQueue.shift();
-          pending.push(this._process(data) as Promise<void>);
         }
+
+        this._consecutiveProcessingCount = 0;
+        await Promise.all(pending);
       }
-
-      this._consecutiveProcessingCount = 0;
-      await Promise.all(pending);
-    }
-
-    if (this._receiveQueue.length > 0) {
-      this._trigger();
-    } else {
-      this._consecutiveProcessingCount = 0;
-      this._processing = false;
+    } catch (error) {
+      // Skip the failing (poison) message and keep the message pump alive. Without
+      // this, a throwing handler would leave _processing set to true forever and the
+      // worker would silently stop processing all subsequent messages.
+      console.error(`ChunkWorker: Failed to process '${data.type}' message, skipping it.`, error);
+    } finally {
+      if (this._receiveQueue.length > 0) {
+        this._trigger();
+      } else {
+        this._consecutiveProcessingCount = 0;
+        this._processing = false;
+      }
     }
   }
 
