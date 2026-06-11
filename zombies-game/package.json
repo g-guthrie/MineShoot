@@ -1,0 +1,26 @@
+{
+  "name": "zombies-fps",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "tsx index.ts",
+    "postinstall": "node dev/patch-webtransport.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "hytopia": "*"
+  },
+  "trustedDependencies": [
+    "sharp"
+  ],
+  "optionalDependencies": {
+    "@hytopia.com/assets": "^0.4.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.22.4"
+  }
+}

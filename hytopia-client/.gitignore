@@ -1,0 +1,9 @@
+.DS_Store
+.env.local
+build
+dist
+node_modules
+temp
+# Auto-generated basis files from Three.js
+public/basis
+build
