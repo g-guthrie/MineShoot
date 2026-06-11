@@ -12,8 +12,11 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "engines": {
+    "node": ">=22.12"
+  },
   "dependencies": {
-    "hytopia": "*"
+    "hytopia": "^0.15.2"
   },
   "trustedDependencies": [
     "sharp"
