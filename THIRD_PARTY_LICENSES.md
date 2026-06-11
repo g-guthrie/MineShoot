@@ -53,3 +53,11 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+## HYTOPIA hygrounds example (MIT)
+
+The game in `hytopia-game/` is adapted from the MIT-licensed "hygrounds"
+example in the HYTOPIA engine monorepo
+(https://github.com/hytopiagg/hytopia-source, Copyright (c) 2026
+HYTOPIA, Inc), with a custom generated three-biome map. It targets the
+HYTOPIA platform, where HYTOPIA's game assets are licensed for use.
