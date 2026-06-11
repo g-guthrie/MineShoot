@@ -5,8 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "tsx index.ts",
-    "postinstall": "node dev/patch-webtransport.mjs"
+    "start": "node dev/patch-webtransport.mjs && tsx index.ts"
   },
   "keywords": [],
   "author": "",

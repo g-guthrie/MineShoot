@@ -85,13 +85,14 @@ export default class Servers {
 
         if (isLocal) {
           await modalAlert(
-            'Could not connect to your local HYTOPIA server.\n' +
+            'Could not connect to your local game server.\n' +
             '----------------\n' +
-            '1) Start it: hytopia start\n' +
-            '2) Use a Chromium browser (Chrome, Brave, Edge)\n' +
-            '3) Allow Local network access for https://hytopia.com:\n' +
-            '   chrome://settings/content/siteDetails?site=https://hytopia.com\n' +
-            'Then try again.'
+            '1) Make sure it is running: cd zombies-game && npm start\n' +
+            '2) The local server uses a self-signed certificate. Open\n' +
+            '   https://127.0.0.1:8080 in a new tab, click Advanced, and\n' +
+            '   choose Proceed/Accept. You only need to do this once.\n' +
+            '3) Use a Chromium browser (Chrome, Brave, Edge).\n' +
+            'Then click OK here to try again.'
           );
         }
 
