@@ -157,7 +157,9 @@ export default abstract class GunEntity extends Entity {
     this._updatePlayerUIReload();
 
     setTimeout(() => {
-      if (!this.isEquipped) {
+      // despawn() does not clear _parent, so isEquipped alone would let a
+      // swapped-out gun's reload finish and clobber the new gun's ammo HUD.
+      if (!this.isSpawned || !this.isEquipped) {
         return;
       }
 

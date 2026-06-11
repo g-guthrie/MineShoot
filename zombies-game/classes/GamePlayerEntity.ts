@@ -4,6 +4,7 @@ import {
   CollisionGroup,
   DefaultPlayerEntity,
   DefaultPlayerEntityController,
+  EntityEvent,
   Player,
   PlayerCameraMode,
   SceneUI,
@@ -38,6 +39,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   private _reviveInterval: NodeJS.Timeout | undefined;
   private _reviveDistanceVectorA: Vector3;
   private _reviveDistanceVectorB: Vector3;
+  private _standingVelocities: { run: number, walk: number, jump: number } | undefined;
 
   // Player entities always assign a PlayerController to the entity, so we can safely create a convenience getter
   public get playerController(): DefaultPlayerEntityController {
@@ -104,6 +106,12 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     // Create reusable vector3 for revive distance calculations
     this._reviveDistanceVectorA = new Vector3(0, 0, 0);
     this._reviveDistanceVectorB = new Vector3(0, 0, 0);
+
+    // Timers must not outlive the entity (disconnect, end-of-game despawn).
+    this.on(EntityEvent.DESPAWN, () => {
+      clearTimeout(this._reviveInterval);
+      this._reviveInterval = undefined;
+    });
   }
 
   public override spawn(world: World, position: Vector3Like, rotation?: QuaternionLike): void {
@@ -127,7 +135,8 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   }
 
   public addMoney(amount: number) {
-    this.money += amount;
+    // Keep money integral: rewards are computed as fractional shares.
+    this.money = Math.round(this.money + amount);
     this._updatePlayerUIMoney();
   }
 
@@ -181,13 +190,21 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   }
 
   public progressRevive(byPlayer: GamePlayerEntity) {
-    if (!this.world) {
+    // A revive tick is already pending; re-pressing interact must not reset
+    // it, otherwise mashing E prevents revive from ever progressing.
+    if (!this.world || this._reviveInterval) {
       return;
     }
 
-    clearTimeout(this._reviveInterval);
-
     this._reviveInterval = setTimeout(() => {
+      this._reviveInterval = undefined;
+
+      // Despawned entities report position {0,0,0}, which would pass the
+      // distance check below — bail if either side is gone or state changed.
+      if (!this.isSpawned || !byPlayer.isSpawned || !this.downed) {
+        return;
+      }
+
       this._reviveDistanceVectorA.set([ this.position.x, this.position.y, this.position.z ]);
       this._reviveDistanceVectorB.set([ byPlayer.position.x, byPlayer.position.y, byPlayer.position.z ]);
       const distance = this._reviveDistanceVectorA.distance(this._reviveDistanceVectorB);
@@ -248,9 +265,24 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this.playerController.idleLoopedAnimations = downed ? [ 'sleep' ] : [ 'idle_lower' ];
     this.playerController.walkLoopedAnimations = downed ? [ 'crawling' ] : [ 'walk_lower' ];
     this.playerController.runLoopedAnimations = downed ? [ 'crawling' ] : [ 'run_lower' ];
-    this.playerController.runVelocity = downed ? 1 : 8;
-    this.playerController.walkVelocity = downed ? 1 : 4;
-    this.playerController.jumpVelocity = downed ? 0 : 10;
+
+    // Capture the controller's standing speeds rather than hardcoding them,
+    // so SDK default changes or per-player modifiers survive a down/revive.
+    if (downed) {
+      this._standingVelocities ??= {
+        run: this.playerController.runVelocity,
+        walk: this.playerController.walkVelocity,
+        jump: this.playerController.jumpVelocity,
+      };
+      this.playerController.runVelocity = 1;
+      this.playerController.walkVelocity = 1;
+      this.playerController.jumpVelocity = 0;
+    } else if (this._standingVelocities) {
+      this.playerController.runVelocity = this._standingVelocities.run;
+      this.playerController.walkVelocity = this._standingVelocities.walk;
+      this.playerController.jumpVelocity = this._standingVelocities.jump;
+      this._standingVelocities = undefined;
+    }
 
     if (!downed && this._gun) {
       this._gun.setParentAnimations();

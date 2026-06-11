@@ -22,8 +22,11 @@ export default class GameManager {
   public isStarted = false;
   public unlockedIds: Set<string> = new Set([ 'start' ]);
   public waveNumber = 0;
-  public waveDelay = 0;
   public world: World | undefined;
+
+  // Players who were part of the running round, so a disconnect+reconnect
+  // mid-game gets respawned instead of relegated to spectator.
+  private _activePlayerIds: Set<string> = new Set();
 
   private _enemySpawnTimeout: NodeJS.Timeout | undefined;
   private _endGameTimeout: NodeJS.Timeout | undefined;
@@ -44,13 +47,19 @@ export default class GameManager {
     this.unlockedIds.add(id);
   }
 
+  public canRejoin(player: Player): boolean {
+    return this._activePlayerIds.has(player.id);
+  }
+
   public checkEndGame() {
     if (this._endGameTimeout !== undefined) {
       return;
     }
 
     this._endGameTimeout = setTimeout(() => {
-      if (!this.world) return;
+      this._endGameTimeout = undefined;
+
+      if (!this.world || !this.isStarted) return;
 
       let allPlayersDowned = true;
 
@@ -65,8 +74,6 @@ export default class GameManager {
       if (allPlayersDowned) {
         this.endGame();
       }
-
-      this._endGameTimeout = undefined;
     }, 1000);
   }
 
@@ -116,14 +123,21 @@ export default class GameManager {
     clearInterval(this._startInterval);
     this._startCountdown = GAME_START_COUNTDOWN_S;
     this._startInterval = setInterval(() => {
-      if (!this.world || !this.world.entityManager.getAllPlayerEntities().length) return;
+      if (!this.world) return;
+
+      // An empty lobby resets the countdown rather than freezing it, so the
+      // next player to join gets the full countdown instead of an ambush start.
+      if (!this.world.entityManager.getAllPlayerEntities().length) {
+        this._startCountdown = GAME_START_COUNTDOWN_S;
+        return;
+      }
 
       this._startCountdown--;
 
       if (this._startCountdown <= 0) {
         this.startGame();
         this.world.chatManager.sendBroadcastMessage('Game starting!', 'FF0000');
-      } else {
+      } else if (this._startCountdown <= 5 || this._startCountdown % 15 === 0) {
         this.world.chatManager.sendBroadcastMessage(`${this._startCountdown} seconds until the game starts...`, 'FF0000');
       }
     }, 1000);
@@ -139,8 +153,9 @@ export default class GameManager {
       player.ui.sendData({ type: 'start' });
     });
 
-    this._spawnLoop();
+    // Wave loop first so the first zombies spawn with wave-1 stats.
     this._waveLoop();
+    this._spawnLoop();
   }
 
   public endGame() {
@@ -154,20 +169,25 @@ export default class GameManager {
     this.isStarted = false;
     this.unlockedIds = new Set([ 'start' ]);
     this.waveNumber = 0;
-    this.waveDelay = 0;
+    this._activePlayerIds.clear();
 
     this.world.entityManager.getEntitiesByTag('enemy').forEach(entity => {
       const enemy = entity as EnemyEntity;
       enemy.takeDamage(enemy.health); // triggers any UI updates when killed via takedamage
     });
 
+    // Unclaimed crate rolls must not carry into the next game.
+    this.world.entityManager.getEntitiesByTag('weapon-crate').forEach(entity => {
+      (entity as WeaponCrateEntity).resetRoll();
+    });
+
     this.world.entityManager.getAllPlayerEntities().forEach(playerEntity => {
-      const player = playerEntity.player;
       playerEntity.despawn();
     });
 
     setTimeout(() => { // brief timeout for at least a tick to allow packet resolution.
-      GameServer.instance.playerManager.getConnectedPlayers().forEach(player => {
+      if (!this.world) return;
+      GameServer.instance.playerManager.getConnectedPlayersByWorld(this.world).forEach(player => {
         this.spawnPlayerEntity(player);
       });
     }, 250);
@@ -179,9 +199,15 @@ export default class GameManager {
   public spawnPlayerEntity(player: Player) {
     if (!this.world) return;
 
+    // A player joining inside endGame()'s respawn window (or any double
+    // join) must not get a second entity wired to the same input.
+    if (this.world.entityManager.getPlayerEntitiesByPlayer(player).length) return;
+
     const playerEntity = new GamePlayerEntity(player);
     playerEntity.spawn(this.world, { x: 2, y: 10, z: 19 });
     player.camera.setAttachedToEntity(playerEntity);
+
+    this._activePlayerIds.add(player.id);
   }
 
   public spawnPurchaseBarriers() {
@@ -204,7 +230,7 @@ export default class GameManager {
   }
 
   private _spawnLoop() {
-    if (!this.world) return; // type guard
+    if (!this.world || !this.isStarted) return;
 
     clearTimeout(this._enemySpawnTimeout);
 
@@ -215,22 +241,26 @@ export default class GameManager {
 
     zombie.spawn(this.world, this._getSpawnPoint());
 
-    const nextSpawn = Math.max(FASTEST_SPAWN_INTERVAL_MS, SLOWEST_SPAWN_INTERVAL_MS - (this.waveNumber * WAVE_SPAWN_INTERVAL_REDUCTION_MS)) + this.waveDelay;
+    const nextSpawn = Math.max(FASTEST_SPAWN_INTERVAL_MS, SLOWEST_SPAWN_INTERVAL_MS - (this.waveNumber * WAVE_SPAWN_INTERVAL_REDUCTION_MS));
 
     this._enemySpawnTimeout = setTimeout(() => this._spawnLoop(), nextSpawn);
-    this.waveDelay = 0;
 
     // Check end game conditions.
     this.checkEndGame();
   }
 
   private _waveLoop() {
-    if (!this.world) return; // type guard
+    if (!this.world || !this.isStarted) return;
 
     clearTimeout(this._waveTimeout);
 
     this.waveNumber++;
-    this.waveDelay = WAVE_DELAY_MS;
+
+    // Real inter-wave lull: pause spawning, resume after the delay.
+    if (this.waveNumber > 1) {
+      clearTimeout(this._enemySpawnTimeout);
+      this._enemySpawnTimeout = setTimeout(() => this._spawnLoop(), WAVE_DELAY_MS);
+    }
 
     this._waveStartAudio.play(this.world, true);
 

@@ -60,6 +60,8 @@ export interface WeaponCrateEntityOptions {
   rollableWeaponIds: string[],
 };
 
+const ROLL_CLAIM_TIMEOUT_MS = 30 * 1000;
+
 export default class WeaponCrateEntity extends InteractableEntity {
   public purchasePrice: number;
   private _purchaseSceneUI: SceneUI;
@@ -67,6 +69,8 @@ export default class WeaponCrateEntity extends InteractableEntity {
   private _rouletteSceneUI: SceneUI;
   private _rollableWeaponIds: string[];
   private _rolledWeaponId: string | undefined;
+  private _rolledForPlayer: GamePlayerEntity | undefined;
+  private _rollExpiryTimeout: NodeJS.Timeout | undefined;
 
   public constructor(options: WeaponCrateEntityOptions) {
     const colliderOptions = Collider.optionsFromModelUri('models/environment/weaponbox.gltf');
@@ -82,6 +86,7 @@ export default class WeaponCrateEntity extends InteractableEntity {
         type: RigidBodyType.FIXED,
         colliders: [ colliderOptions ]
       },
+      tag: 'weapon-crate',
       tintColor: { r: 255, g: 255, b: 255 },
     });
 
@@ -119,17 +124,20 @@ export default class WeaponCrateEntity extends InteractableEntity {
       return;
     }
 
-    // If interacting and a weapon is rolled, equip it.
+    // If interacting and a weapon is rolled, equip it — but only for the
+    // player who paid for the roll.
     if (this._rolledWeaponId) {
-      this._rouletteSceneUI.unload();
-      this._purchaseSceneUI.load(this.world);
+      if (this._rolledForPlayer !== interactingPlayer) {
+        this.world.chatManager.sendPlayerMessage(interactingPlayer.player, `This weapon was purchased by another player!`, 'FF0000');
+        return;
+      }
 
       const GunClass = this._weaponIdToGunClass(this._rolledWeaponId);
       if (GunClass) {
         interactingPlayer.equipGun(new GunClass({ parent: interactingPlayer }));
       }
-      
-      this._rolledWeaponId = undefined;
+
+      this.resetRoll();
       return;
     }
 
@@ -144,6 +152,7 @@ export default class WeaponCrateEntity extends InteractableEntity {
 
     // Roll a weapon and show roll UI
     this._rolledWeaponId = this._rollableWeaponIds[Math.floor(Math.random() * this._rollableWeaponIds.length)];
+    this._rolledForPlayer = interactingPlayer;
     this._rouletteSceneUI.setState({
       selectedWeaponId: this._rolledWeaponId,
       possibleWeapons: POSSIBLE_WEAPONS,
@@ -151,6 +160,27 @@ export default class WeaponCrateEntity extends InteractableEntity {
     this._rouletteSceneUI.load(this.world);
 
     this._rouletteAudio.play(this.world, true);
+
+    // Unclaimed rolls expire back to a purchasable crate.
+    clearTimeout(this._rollExpiryTimeout);
+    this._rollExpiryTimeout = setTimeout(() => {
+      if (this.isSpawned && this._rolledWeaponId) {
+        this.resetRoll();
+      }
+    }, ROLL_CLAIM_TIMEOUT_MS);
+  }
+
+  public resetRoll() {
+    if (!this.isSpawned || !this.world) {
+      return;
+    }
+
+    clearTimeout(this._rollExpiryTimeout);
+    this._rollExpiryTimeout = undefined;
+    this._rolledWeaponId = undefined;
+    this._rolledForPlayer = undefined;
+    this._rouletteSceneUI.unload();
+    this._purchaseSceneUI.load(this.world);
   }
 
   public override spawn(world: World, position: Vector3Like, rotation?: QuaternionLike): void {

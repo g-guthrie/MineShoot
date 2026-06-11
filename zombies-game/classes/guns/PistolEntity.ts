@@ -37,14 +37,11 @@ export default class PistolEntity extends GunEntity {
       return;
     }
 
-    // shoot the bullet
+    // shoot the bullet (base shoot() restarts the configured shoot animation)
     super.shoot();
 
     // cancel the input, pistols require click to shoot
     parentPlayerEntity.player.input.ml = false;
-
-    // play shoot animation
-    parentPlayerEntity.getModelAnimation('shoot_gun_right')?.restart();
   }
 
   public override getMuzzleFlashPositionRotation(): { position: Vector3Like, rotation: QuaternionLike } {

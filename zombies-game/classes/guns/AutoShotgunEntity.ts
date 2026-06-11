@@ -6,7 +6,7 @@ import type { PlayerEntity, QuaternionLike, Vector3Like } from 'hytopia';
 export default class AutoShotgunEntity extends ShotgunEntity {
   public constructor(options: Partial<GunEntityOptions> = {}) {
     super({
-      ammo: options.ammo ?? 6,
+      ammo: options.ammo ?? 4,
       fireRate: options.fireRate ?? 2,
       iconImageUri: options.iconImageUri ?? 'icons/auto-shotgun.png',
       name: options.name ?? 'Auto Shotgun',

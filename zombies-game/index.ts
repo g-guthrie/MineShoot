@@ -38,17 +38,22 @@ startServer(world => {
   // Setup game
   GameManager.instance.setupGame(world);
 
-  // Spawn a player entity when a player joins the game.
+  // Spawn a player entity when a player joins the game. Players who were
+  // part of the running round (a disconnect/reconnect) rejoin immediately;
+  // genuinely new players wait for the next round.
   world.on(PlayerEvent.JOINED_WORLD, ({ player }) => {
-    if (GameManager.instance.isStarted) {
+    if (GameManager.instance.isStarted && !GameManager.instance.canRejoin(player)) {
       return world.chatManager.sendPlayerMessage(player, 'This round has already started, you will automatically join when the next round starts. While you wait, you can fly around as a spectator by using W, A, S, D.', 'FF0000');
     }
 
     GameManager.instance.spawnPlayerEntity(player);
   });
 
-  // Despawn all player entities when a player leaves the game.
+  // Despawn all player entities when a player leaves the game, and re-check
+  // end conditions — without this, the last standing player leaving stalls
+  // game-over until the next enemy spawn.
   world.on(PlayerEvent.LEFT_WORLD, ({ player }) => {
     world.entityManager.getPlayerEntitiesByPlayer(player).forEach(entity => entity.despawn());
+    GameManager.instance.checkEndGame();
   });
 });
