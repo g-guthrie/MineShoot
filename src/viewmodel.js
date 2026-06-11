@@ -4,6 +4,7 @@
  * lengths, with bob, recoil, reload dip, and a muzzle flash.
  */
 import { createGunModel } from './gun-models.js';
+import { getMuzzleTexture } from './effects.js';
 
 const THREE = globalThis.THREE;
 const HOLD_POSITION = { x: 0.3, y: -0.24, z: -0.38 };
@@ -24,30 +25,60 @@ const SWAY_LOOK_SCALE = 0.045;
 const SWAY_RETURN_SPEED = 9;
 const SWAY_MAX = 0.07;
 
-function buildArms(weaponId, gunLength) {
-  // Classic Minecraft first-person arm: one chunky arm running from the gun
-  // grip down past the bottom-right screen edge. The grip end and the
-  // off-screen shoulder end are defined in holder space and the box is
-  // oriented between them, so the arm always connects.
+const LONG_GUNS = { machinegun: true, shotgun: true, sniper: true };
+
+/**
+ * Builds the blocky arm + gripping hands. When the gun model has loaded,
+ * gunBox (the measured Box3 of the normalized model) lets the hands wrap
+ * the actual grip: palm behind, fingers curling over the far side.
+ */
+function buildArms(weaponId, gunLength, gunBox) {
   const group = new THREE.Group();
   const skin = new THREE.MeshLambertMaterial({ color: SKIN_COLOR });
 
-  const grip = new THREE.Vector3(0.005, -0.1, -gunLength * 0.22);
-  // Down, right, and toward the camera: ends up clipped by the frame edge.
-  const shoulder = new THREE.Vector3(0.3, -0.55, 0.45);
+  const gunWidth = gunBox ? Math.min(0.16, gunBox.max.x - gunBox.min.x) : 0.1;
+  const gripBottom = gunBox ? gunBox.min.y + 0.01 : -0.1;
+  const gripZ = -gunLength * (LONG_GUNS[weaponId] ? 0.24 : 0.18);
 
-  const direction = shoulder.clone().sub(grip);
-  const armLength = direction.length() + 0.3;
-  const geometry = new THREE.BoxGeometry(0.17, 0.17, armLength);
-  geometry.translate(0, 0, armLength / 2);
-  const arm = new THREE.Mesh(geometry, skin);
-  arm.position.copy(grip);
-  arm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), direction.normalize());
-  group.add(arm);
+  function addHand(z, bottomY) {
+    const hand = new THREE.Group();
+    // Palm wraps under and around the grip.
+    const palm = new THREE.Mesh(new THREE.BoxGeometry(gunWidth + 0.07, 0.075, 0.13), skin);
+    palm.position.set(0, bottomY - 0.025, 0);
+    hand.add(palm);
+    // Fingers curl over the far (left) side of the grip.
+    const fingers = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.085, 0.12), skin);
+    fingers.position.set(-(gunWidth / 2 + 0.035), bottomY + 0.02, 0);
+    hand.add(fingers);
+    // Thumb on the near side.
+    const thumb = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.06, 0.09), skin);
+    thumb.position.set(gunWidth / 2 + 0.03, bottomY + 0.01, 0.02);
+    hand.add(thumb);
+    hand.position.z = z;
+    group.add(hand);
+    return new THREE.Vector3(0, bottomY - 0.03, z);
+  }
 
-  const hand = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.13, 0.15), skin);
-  hand.position.copy(grip).add(new THREE.Vector3(0, 0.02, 0));
-  group.add(hand);
+  function addArm(anchor, shoulder) {
+    const direction = shoulder.clone().sub(anchor);
+    const armLength = direction.length() + 0.3;
+    const geometry = new THREE.BoxGeometry(0.16, 0.16, armLength);
+    geometry.translate(0, 0, armLength / 2);
+    const arm = new THREE.Mesh(geometry, skin);
+    arm.position.copy(anchor);
+    arm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), direction.normalize());
+    group.add(arm);
+  }
+
+  // Trigger hand on the grip, arm running off the bottom-right frame edge.
+  const rightAnchor = addHand(gripZ, gripBottom);
+  addArm(rightAnchor, new THREE.Vector3(0.3, -0.55, 0.45));
+
+  if (LONG_GUNS[weaponId]) {
+    // Support hand under the handguard, arm running down-left.
+    const leftAnchor = addHand(-gunLength * 0.62, gripBottom + 0.01);
+    addArm(leftAnchor, new THREE.Vector3(-0.42, -0.62, 0.35));
+  }
   return group;
 }
 
@@ -62,9 +93,9 @@ export function createViewmodel(camera) {
   holder.add(gunRoot);
 
   let arms = null;
-  function setArms(weaponId, gunLength) {
+  function setArms(weaponId, gunLength, gunBox) {
     if (arms) holder.remove(arms);
-    arms = buildArms(weaponId, gunLength);
+    arms = buildArms(weaponId, gunLength, gunBox);
     holder.add(arms);
   }
 
@@ -72,7 +103,7 @@ export function createViewmodel(camera) {
   gunRoot.add(muzzleAnchor);
 
   const flash = new THREE.Sprite(new THREE.SpriteMaterial({
-    color: 0xffd27a,
+    map: getMuzzleTexture(),
     transparent: true,
     opacity: 0,
     depthTest: false,
@@ -80,6 +111,10 @@ export function createViewmodel(camera) {
   }));
   flash.scale.setScalar(0.5);
   muzzleAnchor.add(flash);
+
+  // The flash also throws light onto nearby world geometry.
+  const flashLight = new THREE.PointLight(0xffa850, 0, 9, 1.8);
+  muzzleAnchor.add(flashLight);
 
   let currentWeaponId = null;
   let currentModel = null;
@@ -140,7 +175,12 @@ export function createViewmodel(camera) {
       const token = ++loadToken;
       createGunModel(weaponId, tuning.length, 1).then((model) => {
         if (token !== loadToken) return;
+        // Measure while detached so the box is in holder-local space, then
+        // rebuild the arms so the hands wrap the actual grip.
+        model.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(model);
         setModel(model);
+        setArms(weaponId, tuning.length, box);
       }).catch(() => {});
     },
 
@@ -149,7 +189,9 @@ export function createViewmodel(camera) {
       recoilSnap = 1; // instant rotational snap that decays fast
       flashTimer = 0.035; // HYTOPIA-style quick muzzle blink
       flash.material.opacity = 1;
-      flash.material.rotation = Math.random() * Math.PI;
+      flash.material.rotation = Math.random() * Math.PI * 2;
+      flash.scale.setScalar((currentTuning.flash || 0.5) * (0.85 + Math.random() * 0.35));
+      flashLight.intensity = 16;
       if (currentTuning.action) actionClock = 0;
     },
 
@@ -275,6 +317,9 @@ export function createViewmodel(camera) {
       if (flashTimer > 0) {
         flashTimer -= dt;
         if (flashTimer <= 0) flash.material.opacity = 0;
+      }
+      if (flashLight.intensity > 0.05) {
+        flashLight.intensity *= Math.max(0, 1 - dt * 24);
       }
     }
   };

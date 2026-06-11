@@ -316,6 +316,7 @@ export function createRemotes(scene) {
         const muzzle = record.avatar.getMuzzleWorldPosition();
         if (muzzle) from = { x: muzzle.x, y: muzzle.y, z: muzzle.z };
       }
+      effects.addMuzzleFlash(from, weapon.pellets > 1 ? 1.2 : 0.9);
       effects.addTracer(from, { x: msg.tx, y: msg.ty, z: msg.tz });
       effects.addImpact({ x: msg.tx, y: msg.ty, z: msg.tz });
       if (localEntity) {

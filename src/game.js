@@ -132,6 +132,8 @@ globalThis.__MINESHOOT = {
   blocks,
   net,
   weapons,
+  viewmodel,
+  camera,
   createGunModel,
   join: (name) => joinGame(name || 'TestBot')
 };

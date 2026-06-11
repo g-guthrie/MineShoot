@@ -3,8 +3,74 @@
  */
 const THREE = globalThis.THREE;
 
+let muzzleTexture = null;
+
+/** Procedural starburst texture: hot white core, orange spikes, soft falloff. */
+export function getMuzzleTexture() {
+  if (muzzleTexture) return muzzleTexture;
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const cx = size / 2;
+
+  ctx.translate(cx, cx);
+  // Spikes: long thin triangles at irregular angles.
+  const spikes = 9;
+  for (let i = 0; i < spikes; i++) {
+    const angle = (i / spikes) * Math.PI * 2 + (i % 2 ? 0.18 : -0.12);
+    const len = cx * (i % 2 ? 0.95 : 0.6);
+    const halfWidth = cx * 0.07;
+    const gradient = ctx.createLinearGradient(0, 0, Math.cos(angle) * len, Math.sin(angle) * len);
+    gradient.addColorStop(0, 'rgba(255,235,180,0.95)');
+    gradient.addColorStop(0.5, 'rgba(255,160,60,0.55)');
+    gradient.addColorStop(1, 'rgba(255,120,30,0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(angle + Math.PI / 2) * halfWidth, Math.sin(angle + Math.PI / 2) * halfWidth);
+    ctx.lineTo(Math.cos(angle) * len, Math.sin(angle) * len);
+    ctx.lineTo(Math.cos(angle - Math.PI / 2) * halfWidth, Math.sin(angle - Math.PI / 2) * halfWidth);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // Hot core.
+  const core = ctx.createRadialGradient(0, 0, 0, 0, 0, cx * 0.4);
+  core.addColorStop(0, 'rgba(255,255,240,1)');
+  core.addColorStop(0.35, 'rgba(255,220,140,0.9)');
+  core.addColorStop(1, 'rgba(255,140,40,0)');
+  ctx.fillStyle = core;
+  ctx.beginPath();
+  ctx.arc(0, 0, cx * 0.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  muzzleTexture = new THREE.CanvasTexture(canvas);
+  return muzzleTexture;
+}
+
 export function createEffects(scene) {
   const live = [];
+
+  // One shared flash light, moved to whichever muzzle fired last.
+  const flashLight = new THREE.PointLight(0xffa850, 0, 11, 1.8);
+  scene.add(flashLight);
+
+  function addMuzzleFlash(point, scale = 1) {
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: getMuzzleTexture(),
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      rotation: Math.random() * Math.PI * 2
+    }));
+    sprite.scale.setScalar((0.55 + Math.random() * 0.25) * scale);
+    sprite.position.set(point.x, point.y, point.z);
+    scene.add(sprite);
+    live.push({ object: sprite, age: 0, ttl: 0.05, fade: true, grow: 5 });
+
+    flashLight.position.set(point.x, point.y, point.z);
+    flashLight.intensity = 26 * scale;
+  }
 
   function addTracer(from, to, color = 0xffe9a8) {
     const points = [
@@ -57,6 +123,11 @@ export function createEffects(scene) {
   }
 
   function update(dt) {
+    if (flashLight.intensity > 0.05) {
+      flashLight.intensity *= Math.max(0, 1 - dt * 26);
+    } else {
+      flashLight.intensity = 0;
+    }
     for (let i = live.length - 1; i >= 0; i--) {
       const fx = live[i];
       fx.age += dt;
@@ -80,5 +151,5 @@ export function createEffects(scene) {
     }
   }
 
-  return { addTracer, addImpact, addDamageNumber, update };
+  return { addTracer, addImpact, addDamageNumber, addMuzzleFlash, update };
 }
