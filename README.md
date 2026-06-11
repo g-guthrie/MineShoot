@@ -1,5 +1,14 @@
 # MineShoot
 
+> **Active development has moved to the Hytopia stack in this repo:**
+> `zombies-game/` (co-op wave survival) and `hytopia-game/` (PvP deathmatch
+> arena), both served to the vendored web client in `hytopia-client/`.
+> Run everything locally with `npm run dev:games`, then open
+> http://localhost:5173 and pick a mode. The two-client smoke check is
+> `node e2e/two-client.mjs [host:port]`. Everything below this note
+> describes the legacy MineShoot game, which is kept deployed on
+> Cloudflare but is no longer developed.
+
 Online browser multiplayer Minecraft-style arena shooter.
 
 A clean-slate rebuild around the original procedural world environment:

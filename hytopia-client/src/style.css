@@ -312,3 +312,25 @@ body.mobile img {
   background: #333;
   color: #ccc;
 }
+
+.hytopia-modal-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hytopia-modal-choice {
+  text-align: left;
+  padding: 12px 16px;
+}
+
+.hytopia-modal-choice-label {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.hytopia-modal-choice-description {
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.7;
+}

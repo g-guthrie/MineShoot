@@ -15,7 +15,7 @@ import ChestEntity from './ChestEntity';
 import GamePlayerEntity from './GamePlayerEntity';
 import GunEntity from './GunEntity';
 import ItemEntity from './ItemEntity';
-import { SPAWN_REGION_AABB } from '../gameConfig';
+import { SPAWN_POINTS } from '../gameConfig';
 
 const AIM_JITTER_RADIANS = 0.055;
 const AIM_JITTER_RANDOM_MIN_SCALE = 0.6;
@@ -264,11 +264,7 @@ export default class BotPlayerEntity extends GamePlayerEntity {
   }
 
   private static _randomSpawnPosition(): Vector3Like {
-    return {
-      x: SPAWN_REGION_AABB.min.x + Math.random() * (SPAWN_REGION_AABB.max.x - SPAWN_REGION_AABB.min.x),
-      y: SPAWN_REGION_AABB.min.y + Math.random() * (SPAWN_REGION_AABB.max.y - SPAWN_REGION_AABB.min.y),
-      z: SPAWN_REGION_AABB.min.z + Math.random() * (SPAWN_REGION_AABB.max.z - SPAWN_REGION_AABB.min.z),
-    };
+    return SPAWN_POINTS[Math.floor(Math.random() * SPAWN_POINTS.length)];
   }
 
   private static _generateRandomBotName(): string {

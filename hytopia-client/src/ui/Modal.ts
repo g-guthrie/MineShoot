@@ -105,3 +105,62 @@ export function modalPrompt(message: string, defaultValue = ''): Promise<string 
     input.select();
   });
 }
+
+export interface ModalSelectOption {
+  label: string;
+  description?: string;
+  value: string;
+}
+
+export function modalSelect(message: string, options: ModalSelectOption[]): Promise<string | null> {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'hytopia-modal-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'hytopia-modal';
+
+    const msg = document.createElement('div');
+    msg.className = 'hytopia-modal-message';
+    msg.textContent = message;
+
+    const choices = document.createElement('div');
+    choices.className = 'hytopia-modal-choices';
+
+    const close = (value: string | null) => {
+      document.removeEventListener('keydown', onKey);
+      overlay.remove();
+      resolve(value);
+    };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close(null);
+    };
+    document.addEventListener('keydown', onKey);
+
+    options.forEach(option => {
+      const button = document.createElement('button');
+      button.className = 'hytopia-modal-button hytopia-modal-choice';
+
+      const label = document.createElement('div');
+      label.className = 'hytopia-modal-choice-label';
+      label.textContent = option.label;
+      button.appendChild(label);
+
+      if (option.description) {
+        const description = document.createElement('div');
+        description.className = 'hytopia-modal-choice-description';
+        description.textContent = option.description;
+        button.appendChild(description);
+      }
+
+      button.onclick = () => close(option.value);
+      choices.appendChild(button);
+    });
+
+    modal.append(msg, choices);
+    overlay.appendChild(modal);
+    getContainer().appendChild(overlay);
+    (choices.firstElementChild as HTMLButtonElement | null)?.focus();
+  });
+}

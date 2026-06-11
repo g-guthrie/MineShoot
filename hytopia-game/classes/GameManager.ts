@@ -6,7 +6,7 @@ import {
   World,
 } from 'hytopia';
 
-import worldMap from '../assets/map.json' with { type: 'json' } ;
+import worldMap from '../assets/maps/arena.json' with { type: 'json' } ;
 
 import {
   BEDROCK_BLOCK_ID,
@@ -18,7 +18,7 @@ import {
   ITEM_SPAWNS,
   ITEM_SPAWNS_AT_START,
   ITEM_SPAWN_ITEMS,
-  SPAWN_REGION_AABB,
+  SPAWN_POINTS,
   RANK_WIN_EXP,
 } from '../gameConfig';
 
@@ -153,11 +153,7 @@ export default class GameManager {
    * Gets a random spawn position within the defined spawn region
    */
   public getRandomSpawnPosition(): Vector3Like {
-    return {
-      x: SPAWN_REGION_AABB.min.x + Math.random() * (SPAWN_REGION_AABB.max.x - SPAWN_REGION_AABB.min.x),
-      y: SPAWN_REGION_AABB.min.y + Math.random() * (SPAWN_REGION_AABB.max.y - SPAWN_REGION_AABB.min.y),
-      z: SPAWN_REGION_AABB.min.z + Math.random() * (SPAWN_REGION_AABB.max.z - SPAWN_REGION_AABB.min.z),
-    };
+    return SPAWN_POINTS[Math.floor(Math.random() * SPAWN_POINTS.length)];
   }
 
   /**

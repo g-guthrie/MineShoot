@@ -1,10 +1,13 @@
-// Two-client multiplayer smoke check for the zombies stack.
-// Expects the dev stack running (scripts/dev-zombies.sh). Joins two
-// independent browser contexts and asserts the server sees both players.
+// Two-client multiplayer smoke check. Expects the dev stack running
+// (scripts/dev-games.sh). Joins two independent browser contexts and
+// asserts the server sees both players.
+//   node e2e/two-client.mjs            -> zombies (127.0.0.1:8081)
+//   node e2e/two-client.mjs 127.0.0.1:8083  -> pvp
 import { chromium } from '@playwright/test';
 
-const PLAY_URL = 'http://localhost:5173/?join=127.0.0.1:8081';
-const HEALTH_URL = 'http://127.0.0.1:8081';
+const JOIN_HOST = process.argv[2] || '127.0.0.1:8081';
+const PLAY_URL = `http://localhost:5173/?join=${JOIN_HOST}`;
+const HEALTH_URL = `http://${JOIN_HOST}`;
 
 // Background pages get rAF-throttled, which stalls the game loop; these
 // flags keep both clients simulating (pattern from the legacy e2e suite).
@@ -56,13 +59,14 @@ try {
   await Promise.all([pageA, pageB].map(page =>
     page.waitForFunction(() => {
       const text = document.body.innerText || '';
-      return /\d+\/\d+/.test(text); // health "100/100" HUD marker
+      // Zombies shows "100/100" health; PvP shows the DEATHMATCH header.
+      return /\d+\/\d+/.test(text) || /DEATHMATCH/i.test(text);
     }, { timeout: 30000 })
   ));
   console.log('Both clients render the in-game HUD.');
 
-  await pageA.screenshot({ path: '/tmp/zombies-mp-client-a.png' });
-  await pageB.screenshot({ path: '/tmp/zombies-mp-client-b.png' });
+  await pageA.screenshot({ path: '/tmp/mp-client-a.png' });
+  await pageB.screenshot({ path: '/tmp/mp-client-b.png' });
 
   if (errors.a.length || errors.b.length) {
     console.log('page errors:', JSON.stringify(errors, null, 2));

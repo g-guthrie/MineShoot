@@ -26,7 +26,7 @@ import {
 
 import GameManager from './classes/GameManager';
 
-import worldMap from './assets/map.json' with { type: 'json' } ;
+import worldMap from './assets/maps/arena.json' with { type: 'json' } ;
 import GamePlayerEntity from './classes/GamePlayerEntity';
 
 startServer(world => {

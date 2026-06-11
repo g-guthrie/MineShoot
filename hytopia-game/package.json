@@ -8,12 +8,17 @@
     "build": "hytopia build",
     "package": "hytopia package",
     "upgrade-assets-library": "hytopia upgrade-assets-library",
-    "upgrade-project": "hytopia upgrade-project"
+    "upgrade-project": "hytopia upgrade-project",
+    "typecheck": "tsc --noEmit",
+    "start": "tsx index.ts",
+    "postinstall": "node dev/patch-webtransport.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@types/node": "^25.9.3",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   },
   "dependencies": {
@@ -21,5 +26,8 @@
   },
   "optionalDependencies": {
     "@hytopia.com/assets": "^0.4.11"
+  },
+  "engines": {
+    "node": ">=22.12"
   }
 }

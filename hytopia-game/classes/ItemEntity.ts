@@ -9,7 +9,8 @@ import {
   BlockEntityOptions,
   ModelEntityOptions,
   Player,
-  PlayerEntityController,
+  DefaultPlayerEntityController,
+  RigidBodyType,
   QuaternionLike,
   SceneUI,
   Vector3Like,
@@ -62,7 +63,7 @@ export default class ItemEntity extends Entity {
     super({
       ...options,
       parentNodeName: ItemEntity._getHandAnchorNode(options.heldHand),
-      rigidBodyOptions: ItemEntity._createRigidBodyOptions(colliderOptions, 'modelScale' in options ? options.modelScale ?? 1 : 1),
+      rigidBodyOptions: ItemEntity._createRigidBodyOptions(colliderOptions, 'modelScale' in options && typeof options.modelScale === 'number' ? options.modelScale : 1),
     });
 
     this.consumable = options.consumable ?? false;
@@ -162,7 +163,7 @@ export default class ItemEntity extends Entity {
   public setParentAnimations(): void {
     if (!this.parent || !this.parent.world || !(this.parent instanceof GamePlayerEntity)) return;
 
-    const controller = this.parent.controller as PlayerEntityController;
+    const controller = this.parent.controller as DefaultPlayerEntityController;
     const idleLoopedAnimations = [ this.idleAnimation, 'idle_lower' ];
     const walkLoopedAnimations = [ this.idleAnimation, 'walk_lower' ];
     const runLoopedAnimations = [ this.idleAnimation, 'run_lower' ];
@@ -250,6 +251,7 @@ export default class ItemEntity extends Entity {
 
   private static _createRigidBodyOptions(colliderOptions: any, modelScale: number) {
     return {
+      type: RigidBodyType.DYNAMIC,
       enabledRotations: { x: false, y: true, z: false },
       colliders: [{
         ...colliderOptions,

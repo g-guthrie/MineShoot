@@ -5,9 +5,12 @@
     ],
     "target": "ESNext",
     "module": "Preserve",
-    "moduleResolution": "node",
-    "verbatimModuleSyntax": true,
+    "moduleResolution": "bundler",
+    "verbatimModuleSyntax": false,
     "strict": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": [
+      "node"
+    ]
   }
 }
