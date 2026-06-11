@@ -1,21 +1,14 @@
 /**
- * player.js - Local first-person player: look, movement (via the shared
- * authoritative movement solver, so traversal matches the tuned world),
- * and camera sync.
+ * player.js - Local first-person player: look, movement, and camera sync.
  */
-import { stepAuthoritativeMovement } from '../shared/authoritative-movement.js';
-import { EYE_HEIGHT } from '../shared/entity-constants.js';
-import { WORLD_MIN, WORLD_MAX } from '../shared/world-layout.js';
-import { getWorldBoxes } from './world-boxes.js';
+import { stepMovement } from './movement.js';
+import { EYE_HEIGHT } from '../shared/combat.js';
 import { audio } from './audio.js';
 
 const LOOK_SENSITIVITY = 0.0023;
 const PITCH_LIMIT = 1.55;
 
-export function createLocalPlayer({ blocks }) {
-  const runtime = globalThis.__MAYHEM_RUNTIME;
-  const GameWorld = runtime.GameWorld;
-
+export function createLocalPlayer({ world, blocks }) {
   const entity = {
     x: 0,
     y: EYE_HEIGHT,
@@ -37,8 +30,8 @@ export function createLocalPlayer({ blocks }) {
 
   self.collisionBoxes = function () {
     const blockBoxes = blocks.collisionBoxes();
-    if (blockBoxes.length === 0) return getWorldBoxes();
-    return getWorldBoxes().concat(blockBoxes);
+    if (blockBoxes.length === 0) return world.collidables;
+    return world.collidables.concat(blockBoxes);
   };
 
   self.spawnAt = function (point) {
@@ -60,11 +53,11 @@ export function createLocalPlayer({ blocks }) {
 
   self.step = function (dt, inputState) {
     const grounded = entity.isGrounded;
-    stepAuthoritativeMovement(entity, inputState, {
-      dtSec: dt,
-      collisionBoxes: self.collisionBoxes(),
-      getGroundHeightAt: (x, z) => GameWorld.getGroundHeightAt(x, z),
-      bounds: { minX: WORLD_MIN, maxX: WORLD_MAX, minZ: WORLD_MIN, maxZ: WORLD_MAX }
+    stepMovement(entity, inputState, {
+      dt,
+      boxes: self.collisionBoxes(),
+      groundAt: world.groundAt,
+      jumpScaleAt: world.jumpScaleAt
     });
 
     if (!grounded && entity.isGrounded) {

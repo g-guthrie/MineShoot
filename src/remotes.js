@@ -4,7 +4,7 @@
  * animation state machine over the clip set (idle/walk/run/shoot/jump/
  * land/death).
  */
-import { EYE_HEIGHT } from '../shared/entity-constants.js';
+import { EYE_HEIGHT } from '../shared/combat.js';
 import { WEAPONS, weaponOrDefault } from '../shared/combat.js';
 import { createEffects } from './effects.js';
 import { createCharacter } from './character.js';

@@ -2,22 +2,7 @@
  * game.js - Boots the renderer and world, runs the menu backdrop orbit,
  * and owns the main loop once the player joins a match.
  */
-// Shared runtime registrations (order matters: protocol/layout before world).
-import '../shared/protocol.js';
-import '../shared/world-layout.js';
-import '../shared/terrain-sampler.js';
-import '../shared/entity-constants.js';
-import '../shared/gameplay-tuning.js';
-import '../shared/authoritative-movement.js';
-// World content. world-collision pulls in every quadrant module so both the
-// visual build and the canonical collision build see the same registry.
-import '../shared/world-collision.js';
-import '../js/world/material-library.js';
-import '../js/world/biome-utils.js';
-import '../js/world/world.js';
-// Weapon visuals (asset offsets shared with the avatar pipeline).
-import '../js/domain/weapons/visuals.js';
-
+import { createWorld } from './world.js';
 import { createInput } from './input.js';
 import { createLocalPlayer } from './player.js';
 import { createBlocks } from './blocks.js';
@@ -26,18 +11,15 @@ import { createWeapons } from './weapons.js';
 import { createViewmodel } from './viewmodel.js';
 import { createNet } from './net.js';
 import { createHud } from './hud.js';
-import { createGunModel } from './gun-models.js';
 import { createCharacter } from './character.js';
 import { createAnimatedGun } from './animated-guns.js';
 import { audio } from './audio.js';
 import { sfx } from './sfx.js';
-import { PLAYER_MAX_HP, RESPAWN_DELAY_MS, STATE_SEND_HZ } from '../shared/combat.js';
+import {
+  PLAYER_MAX_HP, RESPAWN_DELAY_MS, STATE_SEND_HZ, EYE_HEIGHT
+} from '../shared/combat.js';
 
 const THREE = globalThis.THREE;
-const runtime = globalThis.__MAYHEM_RUNTIME;
-const GameWorld = runtime.GameWorld;
-const protocol = runtime.GameShared.protocol;
-const entityConstants = runtime.GameShared.entityConstants;
 
 const canvas = document.getElementById('game-canvas');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -57,20 +39,18 @@ window.addEventListener('resize', () => {
 });
 
 // Build the world once; it doubles as the menu backdrop.
-const worldMeta = protocol.buildExpectedWorldMeta(protocol.defaults.roomId);
-GameWorld.create(scene, { worldMeta });
-
-const worldCenter = GameWorld.getCenter();
-const worldSize = GameWorld.getSize();
+const world = createWorld(scene);
+const worldCenter = world.center;
+const worldSize = world.size;
 
 const hud = createHud();
 const blocks = createBlocks(scene);
 const remotes = createRemotes(scene);
 const net = createNet();
 const viewmodel = createViewmodel(camera);
-const player = createLocalPlayer({ blocks });
+const player = createLocalPlayer({ world, blocks });
 const weapons = createWeapons({
-  camera, scene, player, blocks, remotes, viewmodel, net, hud,
+  camera, scene, world, player, blocks, remotes, viewmodel, net, hud,
   onFire: (w) => addShake(w.pellets > 1 ? 0.016 : w.cooldownMs > 1000 ? 0.014 : 0.006)
 });
 const input = createInput({ canvas });
@@ -136,7 +116,6 @@ globalThis.__MINESHOOT = {
   viewmodel,
   camera,
   scene,
-  createGunModel,
   createCharacter,
   createAnimatedGun,
   join: (name) => joinGame(name || 'TestBot')
@@ -185,12 +164,9 @@ function joinGame(name) {
 
 function pickSpawn() {
   const avoid = remotes.alivePositions();
-  const point = GameWorld.getRandomSpawnPoint(GameWorld.getSpawnPadding(), {
-    avoidPoints: avoid,
-    minClearance: 10
-  }) || { x: worldCenter, z: worldCenter };
-  const groundY = GameWorld.getGroundHeightAt(point.x, point.z) || 0;
-  return { x: point.x, y: groundY + entityConstants.EYE_HEIGHT, z: point.z };
+  const point = world.randomSpawn(avoid);
+  const groundY = world.groundAt(point.x, point.z) || 0;
+  return { x: point.x, y: groundY + EYE_HEIGHT, z: point.z };
 }
 
 // ---------------------------------------------------------------------------
@@ -448,7 +424,7 @@ function frame(nowMs) {
   const dt = Math.min(0.05, Math.max(0.0001, (nowMs - lastFrameAt) / 1000));
   lastFrameAt = nowMs;
 
-  GameWorld.update(dt);
+  world.update(dt);
   blocks.update(dt);
   remotes.update(dt, nowMs);
 

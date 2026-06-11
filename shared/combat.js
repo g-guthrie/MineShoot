@@ -1,7 +1,17 @@
 /**
- * combat.js - Weapon and block tuning shared by the browser client and the
- * Cloudflare room server so damage math always agrees.
+ * combat.js - Arena, player, weapon and block tuning shared by the browser
+ * client and the Cloudflare room server so the math always agrees.
  */
+export const ARENA = {
+  min: 0,
+  max: 120,
+  center: 60
+};
+
+export const EYE_HEIGHT = 1.6;
+export const PLAYER_RADIUS = 0.5;
+export const PLAYER_HEIGHT = 2.5;
+
 export const WEAPONS = {
   machinegun: {
     name: 'P90',

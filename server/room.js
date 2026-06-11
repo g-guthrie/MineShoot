@@ -17,10 +17,10 @@ import {
   parseBlockKey,
   blockKey
 } from '../shared/combat.js';
-import { WORLD_MIN as LAYOUT_MIN, WORLD_MAX as LAYOUT_MAX } from '../shared/world-layout.js';
+import { ARENA } from '../shared/combat.js';
 
-const WORLD_MIN = LAYOUT_MIN - 4;
-const WORLD_MAX = LAYOUT_MAX + 4;
+const WORLD_MIN = ARENA.min - 4;
+const WORLD_MAX = ARENA.max + 4;
 const MAX_PLAYERS = 24;
 const MAX_BLOCKS_TOTAL = 1200;
 const HIT_RANGE_SLACK = 8;

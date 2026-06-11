@@ -4,8 +4,7 @@
  * hitboxes; the room server validates and applies damage.
  */
 import { WEAPONS, WEAPON_SLOTS, BLOCKS, weaponOrDefault, blockKey, parseBlockKey } from '../shared/combat.js';
-import { EYE_HEIGHT, PLAYER_RADIUS, PLAYER_HEIGHT } from '../shared/entity-constants.js';
-import { getWorldBoxes } from './world-boxes.js';
+import { EYE_HEIGHT, PLAYER_RADIUS, PLAYER_HEIGHT } from '../shared/combat.js';
 import { audio } from './audio.js';
 
 const THREE = globalThis.THREE;
@@ -71,9 +70,7 @@ function boxesOverlap(a, b) {
          a.min.z < b.max.z && a.max.z > b.min.z;
 }
 
-export function createWeapons({ camera, scene, player, blocks, remotes, viewmodel, net, hud, onFire }) {
-  const runtime = globalThis.__MAYHEM_RUNTIME;
-  const GameWorld = runtime.GameWorld;
+export function createWeapons({ camera, scene, world, player, blocks, remotes, viewmodel, net, hud, onFire }) {
   const effects = remotes.effects;
 
   const slots = WEAPON_SLOTS.map((id) => ({
@@ -145,23 +142,23 @@ export function createWeapons({ camera, scene, player, blocks, remotes, viewmode
     return { x: forward.x, y: forward.y, z: forward.z };
   }
 
-  /** Nearest static-world hit: authored collider boxes + terrain march. */
+  /** Nearest static-world hit: world collider boxes + ground march. */
   function raycastWorld(origin, dir, maxDist) {
     let best = null;
-    const boxes = getWorldBoxes();
+    const boxes = world.collidables;
     for (let i = 0; i < boxes.length; i++) {
       const hit = rayBox(origin, dir, boxes[i], best ? best.t : maxDist);
       if (hit && (!best || hit.t < best.t)) best = hit;
     }
 
-    // Terrain: march the ray and find where it dips under the ground height.
+    // Ground: march the ray and find where it dips under the ground height.
     const step = 0.9;
     const limit = best ? best.t : maxDist;
     let prevT = 0;
-    let prevAbove = origin.y - (GameWorld.getGroundHeightAt(origin.x, origin.z) || 0);
+    let prevAbove = origin.y - (world.groundAt(origin.x, origin.z) || 0);
     for (let t = step; t <= limit; t += step) {
       const p = pointAt(origin, dir, t);
-      const above = p.y - (GameWorld.getGroundHeightAt(p.x, p.z) || 0);
+      const above = p.y - (world.groundAt(p.x, p.z) || 0);
       if (above <= 0 && prevAbove > 0) {
         const f = prevAbove / (prevAbove - above);
         const tHit = prevT + (t - prevT) * f;
