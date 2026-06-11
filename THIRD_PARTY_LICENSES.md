@@ -61,3 +61,12 @@ example in the HYTOPIA engine monorepo
 (https://github.com/hytopiagg/hytopia-source, Copyright (c) 2026
 HYTOPIA, Inc), with a custom generated three-biome map. It targets the
 HYTOPIA platform, where HYTOPIA's game assets are licensed for use.
+
+## HYTOPIA zombies-fps example (MIT)
+
+The game in `zombies-game/` is the MIT-licensed "zombies-fps" example
+from the HYTOPIA engine monorepo
+(https://github.com/hytopiagg/hytopia-source, Copyright (c) 2026
+HYTOPIA, Inc), with self-hosting runtime fixes. A copy of the MIT
+license is included at `zombies-game/LICENSE.md` (likewise in
+`hytopia-client/` and `hytopia-game/`).

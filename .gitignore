@@ -11,3 +11,5 @@ hytopia-game/node_modules/
 hytopia-game/dev/persistence/
 hytopia-client/node_modules/
 hytopia-game/tmp-e2e/
+zombies-game/node_modules/
+zombies-game/dev/persistence/
