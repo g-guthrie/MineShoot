@@ -25,6 +25,9 @@ export function createHud() {
   const toastEl = el('toast');
   const scopeEl = el('scope');
   const crosshairEl = el('crosshair');
+  const matchTimer = el('match-timer');
+  const matchEnd = el('match-end');
+  const podium = el('podium');
 
   let hitmarkerTimer = null;
   let vignetteTimer = null;
@@ -96,6 +99,30 @@ export function createHud() {
     setScope(shown) {
       scopeEl.style.display = shown ? 'block' : 'none';
       crosshairEl.style.display = shown ? 'none' : 'block';
+    },
+
+    setMatchTimer(ms) {
+      const total = Math.max(0, Math.ceil(ms / 1000));
+      const minutes = Math.floor(total / 60);
+      const seconds = String(total % 60).padStart(2, '0');
+      matchTimer.textContent = `${minutes}:${seconds}`;
+      matchTimer.classList.toggle('ending', total <= 30);
+    },
+
+    showMatchEnd(scores, selfId) {
+      podium.innerHTML = '';
+      (scores || []).slice(0, 3).forEach((row, index) => {
+        const div = document.createElement('div');
+        div.className = 'podium-row' + (index === 0 ? ' first' : '');
+        const youTag = row.id === selfId ? ' (you)' : '';
+        div.innerHTML = `<span>#${index + 1} ${escapeHtml(row.name)}${youTag}</span><span>${row.kills} kills</span>`;
+        podium.appendChild(div);
+      });
+      matchEnd.style.display = 'flex';
+    },
+
+    hideMatchEnd() {
+      matchEnd.style.display = 'none';
     },
 
     hitmarker(head) {

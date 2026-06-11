@@ -71,7 +71,7 @@ function boxesOverlap(a, b) {
          a.min.z < b.max.z && a.max.z > b.min.z;
 }
 
-export function createWeapons({ camera, scene, player, blocks, remotes, viewmodel, net, hud }) {
+export function createWeapons({ camera, scene, player, blocks, remotes, viewmodel, net, hud, onFire }) {
   const runtime = globalThis.__MAYHEM_RUNTIME;
   const GameWorld = runtime.GameWorld;
   const effects = remotes.effects;
@@ -266,6 +266,7 @@ export function createWeapons({ camera, scene, player, blocks, remotes, viewmode
 
     viewmodel.kick(w.pellets > 1 ? 1.6 : 1);
     audio.play(w.sound, 0.55);
+    if (onFire) onFire(w);
 
     if (s.ammo <= 0) reload();
   }

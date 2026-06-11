@@ -24,6 +24,8 @@ const WORLD_MAX = LAYOUT_MAX + 4;
 const MAX_PLAYERS = 24;
 const MAX_BLOCKS_TOTAL = 1200;
 const HIT_RANGE_SLACK = 8;
+const MATCH_MS = 5 * 60 * 1000;
+const INTERMISSION_MS = 9000;
 
 function now() {
   return Date.now();
@@ -43,6 +45,9 @@ export class GlobalArenaRoom {
     this.blocks = new Map();  // "ix,iy,iz" -> { hp, by }
     this.nextId = 1;
     this.snapshotTimer = null;
+    this.matchEndsAt = 0;
+    this.intermissionUntil = 0;
+    this.matchActive = true;
   }
 
   async fetch(request) {
@@ -115,6 +120,7 @@ export class GlobalArenaRoom {
   handleJoin(player, msg) {
     if (player.joined) return;
     player.joined = true;
+    if (!this.matchEndsAt) this.matchEndsAt = now() + MATCH_MS;
     player.name = sanitizePlayerName(msg.name);
     player.alive = true;
     player.hp = PLAYER_MAX_HP;
@@ -153,7 +159,7 @@ export class GlobalArenaRoom {
   // Fire events are broadcast for tracers/sound on other clients. The
   // cooldown stamp recorded here also gates how often hits are accepted.
   handleFire(player, msg) {
-    if (!player.joined || !player.alive) return;
+    if (!player.joined || !player.alive || !this.matchActive) return;
     const weapon = WEAPONS[weaponOrDefault(msg.weapon)];
     const elapsed = now() - player.lastFireAt;
     if (elapsed < weapon.cooldownMs * 0.7) return;
@@ -172,7 +178,7 @@ export class GlobalArenaRoom {
   }
 
   handleHit(player, msg) {
-    if (!player.joined || !player.alive) return;
+    if (!player.joined || !player.alive || !this.matchActive) return;
     const target = this.players.get(String(msg.target || ''));
     if (!target || !target.joined || !target.alive || target.id === player.id) return;
 
@@ -212,7 +218,7 @@ export class GlobalArenaRoom {
   }
 
   handlePlace(player, msg) {
-    if (!player.joined || !player.alive) return;
+    if (!player.joined || !player.alive || !this.matchActive) return;
     this.regenBlocks(player);
     if (player.blocksCarried <= 0) return;
     if (this.blocks.size >= MAX_BLOCKS_TOTAL) return;
@@ -302,8 +308,34 @@ export class GlobalArenaRoom {
           this.removePlayer(player.id);
         }
       }
-      this.broadcast({ t: 'snap', players: this.publicPlayers() });
+      this.tickMatch();
+      this.broadcast({
+        t: 'snap',
+        players: this.publicPlayers(),
+        matchMs: this.matchActive ? Math.max(0, this.matchEndsAt - now()) : 0
+      });
     }, Math.round(1000 / SNAPSHOT_HZ));
+  }
+
+  tickMatch() {
+    const t = now();
+    if (this.matchActive && this.matchEndsAt && t >= this.matchEndsAt) {
+      this.matchActive = false;
+      this.intermissionUntil = t + INTERMISSION_MS;
+      this.broadcast({ t: 'match_end', scores: this.scoreTable(), nextInMs: INTERMISSION_MS });
+    } else if (!this.matchActive && t >= this.intermissionUntil) {
+      this.matchActive = true;
+      this.matchEndsAt = t + MATCH_MS;
+      this.blocks.clear();
+      for (const player of this.players.values()) {
+        player.kills = 0;
+        player.deaths = 0;
+        player.hp = PLAYER_MAX_HP;
+        player.alive = true;
+        player.blocksCarried = BLOCKS.startCarried;
+      }
+      this.broadcast({ t: 'match_start', scores: this.scoreTable() });
+    }
   }
 
   publicPlayer(player) {

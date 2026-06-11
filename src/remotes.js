@@ -140,6 +140,9 @@ export function createRemotes(scene) {
       },
       lastDisplay: { x: p.x, y: p.y, z: p.z },
       worldSpeed: 0,
+      lateralLean: 0,
+      wasAirborne: false,
+      landSquash: 0,
       dying: 0,
       gunModel: null,
       gunToken: 0,
@@ -428,14 +431,36 @@ export function createRemotes(scene) {
         record.lastDisplay.z = record.display.z;
 
         const anim = record.display.anim || {};
+
+        // Jump anticipation pose on takeoff, squash-and-stretch on landing.
+        const airborne = !!anim.airborne;
+        if (airborne && !record.wasAirborne) {
+          record.avatar.triggerAction('jump', { duration: 0.22 });
+        } else if (!airborne && record.wasAirborne) {
+          record.landSquash = 1;
+        }
+        record.wasAirborne = airborne;
+        record.landSquash = Math.max(0, record.landSquash - dt * 6);
+        const squash = Math.sin(record.landSquash * Math.PI) * 0.12;
+        const stretch = airborne ? 0.05 : 0;
+        record.avatar.root.scale.set(1 + squash * 0.6, 1 - squash + stretch, 1 + squash * 0.6);
+
+        // Lean into strafes: lateral velocity in the avatar's facing frame.
+        const yaw = record.display.yaw;
+        const lateral = (dx * Math.cos(yaw) - dz * Math.sin(yaw)) / Math.max(0.0001, dt);
+        const targetLean = Math.max(-0.12, Math.min(0.12, -lateral * 0.012));
+        record.lateralLean += (targetLean - record.lateralLean) * Math.min(1, dt * 8);
+        if (record.alive) record.avatar.root.rotation.z = record.lateralLean;
+
         record.avatar.updateAnimation(dt, {
           speedNorm: Math.min(1.4, record.worldSpeed / 14),
           worldSpeed: record.worldSpeed,
           sprinting: !!anim.sprinting,
-          airborne: !!anim.airborne,
+          airborne,
           movingForward: !!anim.movingForward,
           movingBackward: !!anim.movingBackward,
           reloading: !!anim.reloading,
+          adsActive: !!anim.ads,
           aimPitch: record.display.pitch
         });
         // Head follows the player's look pitch, like Minecraft.

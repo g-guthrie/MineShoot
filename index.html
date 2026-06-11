@@ -107,6 +107,27 @@
   .weapon-slot.active { border-color: #8ed75c; color: #fff; background: rgba(38,66,28,0.6); }
   .weapon-slot .key { display: block; font-size: 10px; opacity: 0.7; }
 
+  #match-timer {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.5); color: #fff; padding: 4px 14px; border-radius: 4px;
+    font-size: 18px; font-weight: 800; letter-spacing: 2px;
+  }
+  #match-timer.ending { color: #ff8a65; }
+
+  #match-end {
+    position: absolute; inset: 0; display: none; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px;
+    background: rgba(6,10,16,0.78);
+  }
+  #match-end h2 { color: #ffd35c; font-size: 42px; margin: 0; letter-spacing: 3px; text-shadow: 0 3px 8px #000; }
+  #match-end .podium { display: flex; flex-direction: column; gap: 6px; min-width: 320px; }
+  #match-end .podium-row {
+    display: flex; justify-content: space-between; background: rgba(255,255,255,0.08);
+    color: #e8f2fb; padding: 8px 18px; border-radius: 6px; font-size: 18px;
+  }
+  #match-end .podium-row.first { background: rgba(255,211,92,0.22); color: #ffd35c; font-weight: 800; }
+  #match-end .next-hint { color: #9fb4c8; font-size: 15px; margin-top: 8px; }
+
   #killfeed {
     position: absolute; top: 18px; right: 22px; display: flex; flex-direction: column;
     gap: 5px; align-items: flex-end;
@@ -216,6 +237,12 @@
       <div id="blocks-count">&#9632; 16 blocks</div>
     </div>
     <div id="weapon-bar"></div>
+    <div id="match-timer">5:00</div>
+    <div id="match-end">
+      <h2>MATCH OVER</h2>
+      <div class="podium" id="podium"></div>
+      <div class="next-hint" id="next-hint">Next match starting...</div>
+    </div>
     <div id="killfeed"></div>
     <div id="scoreboard">
       <h2>SCOREBOARD</h2>

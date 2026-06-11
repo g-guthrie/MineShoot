@@ -69,7 +69,8 @@ const net = createNet();
 const viewmodel = createViewmodel(camera);
 const player = createLocalPlayer({ blocks });
 const weapons = createWeapons({
-  camera, scene, player, blocks, remotes, viewmodel, net, hud
+  camera, scene, player, blocks, remotes, viewmodel, net, hud,
+  onFire: (w) => addShake(w.pellets > 1 ? 0.016 : w.cooldownMs > 1000 ? 0.014 : 0.006)
 });
 const input = createInput({ canvas });
 remotes.setLocalEntity(player.entity);
@@ -83,6 +84,7 @@ const state = {
   hp: PLAYER_MAX_HP,
   diedAt: 0,
   killerName: '',
+  matchFrozen: false,
   menuOrbit: Math.random() * Math.PI * 2,
   lastStateSentAt: 0
 };
@@ -208,6 +210,7 @@ net.on('welcome', (msg) => {
   input.requestPointerLock();
   audio.unlock();
   sfx.unlock();
+  audio.loop('wind', 0.07);
 });
 
 net.on('join', (msg) => {
@@ -226,6 +229,33 @@ net.on('snap', (msg) => {
     if (p.id === state.selfId) continue;
     remotes.applySnapshot(p);
   }
+  if (typeof msg.matchMs === 'number' && !state.matchFrozen) {
+    hud.setMatchTimer(msg.matchMs);
+  }
+});
+
+net.on('match_end', (msg) => {
+  state.matchFrozen = true;
+  hud.showMatchEnd(msg.scores, state.selfId);
+  const winner = msg.scores && msg.scores[0];
+  if (winner && winner.id === state.selfId) sfx.kill();
+});
+
+net.on('match_start', (msg) => {
+  state.matchFrozen = false;
+  hud.hideMatchEnd();
+  hud.setScores(msg.scores, state.selfId);
+  blocks.reset();
+  state.hp = PLAYER_MAX_HP;
+  hud.setHp(state.hp);
+  hud.setBlocks(16);
+  if (state.mode === 'dead') {
+    hud.hideDeath();
+    state.mode = 'playing';
+  }
+  const spawn = pickSpawn();
+  player.spawnAt(spawn);
+  hud.toast('New match started!');
 });
 
 net.on('fire', (msg) => {
@@ -237,6 +267,7 @@ net.on('damage', (msg) => {
   hud.setHp(state.hp);
   hud.damageFlash();
   sfx.hurt(audio.hurtPitch());
+  addShake(0.012 + Math.min(0.02, msg.amount / 2500));
 });
 
 net.on('hit_confirm', (msg) => {
@@ -296,6 +327,11 @@ net.on('disconnect', () => {
 
 const BASE_FOV = 75;
 let scopeShown = false;
+let shakeAmp = 0;
+
+function addShake(amount) {
+  shakeAmp = Math.min(0.05, shakeAmp + amount);
+}
 
 input.onLook((dx, dy) => {
   if (state.mode !== 'playing') return;
@@ -318,7 +354,8 @@ input.onAds((active) => {
 function updateAds(dt) {
   const w = weapons.currentWeapon();
   const aiming = weapons.isAds() && state.mode === 'playing';
-  const targetFov = aiming && w.adsFovDeg ? w.adsFovDeg : BASE_FOV;
+  const sprintPush = !aiming && player.entity.sprinting ? 6 : 0;
+  const targetFov = aiming && w.adsFovDeg ? w.adsFovDeg : BASE_FOV + sprintPush;
   const next = camera.fov + (targetFov - camera.fov) * Math.min(1, dt * 12);
   if (Math.abs(next - camera.fov) > 0.01) {
     camera.fov = next;
@@ -334,7 +371,7 @@ function updateAds(dt) {
 }
 
 input.onFireDown(() => {
-  if (state.mode !== 'playing' || !input.isLocked()) return;
+  if (state.mode !== 'playing' || !input.isLocked() || state.matchFrozen) return;
   weapons.triggerDown();
 });
 input.onFireUp(() => weapons.triggerUp());
@@ -347,6 +384,7 @@ input.onPlaceBlock(() => {
 input.onWeaponSelect((slot) => {
   if (state.mode !== 'playing') return;
   weapons.selectSlot(slot);
+  sfx.click();
 });
 
 input.onReload(() => {
@@ -391,7 +429,8 @@ setInterval(() => {
       airborne: !player.entity.isGrounded,
       movingForward: input.movementState().forward,
       movingBackward: input.movementState().backward,
-      reloading: weapons.isReloading()
+      reloading: weapons.isReloading(),
+      ads: weapons.isAds()
     }
   });
 }, Math.round(1000 / STATE_SEND_HZ));
@@ -424,7 +463,7 @@ function frame(nowMs) {
   } else {
     if (state.mode === 'playing') {
       player.step(dt, input.movementState());
-      weapons.update(dt, input.isFireHeld());
+      weapons.update(dt, input.isFireHeld() && !state.matchFrozen);
       viewmodel.update(dt, player);
       weapons.updateGhost();
       updateAds(dt);
@@ -435,6 +474,12 @@ function frame(nowMs) {
       weapons.setGhostVisible(false);
     }
     player.syncCamera(camera);
+    if (shakeAmp > 0.0005) {
+      camera.rotation.x += (Math.random() - 0.5) * shakeAmp;
+      camera.rotation.y += (Math.random() - 0.5) * shakeAmp;
+      camera.rotation.z += (Math.random() - 0.5) * shakeAmp * 0.5;
+      shakeAmp *= Math.max(0, 1 - dt * 9);
+    }
   }
 
   weapons.updateEffects(dt);

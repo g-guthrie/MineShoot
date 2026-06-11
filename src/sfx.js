@@ -55,6 +55,12 @@ export const sfx = {
     tone({ freq: 1760, duration: 0.12, volume: 0.14, type: 'triangle', delay: 0.12 });
   },
 
+  /** Soft mechanical click for weapon switching / UI. */
+  click() {
+    tone({ freq: 1500, duration: 0.02, volume: 0.07, type: 'square' });
+    tone({ freq: 900, duration: 0.025, volume: 0.06, type: 'square', delay: 0.02 });
+  },
+
   /** Low thud when taking damage. */
   hurt(rate = 1) {
     tone({ freq: 220 * rate, endFreq: 90 * rate, duration: 0.12, volume: 0.22, type: 'triangle' });

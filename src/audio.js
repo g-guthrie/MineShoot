@@ -2,6 +2,7 @@
  * audio.js - Tiny HTMLAudio pool for weapon/movement sounds.
  */
 const SOURCES = {
+  wind: '/assets/audio/movement/wind-woosh-loop.ogg',
   rifle: '/assets/audio/weapons/rifle.mp3',
   pistol: '/assets/audio/weapons/pistol.mp3',
   shotgun: '/assets/audio/weapons/shotgun.mp3',
@@ -42,6 +43,25 @@ export const audio = {
       el.playbackRate = rate;
       el.play().catch(() => {});
     } catch (err) { /* autoplay restrictions */ }
+  },
+
+  /** Quiet ambient loop; restarting an active loop is a no-op. */
+  loop(name, volume = 0.1) {
+    const base = template(name);
+    if (!base) return;
+    if (base.__looping) return;
+    base.__looping = true;
+    base.loop = true;
+    base.volume = volume;
+    base.play().catch(() => { base.__looping = false; });
+  },
+
+  stopLoop(name) {
+    const base = templates.get(name);
+    if (base && base.__looping) {
+      base.pause();
+      base.__looping = false;
+    }
   },
 
   playAt(name, distance, maxDistance = 80, baseVolume = 1, rate = 1) {

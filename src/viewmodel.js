@@ -104,9 +104,15 @@ export function createViewmodel(camera) {
   // Per-weapon fire action (pump/bolt/slide) timeline, in seconds.
   let actionClock = -1;
   // ADS blend: 0 = hip, 1 = aimed (gun centered under the crosshair).
+  // Driven by a lightly underdamped spring so the gun settles with a
+  // small overshoot instead of an exponential crawl.
   let adsTarget = 0;
   let adsBlend = 0;
+  let adsVel = 0;
   let scoped = false;
+  // Sprint carry pose blend and idle breathing.
+  let sprintBlend = 0;
+  let breathPhase = Math.random() * Math.PI * 2;
 
   function setModel(object) {
     if (currentModel) {
@@ -180,6 +186,12 @@ export function createViewmodel(camera) {
       }
       const bobX = Math.sin(bobPhase) * 0.012 * speedNorm;
       const bobY = Math.abs(Math.cos(bobPhase)) * 0.016 * speedNorm;
+      // Walk push-pull: the gun drives forward and back with each step.
+      const bobZ = Math.cos(bobPhase) * 0.02 * speedNorm;
+      // Idle breathing keeps the gun alive even when standing still.
+      breathPhase += dt * 1.7;
+      const breatheY = Math.sin(breathPhase) * 0.004;
+      const breatheZ = Math.cos(breathPhase * 0.7) * 0.005;
 
       // Landing dip on grounded transition.
       if (player.entity.isGrounded && !wasGrounded) landDip = 1;
@@ -229,25 +241,33 @@ export function createViewmodel(camera) {
         }
       }
 
-      // ADS blends the hold toward screen center and damps bob/sway.
-      adsBlend += (adsTarget - adsBlend) * Math.min(1, dt * 12);
+      // ADS spring (underdamped for a touch of overshoot).
+      const stiffness = 190;
+      const damping = 20;
+      adsVel += ((adsTarget - adsBlend) * stiffness - adsVel * damping) * dt;
+      adsBlend = Math.max(-0.05, Math.min(1.08, adsBlend + adsVel * dt));
       const ads = adsBlend;
-      const damp = 1 - ads * 0.7;
+      const damp = 1 - Math.min(1, Math.max(0, ads)) * 0.7;
 
-      const baseX = HOLD_POSITION.x * (1 - ads) + 0.0 * ads;
-      const baseY = (HOLD_POSITION.y + holdOffset.y) * (1 - ads) + -0.16 * ads;
-      const baseZ = (HOLD_POSITION.z + holdOffset.z) * (1 - ads) + -0.32 * ads;
+      // Sprint carry: gun swings up across the body while sprinting.
+      const sprintTarget = player.entity.sprinting && adsTarget === 0 && reloadTimer <= 0 ? 1 : 0;
+      sprintBlend += (sprintTarget - sprintBlend) * Math.min(1, dt * 8);
+      const sprint = sprintBlend;
+
+      const baseX = HOLD_POSITION.x * (1 - ads) + 0.0 * ads - sprint * 0.06;
+      const baseY = (HOLD_POSITION.y + holdOffset.y) * (1 - ads) + -0.16 * ads - sprint * 0.05;
+      const baseZ = (HOLD_POSITION.z + holdOffset.z) * (1 - ads) + -0.32 * ads + sprint * 0.05;
 
       holder.position.set(
         baseX + (holdOffset.x + bobX + swayX * 0.6) * damp,
-        baseY + (-bobY - switchDip * 0.35 - landDip * 0.07 + swayY * 0.5) * damp,
-        baseZ + recoil * 0.07 + actionZ
+        baseY + (-bobY - switchDip * 0.35 - landDip * 0.07 + swayY * 0.5 + breatheY) * damp,
+        baseZ + recoil * 0.07 + actionZ + (bobZ + breatheZ) * damp
       );
       holder.rotation.set(
         recoil * 0.04 + recoilSnap * 0.05 + reloadAngle * -0.8
-          + (swayY * 1.4 - landDip * 0.06) * damp + actionPitch,
-        (6 * DEG) * (1 - ads) + swayX * 1.6 * damp,
-        swayX * 0.8 * damp + actionRoll
+          + (swayY * 1.4 - landDip * 0.06) * damp + actionPitch + sprint * 0.32,
+        (6 * DEG) * (1 - ads) + swayX * 1.6 * damp + sprint * 0.5,
+        swayX * 0.8 * damp + actionRoll - sprint * 0.12
       );
     },
 
