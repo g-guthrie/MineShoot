@@ -2,6 +2,7 @@ import { AudioLoader, Cache, CubeTextureLoader, TextureLoader } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import Game from '../Game';
+import { getHttpProtocol } from './Servers';
 
 const TRANSCODER_PATH = '/basis/';
 
@@ -18,11 +19,12 @@ export default class Assets {
   public static readonly gltfLoader: GLTFLoader = new GLTFLoader().setKTX2Loader(Assets.ktx2Loader);
 
   public static getCdnBaseUrl(): string {
-    return `https://${Game.instance.networkManager.serverHostname}`;
+    const hostname = Game.instance.networkManager.serverHostname!;
+    return `${getHttpProtocol(hostname)}://${hostname}`;
   }
 
   public static toAssetUri(assetUri: string, cacheBreak = false): string {
-    if (assetUri.startsWith('https://')) {
+    if (assetUri.startsWith('https://') || assetUri.startsWith('http://')) {
       return assetUri;
     }
 

@@ -4,12 +4,11 @@ import {
   CollisionGroupsBuilder,
   Entity,
   PlayerEntity,
-  Vector3Like,
-  QuaternionLike,
   World,
-  PlayerEntityController,
-  ModelEntityOptions,
+  DefaultPlayerEntityController,
 } from 'hytopia';
+
+import type { ModelEntityOptions, QuaternionLike, Vector3Like } from 'hytopia';
 
 import EnemyEntity from './EnemyEntity';
 import type GamePlayerEntity from './GamePlayerEntity';
@@ -173,7 +172,7 @@ export default abstract class GunEntity extends Entity {
       return;
     }
 
-    const playerEntityController = this.parent.controller as PlayerEntityController;
+    const playerEntityController = this.parent.controller as DefaultPlayerEntityController;
 
     playerEntityController.idleLoopedAnimations = [ this.idleAnimation, 'idle_lower' ];
     playerEntityController.walkLoopedAnimations = [ this.idleAnimation, 'walk_lower' ];

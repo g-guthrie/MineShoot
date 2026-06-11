@@ -1,21 +1,18 @@
-import { 
+import {
   Audio,
   BaseEntityControllerEvent,
   CollisionGroup,
   DefaultPlayerEntity,
   DefaultPlayerEntityController,
-  EventPayloads,
-  Light,
-  LightType,
   Player,
   PlayerCameraMode,
   SceneUI,
-  Vector3Like,
-  QuaternionLike,
   World,
   Quaternion,
   Vector3,
 } from 'hytopia';
+
+import type { EventPayloads, QuaternionLike, Vector3Like } from 'hytopia';
 
 import PistolEntity from './guns/PistolEntity';
 
@@ -38,7 +35,6 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   private _downedSceneUI: SceneUI;
   private _purchaseAudio: Audio;
   private _gun: GunEntity | undefined;
-  private _light: Light;
   private _reviveInterval: NodeJS.Timeout | undefined;
   private _reviveDistanceVectorA: Vector3;
   private _reviveDistanceVectorB: Vector3;
@@ -105,18 +101,6 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
       offset: { x: 0, y: 0.5, z: 0 },
     });
 
-    // Setup light
-    this._light = new Light({
-      angle: Math.PI / 4 + 0.1,
-      penumbra: 0.03,
-      attachedToEntity: this,
-      trackedEntity: this,
-      type: LightType.SPOTLIGHT,
-      intensity: 5,
-      offset: { x: 0, y: 0, z: 0.1 }, 
-      color: { r: 255, g: 255, b: 255 },
-    });
-
     // Create reusable vector3 for revive distance calculations
     this._reviveDistanceVectorA = new Vector3(0, 0, 0);
     this._reviveDistanceVectorB = new Vector3(0, 0, 0);
@@ -133,9 +117,6 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
 
     // Give player a pistol.
     this.equipGun(new PistolEntity({ parent: this }));
-
-    // Spawn light
-    this._light.spawn(world);
 
     // Start auto heal ticker
     this._autoHealTicker();
@@ -316,7 +297,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     }
 
     if (hitEntity instanceof InteractableEntity) {
-      hitEntity.interact(this);
+      hitEntity.interactWith(this);
     }
 
     if (hitEntity instanceof GamePlayerEntity && hitEntity.downed) {

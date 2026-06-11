@@ -2,12 +2,10 @@ import {
   Audio,
   Entity,
   EntityEvent,
-  EventPayloads,
-  ModelEntityOptions,
   PathfindingEntityController,
 } from 'hytopia';
 
-import type { QuaternionLike, Vector3Like, World } from 'hytopia';
+import type { EventPayloads, ModelEntityOptions, QuaternionLike, Vector3Like, World } from 'hytopia';
 
 import GamePlayerEntity from './GamePlayerEntity';
 

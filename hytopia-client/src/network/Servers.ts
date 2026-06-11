@@ -6,9 +6,21 @@ const MINIMUM_SUPPORTED_SERVER_VERSION = '0.10.0';
 // platform's loopback DNS alias (local.hytopiahosting.com), which depends
 // on HYTOPIA's infrastructure. Literal IPv4 because the dev server binds
 // 0.0.0.0 and "localhost" resolves to ::1 first in Chromium.
-const DEV_LOCAL_HOSTNAME = '127.0.0.1:8080';
+const DEV_LOCAL_HOSTNAME = '127.0.0.1:8081';
 const DEV_LEGACY_HOSTNAME = 'localhost:8080';
 const SERVER_HEALTH_CHECK_TIMEOUT_MS = 8000;
+
+export function isLocalServer(hostname: string): boolean {
+  return /^(\d+\.\d+\.\d+\.\d+|localhost)(:\d+)?$/.test(hostname);
+}
+
+export function getHttpProtocol(hostname: string): 'http' | 'https' {
+  return isLocalServer(hostname) ? 'http' : 'https';
+}
+
+export function getWebSocketProtocol(hostname: string): 'ws' | 'wss' {
+  return isLocalServer(hostname) ? 'ws' : 'wss';
+}
 
 // Compatible client URLs, ordered newest to oldest.
 // First entry with version <= server version wins.
@@ -49,7 +61,7 @@ export default class Servers {
       }
 
       // Validate server connection
-      const isLocal = [ DEV_LOCAL_HOSTNAME, DEV_LEGACY_HOSTNAME ].includes(hostname);
+      const isLocal = isLocalServer(hostname);
 
       try {
         const candidates = hostname === DEV_LOCAL_HOSTNAME
@@ -60,7 +72,7 @@ export default class Servers {
 
         for (const candidate of candidates) {
           try {
-            response = await fetchWithTimeout(`https://${candidate}`, {
+            response = await fetchWithTimeout(`${getHttpProtocol(candidate)}://${candidate}`, {
               targetAddressSpace: isLocal ? 'loopback' : undefined,
             } as RequestInit, SERVER_HEALTH_CHECK_TIMEOUT_MS);
           } catch { /* ignore network errors (including timeout); try next candidate */ }
@@ -89,8 +101,7 @@ export default class Servers {
             '----------------\n' +
             '1) Start it: hytopia start\n' +
             '2) Use a Chromium browser (Chrome, Brave, Edge)\n' +
-            '3) Allow Local network access for https://hytopia.com:\n' +
-            '   chrome://settings/content/siteDetails?site=https://hytopia.com\n' +
+            `3) Confirm the local proxy is running on ${DEV_LOCAL_HOSTNAME}\n` +
             'Then try again.'
           );
         }
@@ -117,7 +128,7 @@ export default class Servers {
     const hostname = (new URLSearchParams(window.location.search)).get('join') || '';
 
     try {
-      const response = await fetchWithTimeout(`https://${hostname}`, { method: 'HEAD' }, SERVER_HEALTH_CHECK_TIMEOUT_MS);
+      const response = await fetchWithTimeout(`${getHttpProtocol(hostname)}://${hostname}`, { method: 'HEAD' }, SERVER_HEALTH_CHECK_TIMEOUT_MS);
 
       return response.ok;
     } catch {

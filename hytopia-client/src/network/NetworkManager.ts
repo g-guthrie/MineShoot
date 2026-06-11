@@ -4,7 +4,7 @@ import { Packr, FLOAT32_OPTIONS } from 'msgpackr';
 import Deserializer from './Deserializer';
 import EventRouter from '../events/EventRouter';
 import Game from '../Game';
-import Servers from './Servers';
+import Servers, { getWebSocketProtocol, isLocalServer } from './Servers';
 
 import type {
   DeserializedAudios,
@@ -142,7 +142,7 @@ export default class NetworkManager {
     // WebTransport (HTTP/3 / QUIC) rejects without pinned certificate
     // hashes. Prefer WebSocket for those, and keep WebTransport for hosts
     // with real certificates.
-    const selfHosted = /^(\d+\.\d+\.\d+\.\d+|localhost)(:\d+)?$/.test(hostname);
+    const selfHosted = isLocalServer(hostname);
 
     if (!selfHosted && typeof WebTransport !== 'undefined') {
       await this._connectWebTransport();
@@ -331,7 +331,7 @@ export default class NetworkManager {
     return new Promise(resolve => {
       console.log('NetworkManager._connectWebSocket(): Attempting to connect using WebSocket...');
 
-      this._ws = new WebSocket(`wss://${this._serverHostname}${window.location.search}`);
+      this._ws = new WebSocket(`${getWebSocketProtocol(this._serverHostname!)}://${this._serverHostname}${window.location.search}`);
       this._ws.binaryType = 'arraybuffer';
       this._ws.onopen = () => {
         console.log('NetworkManager._connectWebSocket(): WebSocket connection successful!');

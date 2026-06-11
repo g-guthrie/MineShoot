@@ -1,4 +1,4 @@
-import { EntityModelAnimationLoopMode, GameServer, PathfindingEntityController } from 'hytopia';
+import { EntityModelAnimationLoopMode, GameServer, PathfindingEntityController, RigidBodyType } from 'hytopia';
 import type { QuaternionLike, Vector3Like, World } from 'hytopia';
 
 import EnemyEntity from '../EnemyEntity';
@@ -26,6 +26,7 @@ export default class RipperEntity extends EnemyEntity {
       modelAnimations: [{ name: animation, loopMode: EntityModelAnimationLoopMode.LOOP, play: true }],
       modelScale: 0.5,
       rigidBodyOptions: {
+        type: RigidBodyType.DYNAMIC,
         enabledRotations: { x: false, y: true, z: false },
         ccdEnabled: true,
       },

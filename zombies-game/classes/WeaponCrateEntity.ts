@@ -2,12 +2,12 @@ import {
   Audio,
   Collider,
   RigidBodyType,
-  QuaternionLike,
-  Vector3Like,
   World,
   SceneUI,
   ColliderShape,
 } from 'hytopia';
+
+import type { QuaternionLike, Vector3Like } from 'hytopia';
 
 import GamePlayerEntity from './GamePlayerEntity';
 import InteractableEntity from './InteractableEntity';
@@ -114,7 +114,7 @@ export default class WeaponCrateEntity extends InteractableEntity {
     });
   }
 
-  public override interact(interactingPlayer: GamePlayerEntity) {
+  public override interactWith(interactingPlayer: GamePlayerEntity) {
     if (!this.isSpawned || !this.world) {
       return;
     }

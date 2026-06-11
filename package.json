@@ -14,6 +14,7 @@
   },
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 3000",
+    "dev:zombies": "./scripts/dev-zombies.sh",
     "dev:server": "wrangler dev --config wrangler.worker.toml --port 8787",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 3000",

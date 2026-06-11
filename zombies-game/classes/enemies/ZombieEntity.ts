@@ -1,4 +1,4 @@
-import { EntityModelAnimationLoopMode, PathfindingEntityController } from 'hytopia';
+import { EntityModelAnimationLoopMode, PathfindingEntityController, RigidBodyType } from 'hytopia';
 
 import EnemyEntity from '../EnemyEntity';
 import type { EnemyEntityOptions } from '../EnemyEntity';
@@ -22,6 +22,7 @@ export default class ZombieEntity extends EnemyEntity {
       modelAnimations: [{ name: animation, loopMode: EntityModelAnimationLoopMode.LOOP, play: true }],
       modelScale: 0.5 + Math.random() * 0.2,
       rigidBodyOptions: {
+        type: RigidBodyType.DYNAMIC,
         enabledRotations: { x: false, y: true, z: false },
         ccdEnabled: true,
       },

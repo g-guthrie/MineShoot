@@ -13,3 +13,8 @@ hytopia-client/node_modules/
 hytopia-game/tmp-e2e/
 zombies-game/node_modules/
 zombies-game/dev/persistence/
+.claude/launch.json
+tmp/
+hytopia-client/build/
+hytopia-client/temp/
+hytopia-game/bun.lock

@@ -1,14 +1,13 @@
 import {
-  BlockColliderOptions,
   ColliderShape,
   CollisionGroup,
   Entity,
-  QuaternionLike,
   RigidBodyType,
   SceneUI,
-  Vector3Like,
   World,
 } from 'hytopia';
+
+import type { BlockColliderOptions, QuaternionLike, Vector3Like } from 'hytopia';
 
 import GameManager from './GameManager';
 import GamePlayerEntity from './GamePlayerEntity';
@@ -52,7 +51,7 @@ export default class PurchaseBarrierEntity extends InteractableEntity {
     return this._width;
   }
   
-  public override interact(interactingPlayer: GamePlayerEntity) {
+  public override interactWith(interactingPlayer: GamePlayerEntity) {
     if (!this.isSpawned || !this.world) {
       return;
     }
