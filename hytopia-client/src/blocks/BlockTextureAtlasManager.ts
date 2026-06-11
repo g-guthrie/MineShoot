@@ -82,9 +82,19 @@ export default class BlockTextureAtlasManager {
     try {
       this._texture = await Assets.ktx2Loader.loadAsync(assetPath);
     } catch (error) {
-      // TODO: Retry?
-      console.error(error);
-      throw new Error(`BlockTextureAtlasManager: Fatal Error! Failed to load ${assetPath}.`);
+      // KTX2 needs GPU compressed-texture support, which software
+      // renderers and some old devices lack. The server writes a plain
+      // PNG atlas next to the KTX2 one; fall back to it.
+      console.warn(`BlockTextureAtlasManager: KTX2 atlas failed (${error}), falling back to PNG atlas.`);
+      const pngPath = Assets.toAssetUri(BLOCK_TEXTURE_ATLAS_PATH.replace(/\.ktx2$/, '.png'));
+      try {
+        this._texture = await Assets.textureLoader.loadAsync(pngPath);
+        this._texture.flipY = false;
+        this._texture.colorSpace = SRGBColorSpace;
+      } catch (pngError) {
+        console.error(pngError);
+        throw new Error(`BlockTextureAtlasManager: Fatal Error! Failed to load ${assetPath} and PNG fallback.`);
+      }
     }
 
     this._setupTexture();

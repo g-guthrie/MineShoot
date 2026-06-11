@@ -28,10 +28,12 @@ startServer(world => {
   // Load map.
   world.loadMap(worldMap);
 
-  // Setup lighting
-  world.setAmbientLightIntensity(0.0001);
-  world.setAmbientLightColor({ r: 255, g: 192, b: 192 });
-  world.setDirectionalLightIntensity(0.0001);
+  // Setup lighting. The original example uses near-zero light for horror
+  // mood (relying on in-map lamps); raised here so the world is readable.
+  // Tune back down once lamp placement is verified.
+  world.setAmbientLightIntensity(0.85);
+  world.setAmbientLightColor({ r: 255, g: 214, b: 214 });
+  world.setDirectionalLightIntensity(2.5);
 
   // Setup game
   GameManager.instance.setupGame(world);
