@@ -3,22 +3,23 @@
  * the textured low-poly weapon models, normalized to consistent on-screen
  * lengths, with bob, recoil, reload dip, and a muzzle flash.
  */
-import { createGunModel } from './gun-models.js';
+import { createAnimatedGun } from './animated-guns.js';
 import { getMuzzleTexture } from './effects.js';
 
 const THREE = globalThis.THREE;
-const HOLD_POSITION = { x: 0.3, y: -0.24, z: -0.38 };
+const HOLD_POSITION = { x: 0.27, y: -0.22, z: -0.34 };
 const DEG = Math.PI / 180;
 const SKIN_COLOR = 0xd2a77d;
+const SLEEVE_COLOR = 0x55613f; // soldier fatigues, matches the character kit
 
 // Per-weapon view tuning: target on-screen barrel length, optional hold
-// offsets relative to HOLD_POSITION, muzzle flash size, and the fire
-// action (pump/bolt/slide motion played after the recoil kick).
+// offsets relative to HOLD_POSITION, and muzzle flash size. Fire/reload
+// motion comes from the keyframed clips baked into the gun models.
 const VIEW_TUNING = {
-  machinegun: { length: 0.88, flash: 0.5 },
-  shotgun: { length: 0.82, flash: 0.75, action: { type: 'pump', delayMs: 220, durationMs: 320 } },
-  sniper: { length: 1.05, dy: 0.02, flash: 0.6, action: { type: 'bolt', delayMs: 200, durationMs: 420 } },
-  pistol: { length: 0.42, dy: 0.02, dx: -0.02, flash: 0.4, action: { type: 'slide', delayMs: 0, durationMs: 110 } }
+  machinegun: { length: 0.7, flash: 0.5 },
+  shotgun: { length: 0.92, flash: 0.75 },
+  sniper: { length: 1.05, dy: 0.02, flash: 0.6 },
+  pistol: { length: 0.46, dy: 0.02, dx: -0.02, flash: 0.4 }
 };
 
 const SWAY_LOOK_SCALE = 0.045;
@@ -35,6 +36,7 @@ const LONG_GUNS = { machinegun: true, shotgun: true, sniper: true };
 function buildArms(weaponId, gunLength, gunBox) {
   const group = new THREE.Group();
   const skin = new THREE.MeshLambertMaterial({ color: SKIN_COLOR });
+  const sleeve = new THREE.MeshLambertMaterial({ color: SLEEVE_COLOR });
 
   const gunWidth = gunBox ? Math.min(0.16, gunBox.max.x - gunBox.min.x) : 0.1;
   const gripBottom = gunBox ? gunBox.min.y + 0.01 : -0.1;
@@ -51,12 +53,24 @@ function buildArms(weaponId, gunLength, gunBox) {
   function addArm(anchor, shoulder) {
     const direction = shoulder.clone().sub(anchor);
     const armLength = direction.length() + 0.3;
-    const geometry = new THREE.BoxGeometry(0.16, 0.16, armLength);
-    geometry.translate(0, 0, armLength / 2);
-    const arm = new THREE.Mesh(geometry, skin);
-    arm.position.copy(anchor);
-    arm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), direction.normalize());
-    group.add(arm);
+    const dir = direction.normalize();
+    const orientation = new THREE.Quaternion()
+      .setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+
+    // Skin wrist segment near the hand, fatigues sleeve for the rest.
+    const wristGeo = new THREE.BoxGeometry(0.15, 0.15, 0.16);
+    wristGeo.translate(0, 0, 0.08);
+    const wrist = new THREE.Mesh(wristGeo, skin);
+    wrist.position.copy(anchor);
+    wrist.quaternion.copy(orientation);
+    group.add(wrist);
+
+    const sleeveGeo = new THREE.BoxGeometry(0.19, 0.19, armLength - 0.14);
+    sleeveGeo.translate(0, 0, 0.14 + (armLength - 0.14) / 2);
+    const sleeveMesh = new THREE.Mesh(sleeveGeo, sleeve);
+    sleeveMesh.position.copy(anchor);
+    sleeveMesh.quaternion.copy(orientation);
+    group.add(sleeveMesh);
   }
 
   // Trigger hand on the grip, arm running off the bottom-right frame edge.
@@ -77,6 +91,12 @@ export function createViewmodel(camera) {
   // Slight inward yaw so the barrel converges toward the crosshair.
   holder.rotation.y = 6 * DEG;
   camera.add(holder);
+
+  // Short-range fill so the viewmodel never reads as a murky silhouette,
+  // whatever the world lighting is doing.
+  const fillLight = new THREE.PointLight(0xfff2e0, 1.4, 2.4, 1.2);
+  fillLight.position.set(-0.25, 0.35, 0.25);
+  camera.add(fillLight);
 
   const gunRoot = new THREE.Group();
   holder.add(gunRoot);
@@ -107,6 +127,7 @@ export function createViewmodel(camera) {
 
   let currentWeaponId = null;
   let currentModel = null;
+  let currentGun = null;
   let loadToken = 0;
   let holdOffset = { x: 0, y: 0, z: 0 };
   let currentTuning = VIEW_TUNING.machinegun;
@@ -125,8 +146,6 @@ export function createViewmodel(camera) {
   // Landing dip.
   let wasGrounded = true;
   let landDip = 0;
-  // Per-weapon fire action (pump/bolt/slide) timeline, in seconds.
-  let actionClock = -1;
   // ADS blend: 0 = hip, 1 = aimed (gun centered under the crosshair).
   // Driven by a lightly underdamped spring so the gun settles with a
   // small overshoot instead of an exponential crawl.
@@ -155,25 +174,23 @@ export function createViewmodel(camera) {
 
       const tuning = VIEW_TUNING[weaponId] || VIEW_TUNING.machinegun;
       currentTuning = tuning;
-      actionClock = -1;
       holdOffset = { x: tuning.dx || 0, y: tuning.dy || 0, z: tuning.dz || 0 };
       muzzleAnchor.position.set(0, 0.02, -tuning.length - 0.03);
       flash.scale.setScalar(tuning.flash || 0.5);
       setArms(weaponId, tuning.length);
 
       const token = ++loadToken;
-      createGunModel(weaponId, tuning.length, 1).then((model) => {
+      createAnimatedGun(weaponId, tuning.length).then((gun) => {
         if (token !== loadToken) return;
-        // Measure while detached so the box is in holder-local space, then
-        // rebuild the arms so the hands wrap the actual grip.
-        model.updateMatrixWorld(true);
-        const box = new THREE.Box3().setFromObject(model);
-        setModel(model);
-        setArms(weaponId, tuning.length, box);
-      }).catch(() => {});
+        currentGun = gun;
+        setModel(gun.root);
+        setArms(weaponId, tuning.length, gun.box);
+      }).catch((err) => {
+        console.error('animated gun load failed', err);
+      });
     },
 
-    kick(strength = 1) {
+    kick(strength = 1, cooldownMs = 300) {
       recoil = Math.min(1.8, recoil + 0.7 * strength);
       recoilSnap = 1; // instant rotational snap that decays fast
       flashTimer = 0.035; // HYTOPIA-style quick muzzle blink
@@ -181,7 +198,7 @@ export function createViewmodel(camera) {
       flash.material.rotation = Math.random() * Math.PI * 2;
       flash.scale.setScalar((currentTuning.flash || 0.5) * (0.85 + Math.random() * 0.35));
       flashLight.intensity = 16;
-      if (currentTuning.action) actionClock = 0;
+      if (currentGun) currentGun.playFire(cooldownMs);
     },
 
     onLook(dx, dy) {
@@ -202,6 +219,7 @@ export function createViewmodel(camera) {
     startReload(durationMs) {
       reloadDuration = durationMs / 1000;
       reloadTimer = reloadDuration;
+      if (currentGun) currentGun.playReload(durationMs);
     },
 
     muzzleWorldPosition() {
@@ -239,37 +257,12 @@ export function createViewmodel(camera) {
       switchDip = Math.max(0, switchDip - dt * 4);
       if (reloadTimer > 0) reloadTimer = Math.max(0, reloadTimer - dt);
 
+      // Reload motion comes from the gun's keyframed clip; the holder only
+      // adds a gentle settle dip.
       let reloadAngle = 0;
       if (reloadTimer > 0 && reloadDuration > 0) {
         const progress = 1 - reloadTimer / reloadDuration;
-        reloadAngle = Math.sin(Math.min(1, progress) * Math.PI) * 0.7;
-      }
-
-      // Per-weapon fire action: pump/bolt/slide motion on the gun itself.
-      let actionZ = 0;
-      let actionRoll = 0;
-      let actionPitch = 0;
-      const action = currentTuning.action;
-      if (action && actionClock >= 0) {
-        actionClock += dt;
-        const start = action.delayMs / 1000;
-        const span = action.durationMs / 1000;
-        const phase = (actionClock - start) / span;
-        if (phase >= 1) {
-          actionClock = -1;
-        } else if (phase > 0) {
-          const pulse = Math.sin(phase * Math.PI);
-          if (action.type === 'pump') {
-            actionZ = pulse * 0.09;
-            actionPitch = pulse * 0.06;
-          } else if (action.type === 'bolt') {
-            actionRoll = pulse * 0.3;
-            actionZ = pulse * 0.05;
-          } else if (action.type === 'slide') {
-            actionZ = pulse * 0.05;
-            actionPitch = pulse * 0.12;
-          }
-        }
+        reloadAngle = Math.sin(Math.min(1, progress) * Math.PI) * 0.18;
       }
 
       // ADS spring (underdamped for a touch of overshoot).
@@ -292,17 +285,18 @@ export function createViewmodel(camera) {
       holder.position.set(
         baseX + (holdOffset.x + bobX + swayX * 0.6) * damp,
         baseY + (-bobY - switchDip * 0.35 - landDip * 0.07 + swayY * 0.5 + breatheY) * damp,
-        baseZ + recoil * 0.07 + actionZ + (bobZ + breatheZ) * damp
+        baseZ + recoil * 0.07 + (bobZ + breatheZ) * damp
       );
       holder.rotation.set(
         recoil * 0.04 + recoilSnap * 0.05 + reloadAngle * -0.8
-          + (swayY * 1.4 - landDip * 0.06) * damp + actionPitch + sprint * 0.32,
+          + (swayY * 1.4 - landDip * 0.06) * damp + sprint * 0.32,
         (6 * DEG) * (1 - ads) + swayX * 1.6 * damp + sprint * 0.5,
-        swayX * 0.8 * damp + actionRoll - sprint * 0.12
+        swayX * 0.8 * damp - sprint * 0.12
       );
     },
 
     updateEffects(dt) {
+      if (currentGun) currentGun.update(dt);
       if (flashTimer > 0) {
         flashTimer -= dt;
         if (flashTimer <= 0) flash.material.opacity = 0;

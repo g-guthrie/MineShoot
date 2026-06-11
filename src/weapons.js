@@ -264,7 +264,7 @@ export function createWeapons({ camera, scene, player, blocks, remotes, viewmode
       for (let i = 0; i < sends; i++) net.send({ t: 'block_hit', k: key });
     }
 
-    viewmodel.kick(w.pellets > 1 ? 1.6 : 1);
+    viewmodel.kick(w.pellets > 1 ? 1.6 : 1, w.cooldownMs);
     audio.play(w.sound, 0.55);
     if (onFire) onFire(w);
 

@@ -1,17 +1,18 @@
 # Third-Party Licenses
 
-## Quaternius Toon Shooter Game Kit
+## Quaternius asset packs (CC0)
 
-The animated player characters in `public/assets/characters/toon-shooter/`
-(Character_Soldier, Character_Enemy, Character_Hazmat) are from the
-Quaternius "Toon Shooter Game Kit":
+The following assets are by Quaternius, released under CC0 1.0 Universal
+(public domain) — https://creativecommons.org/publicdomain/zero/1.0/ —
+no attribution required; credit given with thanks:
 
-- Source: https://quaternius.com/packs/toonshootergamekit.html
-- License: CC0 1.0 Universal (public domain)
-  https://creativecommons.org/publicdomain/zero/1.0/
-
-No attribution is required by the license; credit to Quaternius is given
-with thanks.
+- `public/assets/characters/toon-shooter/` (Character_Soldier,
+  Character_Enemy, Character_Hazmat): "Toon Shooter Game Kit",
+  https://quaternius.com/packs/toonshootergamekit.html
+- `public/assets/weapons/animated/` (P90, Pistol, Revolver, Rifle,
+  Shotgun, SniperRifle; converted FBX -> GLB, recolored by material
+  name): "Animated FPS Guns" pack,
+  https://quaternius.com/packs/animatedguns.html
 
 ## HYTOPIA game engine and example games
 

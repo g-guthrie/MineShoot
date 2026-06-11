@@ -28,6 +28,7 @@ import { createNet } from './net.js';
 import { createHud } from './hud.js';
 import { createGunModel } from './gun-models.js';
 import { createCharacter } from './character.js';
+import { createAnimatedGun } from './animated-guns.js';
 import { audio } from './audio.js';
 import { sfx } from './sfx.js';
 import { PLAYER_MAX_HP, RESPAWN_DELAY_MS, STATE_SEND_HZ } from '../shared/combat.js';
@@ -137,6 +138,7 @@ globalThis.__MINESHOOT = {
   scene,
   createGunModel,
   createCharacter,
+  createAnimatedGun,
   join: (name) => joinGame(name || 'TestBot')
 };
 

@@ -4,7 +4,7 @@
  */
 export const WEAPONS = {
   machinegun: {
-    name: 'AK',
+    name: 'P90',
     damage: 14,
     pellets: 1,
     cooldownMs: 110,
@@ -61,7 +61,7 @@ export const WEAPONS = {
     sound: 'sniper'
   },
   pistol: {
-    name: 'Pistol',
+    name: 'Revolver',
     damage: 30,
     pellets: 1,
     cooldownMs: 250,
