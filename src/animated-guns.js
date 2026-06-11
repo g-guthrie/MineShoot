@@ -15,7 +15,10 @@ const GUNS = {
     url: '/assets/weapons/animated/P90.glb',
     fire: 'P90Armature|Fire',
     reload: 'P90Armature|Reload',
-    rotationDeg: [0, 180, 0]
+    rotationDeg: [0, 180, 0],
+    // Bullpup: the grip sits in the front half, which fools the
+    // grip-at-the-rear orientation heuristic.
+    invertFlip: true
   },
   shotgun: {
     url: '/assets/weapons/animated/Shotgun.glb',
@@ -75,7 +78,8 @@ function loadGltf(url) {
 /**
  * Skeleton-aware world bounds. Detached pieces like bullets and magazines
  * can sit far from the body in the measured frame, so only meshes near the
- * largest mesh (the gun body) are counted.
+ * largest mesh (the gun body) are counted. Returns the cluster box plus
+ * the per-part boxes inside it.
  */
 function measure(root) {
   root.updateMatrixWorld(true);
@@ -91,7 +95,7 @@ function measure(root) {
     }
     if (!meshBox.isEmpty()) boxes.push(meshBox);
   });
-  if (boxes.length === 0) return new THREE.Box3();
+  if (boxes.length === 0) return { box: new THREE.Box3(), parts: [] };
 
   const volume = (b) =>
     Math.max(0.0001, b.max.x - b.min.x) *
@@ -103,10 +107,33 @@ function measure(root) {
   );
 
   const box = primary.clone();
+  const parts = [];
   for (const candidate of boxes) {
-    if (candidate.intersectsBox(cluster)) box.union(candidate);
+    if (candidate.intersectsBox(cluster)) {
+      box.union(candidate);
+      parts.push(candidate);
+    }
   }
-  return box;
+  return { box, parts };
+}
+
+/**
+ * Guns hang their grip/trigger below the REAR half while the muzzle end
+ * is thin, so the Z-half whose geometry reaches lowest is the back of the
+ * gun. Returns true when the model needs a 180-degree flip to put the
+ * muzzle at -Z.
+ */
+function needsFlip(box, parts) {
+  const centerZ = (box.min.z + box.max.z) / 2;
+  let frontMinY = Infinity;
+  let rearMinY = Infinity;
+  for (const part of parts) {
+    const partCenterZ = (part.min.z + part.max.z) / 2;
+    if (partCenterZ < centerZ) frontMinY = Math.min(frontMinY, part.min.y);
+    else rearMinY = Math.min(rearMinY, part.min.y);
+  }
+  // Grip hanging in the -Z half means the gun is facing backwards.
+  return frontMinY < rearMinY - (box.max.y - box.min.y) * 0.12;
 }
 
 /**
@@ -161,7 +188,12 @@ export function createAnimatedGun(weaponId, targetLength) {
     }
 
     let scale;
-    const box = measure(wrap);
+    let { box, parts } = measure(wrap);
+    const flip = config.invertFlip ? !needsFlip(box, parts) : needsFlip(box, parts);
+    if (flip) {
+      inner.rotation.y += Math.PI;
+      ({ box, parts } = measure(wrap));
+    }
     if (config.manualScale != null) {
       scale = config.manualScale;
       wrap.scale.setScalar(scale);
