@@ -75,7 +75,7 @@
   const CDN_ASSETS_URL = '{{CDN_ASSETS_URL}}';
   let timerInterval;
 
-  hytopia.registerSceneUITemplate('downed-player', (id, onState) => {
+  highchair.registerSceneUITemplate('downed-player', (id, onState) => {
     const template = document.getElementById('downed-player-template');
     const clone = template.content.cloneNode(true);
     const progressFill = clone.querySelector('.revive-progress-fill');
@@ -88,7 +88,7 @@
   });
 
   // register purchase label template
-  hytopia.registerSceneUITemplate('purchase-label', (id, onState) => {
+  highchair.registerSceneUITemplate('purchase-label', (id, onState) => {
     const template = document.getElementById('purchase-label-template');
     const clone = template.content.cloneNode(true);
     const labelName = clone.querySelector('.label-name');
@@ -103,7 +103,7 @@
   });
 
   // register weapon roulette template
-  hytopia.registerSceneUITemplate('weapon-roulette', (id, onState) => {
+  highchair.registerSceneUITemplate('weapon-roulette', (id, onState) => {
     const template = document.getElementById('weapon-roulette-template');
     const clone = template.content.cloneNode(true);
     const rouletteImage = clone.querySelector('.roulette-image');
@@ -148,7 +148,7 @@
   });
 
   // handle game data ui updates
-  hytopia.onData(data => {
+  highchair.onData(data => {
     const { type } = data;
 
     if (!type) {

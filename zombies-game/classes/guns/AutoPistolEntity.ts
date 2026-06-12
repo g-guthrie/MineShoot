@@ -1,7 +1,7 @@
-import { Quaternion } from 'hytopia';
+import { Quaternion } from 'highchair';
 import PistolEntity from './PistolEntity';
 import type { GunEntityOptions } from '../GunEntity';
-import type { PlayerEntity, QuaternionLike, Vector3Like } from 'hytopia';
+import type { PlayerEntity, QuaternionLike, Vector3Like } from 'highchair';
 
 export default class AutoPistolEntity extends PistolEntity {
   public constructor(options: Partial<GunEntityOptions> = {}) {

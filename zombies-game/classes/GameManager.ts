@@ -1,13 +1,13 @@
-import { Audio, Collider, ColliderShape, CollisionGroup, GameServer } from 'hytopia';
+import { Audio, Collider, ColliderShape, CollisionGroup, GameServer } from 'highchair';
 import GamePlayerEntity from './GamePlayerEntity';
 import PurchaseBarrierEntity from './PurchaseBarrierEntity';
 import { INVISIBLE_WALLS, INVISIBLE_WALL_COLLISION_GROUP, PURCHASE_BARRIERS, ENEMY_SPAWN_POINTS, WEAPON_CRATES } from '../gameConfig';
 import RipperEntity from './enemies/RipperEntity';
 import ZombieEntity from './enemies/ZombieEntity';
 import WeaponCrateEntity from './WeaponCrateEntity';
-import type { World, Vector3Like } from 'hytopia';
+import type { World, Vector3Like } from 'highchair';
 import type EnemyEntity from './EnemyEntity';
-import type { Player } from 'hytopia';
+import type { Player } from 'highchair';
 
 const GAME_WAVE_INTERVAL_MS = 30 * 1000; // 30 seconds between waves
 const SLOWEST_SPAWN_INTERVAL_MS = 4000; // Starting spawn rate

@@ -19,7 +19,7 @@ const originalListen = (net.Server.prototype as any).listen;
   return originalListen.apply(this, args);
 };
 
-import { startServer, PlayerEvent } from 'hytopia';
+import { startServer, PlayerEvent } from 'highchair';
 import worldMap from './assets/maps/terrain.json' with { type: 'json' } ;
 
 import GameManager from './classes/GameManager';

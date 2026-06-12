@@ -1,0 +1,7 @@
+{
+  "name": "HIGHCHAIR",
+  "short_name": "HIGHCHAIR",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "landscape"
+}

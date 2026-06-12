@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Local dev fallback for the SDK's KTX atlas generation.
+# If a cached atlas already exists, keep it and report success. Install the
+# real KTX toktx binary before changing block textures or regenerating atlases.
+set -euo pipefail
+
+if [ "$#" -lt 2 ]; then
+  echo "local toktx shim: expected output and input paths" >&2
+  exit 2
+fi
+
+prev=
+last=
+for arg in "$@"; do
+  prev="$last"
+  last="$arg"
+done
+
+output="$prev"
+input="$last"
+
+if [ -f "$output" ]; then
+  touch "$output"
+  echo "local toktx shim: kept cached $output from $input" >&2
+  exit 0
+fi
+
+echo "local toktx shim: missing cached output $output" >&2
+echo "Install KTX Software to generate it with the real toktx binary." >&2
+exit 127

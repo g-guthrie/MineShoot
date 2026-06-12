@@ -6,9 +6,9 @@ import {
   PlayerEntity,
   World,
   DefaultPlayerEntityController,
-} from 'hytopia';
+} from 'highchair';
 
-import type { ModelEntityOptions, QuaternionLike, Vector3Like } from 'hytopia';
+import type { ModelEntityOptions, QuaternionLike, Vector3Like } from 'highchair';
 
 import EnemyEntity from './EnemyEntity';
 import type GamePlayerEntity from './GamePlayerEntity';

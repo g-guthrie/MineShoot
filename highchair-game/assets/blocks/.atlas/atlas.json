@@ -1,0 +1,1620 @@
+{
+  "version": 1,
+  "textureSize": 24,
+  "padding": 20,
+  "atlasWidth": 1024,
+  "atlasHeight": 512,
+  "textures": {
+    "blocks/bamboo-slats.png": {
+      "u0": 0.01953125,
+      "v0": 0.0390625,
+      "u1": 0.04296875,
+      "v1": 0.0859375,
+      "averageRGB": [
+        0.8446078431372549,
+        0.6914624183006536,
+        0.4922589869281046
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/bricks.png": {
+      "u0": 0.08203125,
+      "v0": 0.0390625,
+      "u1": 0.10546875,
+      "v1": 0.0859375,
+      "averageRGB": [
+        0.82260348583878,
+        0.42995642701525055,
+        0.25255991285403045
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/clay.png": {
+      "u0": 0.14453125,
+      "v0": 0.0390625,
+      "u1": 0.16796875,
+      "v1": 0.0859375,
+      "averageRGB": [
+        0.43826933551198255,
+        0.5242578976034858,
+        0.5709626906318083
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/coal-ore.png": {
+      "u0": 0.20703125,
+      "v0": 0.0390625,
+      "u1": 0.23046875,
+      "v1": 0.0859375,
+      "averageRGB": [
+        0.39108796296296294,
+        0.379786220043573,
+        0.4042619825708061
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/cobblestone-dark.png": {
+      "u0": 0.26953125,
+      "v0": 0.0390625,
+      "u1": 0.29296875,
+      "v1": 0.0859375,
+      "averageRGB": [
+        0.4062431917211329,
+        0.4082175925925926,
+        0.4082175925925926
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/cobblestone-large-dark.png": {
+      "u0": 0.33203125,
+      "v0": 0.0390625,
+      "u1": 0.35546875,
+      "v1": 0.0859375,
+      "averageRGB": [
+        0.38560729847494557,
+        0.38560729847494557,
+        0.38560729847494557
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/cobblestone-mossy.png": {
+      "u0": 0.39453125,
+      "v0": 0.0390625,
+      "u1": 0.41796875,
+      "v1": 0.0859375,
+      "averageRGB": [
+        0.46979166666666666,
+        0.48850081699346404,
+        0.45642701525054463
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/cobblestone.png": {
+      "u0": 0.45703125,
+      "v0": 0.0390625,
+      "u1": 0.48046875,
+      "v1": 0.0859375,
+      "averageRGB": [
+        0.5032407407407408,
+        0.4851988017429194,
+        0.5060661764705883
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/cracked_sand/+x.png": {
+      "u0": 0.51953125,
+      "v0": 0.0390625,
+      "u1": 0.54296875,
+      "v1": 0.0859375,
+      "averageRGB": [
+        0.7200708061002178,
+        0.5021650326797386,
+        0.2904616013071895
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/cracked_sand/+y.png": {
+      "u0": 0.58203125,
+      "v0": 0.0390625,
+      "u1": 0.60546875,
+      "v1": 0.0859375,
+      "averageRGB": [
+        0.7200708061002178,
+        0.5021650326797386,
+        0.2904616013071895
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/cracked_sand/+z.png": {
+      "u0": 0.64453125,
+      "v0": 0.0390625,
+      "u1": 0.66796875,
+      "v1": 0.0859375,
+      "averageRGB": [
+        0.7200708061002178,
+        0.5021650326797386,
+        0.2904616013071895
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/cracked_sand/-x.png": {
+      "u0": 0.70703125,
+      "v0": 0.0390625,
+      "u1": 0.73046875,
+      "v1": 0.0859375,
+      "averageRGB": [
+        0.7200708061002178,
+        0.5021650326797386,
+        0.2904616013071895
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/cracked_sand/-y.png": {
+      "u0": 0.76953125,
+      "v0": 0.0390625,
+      "u1": 0.79296875,
+      "v1": 0.0859375,
+      "averageRGB": [
+        0.7200708061002178,
+        0.5021650326797386,
+        0.2904616013071895
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/cracked_sand/-z.png": {
+      "u0": 0.83203125,
+      "v0": 0.0390625,
+      "u1": 0.85546875,
+      "v1": 0.0859375,
+      "averageRGB": [
+        0.7200708061002178,
+        0.5021650326797386,
+        0.2904616013071895
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/creep.png": {
+      "u0": 0.89453125,
+      "v0": 0.0390625,
+      "u1": 0.91796875,
+      "v1": 0.0859375,
+      "averageRGB": [
+        0.7879901960784313,
+        0.32573529411764707,
+        0.5298747276688452
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/diamond-block.png": {
+      "u0": 0.95703125,
+      "v0": 0.0390625,
+      "u1": 0.98046875,
+      "v1": 0.0859375,
+      "averageRGB": [
+        0.4613221677559913,
+        0.687568082788671,
+        0.9542892156862746
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/diamond-ore.png": {
+      "u0": 0.01953125,
+      "v0": 0.1640625,
+      "u1": 0.04296875,
+      "v1": 0.2109375,
+      "averageRGB": [
+        0.5100626361655773,
+        0.5893450435729848,
+        0.6568559368191721
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/dirt.png": {
+      "u0": 0.08203125,
+      "v0": 0.1640625,
+      "u1": 0.10546875,
+      "v1": 0.2109375,
+      "averageRGB": [
+        0.5147058823529411,
+        0.296207788671024,
+        0.20375136165577343
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/dragon_block/+x.png": {
+      "u0": 0.14453125,
+      "v0": 0.1640625,
+      "u1": 0.16796875,
+      "v1": 0.2109375,
+      "averageRGB": [
+        0.1619485294117647,
+        0.1335171568627451,
+        0.18048066448801742
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/dragon_block/+y.png": {
+      "u0": 0.20703125,
+      "v0": 0.1640625,
+      "u1": 0.23046875,
+      "v1": 0.2109375,
+      "averageRGB": [
+        0.22261029411764705,
+        0.17944580610021788,
+        0.2662105119825708
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/dragon_block/+z.png": {
+      "u0": 0.26953125,
+      "v0": 0.1640625,
+      "u1": 0.29296875,
+      "v1": 0.2109375,
+      "averageRGB": [
+        0.1619485294117647,
+        0.1335171568627451,
+        0.18048066448801742
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/dragon_block/-x.png": {
+      "u0": 0.33203125,
+      "v0": 0.1640625,
+      "u1": 0.35546875,
+      "v1": 0.2109375,
+      "averageRGB": [
+        0.1619485294117647,
+        0.1335171568627451,
+        0.18048066448801742
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/dragon_block/-y.png": {
+      "u0": 0.39453125,
+      "v0": 0.1640625,
+      "u1": 0.41796875,
+      "v1": 0.2109375,
+      "averageRGB": [
+        0.1382693355119826,
+        0.11570669934640522,
+        0.14611928104575161
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/dragon_block/-z.png": {
+      "u0": 0.45703125,
+      "v0": 0.1640625,
+      "u1": 0.48046875,
+      "v1": 0.2109375,
+      "averageRGB": [
+        0.1619485294117647,
+        0.1335171568627451,
+        0.18048066448801742
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/dragons-stone.png": {
+      "u0": 0.51953125,
+      "v0": 0.1640625,
+      "u1": 0.54296875,
+      "v1": 0.2109375,
+      "averageRGB": [
+        0.1382693355119826,
+        0.11570669934640522,
+        0.14611928104575161
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/emerald-block.png": {
+      "u0": 0.58203125,
+      "v0": 0.1640625,
+      "u1": 0.60546875,
+      "v1": 0.2109375,
+      "averageRGB": [
+        0.2411764705882353,
+        0.7804806644880175,
+        0.5394607843137255
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/emerald-ore.png": {
+      "u0": 0.64453125,
+      "v0": 0.1640625,
+      "u1": 0.66796875,
+      "v1": 0.2109375,
+      "averageRGB": [
+        0.4410947712418301,
+        0.6215618191721133,
+        0.5223720043572985
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/error.png": {
+      "u0": 0.70703125,
+      "v0": 0.1640625,
+      "u1": 0.73046875,
+      "v1": 0.2109375,
+      "averageRGB": [
+        0.48627450980392156,
+        0,
+        0.48627450980392156
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/ghost-dirt.png": {
+      "u0": 0.76953125,
+      "v0": 0.1640625,
+      "u1": 0.79296875,
+      "v1": 0.2109375,
+      "averageRGB": [
+        0.7733728213507626,
+        0.8011846405228759,
+        0.833966503267974
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/glass-window-divided.png": {
+      "u0": 0.83203125,
+      "v0": 0.1640625,
+      "u1": 0.85546875,
+      "v1": 0.2109375,
+      "averageRGB": [
+        0.6670411220043573,
+        0.7000816993464053,
+        0.7087418300653594
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": true,
+      "transparencyRatio": 0.5399305555555556
+    },
+    "blocks/glass-window.png": {
+      "u0": 0.89453125,
+      "v0": 0.1640625,
+      "u1": 0.91796875,
+      "v1": 0.2109375,
+      "averageRGB": [
+        0.11570669934640522,
+        0.15014297385620917,
+        0.1599332788671024
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": true,
+      "transparencyRatio": 0.6788194444444444
+    },
+    "blocks/glass.png": {
+      "u0": 0.95703125,
+      "v0": 0.1640625,
+      "u1": 0.98046875,
+      "v1": 0.2109375,
+      "averageRGB": [
+        0.9303581154684096,
+        0.9739038671023965,
+        0.987037037037037
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": true,
+      "transparencyRatio": 0.8055555555555556
+    },
+    "blocks/gold-ore.png": {
+      "u0": 0.01953125,
+      "v0": 0.2890625,
+      "u1": 0.04296875,
+      "v1": 0.3359375,
+      "averageRGB": [
+        0.6935661764705883,
+        0.5881059368191721,
+        0.45576661220043574
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/grass.png": {
+      "u0": 0.08203125,
+      "v0": 0.2890625,
+      "u1": 0.10546875,
+      "v1": 0.3359375,
+      "averageRGB": [
+        0.49923066448801745,
+        0.6703976034858388,
+        0.173604302832244
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/grass/+x.png": {
+      "u0": 0.14453125,
+      "v0": 0.2890625,
+      "u1": 0.16796875,
+      "v1": 0.3359375,
+      "averageRGB": [
+        0.478724128540305,
+        0.40051742919389977,
+        0.2136165577342048
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/grass/+y.png": {
+      "u0": 0.20703125,
+      "v0": 0.2890625,
+      "u1": 0.23046875,
+      "v1": 0.3359375,
+      "averageRGB": [
+        0.5242578976034858,
+        0.616019880174292,
+        0.23321759259259262
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/grass/+z.png": {
+      "u0": 0.26953125,
+      "v0": 0.2890625,
+      "u1": 0.29296875,
+      "v1": 0.3359375,
+      "averageRGB": [
+        0.478724128540305,
+        0.40051742919389977,
+        0.2136165577342048
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/grass/-x.png": {
+      "u0": 0.33203125,
+      "v0": 0.2890625,
+      "u1": 0.35546875,
+      "v1": 0.3359375,
+      "averageRGB": [
+        0.478724128540305,
+        0.40051742919389977,
+        0.2136165577342048
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/grass/-y.png": {
+      "u0": 0.39453125,
+      "v0": 0.2890625,
+      "u1": 0.41796875,
+      "v1": 0.3359375,
+      "averageRGB": [
+        0.5145288671023965,
+        0.29707924836601307,
+        0.20518790849673202
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/grass/-z.png": {
+      "u0": 0.45703125,
+      "v0": 0.2890625,
+      "u1": 0.48046875,
+      "v1": 0.3359375,
+      "averageRGB": [
+        0.478724128540305,
+        0.40051742919389977,
+        0.2136165577342048
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/gravel.png": {
+      "u0": 0.51953125,
+      "v0": 0.2890625,
+      "u1": 0.54296875,
+      "v1": 0.3359375,
+      "averageRGB": [
+        0.48997821350762527,
+        0.48018790849673204,
+        0.49144199346405226
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/ice-block.png": {
+      "u0": 0.58203125,
+      "v0": 0.2890625,
+      "u1": 0.60546875,
+      "v1": 0.3359375,
+      "averageRGB": [
+        0.7345928649237472,
+        0.8818831699346406,
+        0.9608455882352941
+      ],
+      "isTransparent": true,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0.4334082244008701
+    },
+    "blocks/ice.png": {
+      "u0": 0.64453125,
+      "v0": 0.2890625,
+      "u1": 0.66796875,
+      "v1": 0.3359375,
+      "averageRGB": [
+        0.7054466230936819,
+        0.8693899782135077,
+        0.9571350762527233
+      ],
+      "isTransparent": true,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0.2509803921568619
+    },
+    "blocks/infected-shadowrock-core.png": {
+      "u0": 0.70703125,
+      "v0": 0.2890625,
+      "u1": 0.73046875,
+      "v1": 0.3359375,
+      "averageRGB": [
+        0.2996459694989107,
+        0.22459831154684096,
+        0.3782407407407407
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/infected-shadowrock.png": {
+      "u0": 0.76953125,
+      "v0": 0.2890625,
+      "u1": 0.79296875,
+      "v1": 0.3359375,
+      "averageRGB": [
+        0.28220315904139437,
+        0.21132216775599127,
+        0.36726579520697167
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/iron-ore.png": {
+      "u0": 0.83203125,
+      "v0": 0.2890625,
+      "u1": 0.85546875,
+      "v1": 0.3359375,
+      "averageRGB": [
+        0.614161220043573,
+        0.5363834422657952,
+        0.5108796296296296
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/jungle-block-damaged.png": {
+      "u0": 0.89453125,
+      "v0": 0.2890625,
+      "u1": 0.91796875,
+      "v1": 0.3359375,
+      "averageRGB": [
+        0.7654888344226579,
+        0.6218137254901961,
+        0.36142429193899783
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/jungle-block-face.png": {
+      "u0": 0.95703125,
+      "v0": 0.2890625,
+      "u1": 0.98046875,
+      "v1": 0.3359375,
+      "averageRGB": [
+        0.7708197167755991,
+        0.625660403050109,
+        0.36340550108932457
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/jungle-block-mossy.png": {
+      "u0": 0.01953125,
+      "v0": 0.4140625,
+      "u1": 0.04296875,
+      "v1": 0.4609375,
+      "averageRGB": [
+        0.6732298474945534,
+        0.6097017973856209,
+        0.2965141612200436
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/jungle-block.png": {
+      "u0": 0.08203125,
+      "v0": 0.4140625,
+      "u1": 0.10546875,
+      "v1": 0.4609375,
+      "averageRGB": [
+        0.7914760348583878,
+        0.6451388888888888,
+        0.38120915032679736
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/jungle-dirt-roots.png": {
+      "u0": 0.14453125,
+      "v0": 0.4140625,
+      "u1": 0.16796875,
+      "v1": 0.4609375,
+      "averageRGB": [
+        0.8083946078431372,
+        0.665284586056645,
+        0.42438044662309365
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/jungle-dirt-trampled.png": {
+      "u0": 0.20703125,
+      "v0": 0.4140625,
+      "u1": 0.23046875,
+      "v1": 0.4609375,
+      "averageRGB": [
+        0.8380106209150328,
+        0.6884531590413943,
+        0.4326933551198257
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/jungle-dirt.png": {
+      "u0": 0.26953125,
+      "v0": 0.4140625,
+      "u1": 0.29296875,
+      "v1": 0.4609375,
+      "averageRGB": [
+        0.789099945533769,
+        0.6411356209150327,
+        0.3930283224400872
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/lava-dirt-cracked.png": {
+      "u0": 0.33203125,
+      "v0": 0.4140625,
+      "u1": 0.35546875,
+      "v1": 0.4609375,
+      "averageRGB": [
+        0.3656113834422658,
+        0.1375068082788671,
+        0.1322984749455338
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/lava-dirt.png": {
+      "u0": 0.39453125,
+      "v0": 0.4140625,
+      "u1": 0.41796875,
+      "v1": 0.4609375,
+      "averageRGB": [
+        0.3030433006535948,
+        0.11933551198257081,
+        0.13894335511982572
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/lava-rocky-cracked.png": {
+      "u0": 0.45703125,
+      "v0": 0.4140625,
+      "u1": 0.48046875,
+      "v1": 0.4609375,
+      "averageRGB": [
+        0.5562091503267974,
+        0.20862608932461874,
+        0.0945874183006536
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/lava-rocky.png": {
+      "u0": 0.51953125,
+      "v0": 0.4140625,
+      "u1": 0.54296875,
+      "v1": 0.4609375,
+      "averageRGB": [
+        0.7200980392156863,
+        0.30872140522875813,
+        0.08134531590413945
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/lava.png": {
+      "u0": 0.58203125,
+      "v0": 0.4140625,
+      "u1": 0.60546875,
+      "v1": 0.4609375,
+      "averageRGB": [
+        0.9575571895424837,
+        0.3249455337690632,
+        0.05800653594771241
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/log/+x.png": {
+      "u0": 0.64453125,
+      "v0": 0.4140625,
+      "u1": 0.66796875,
+      "v1": 0.4609375,
+      "averageRGB": [
+        0.4494757625272331,
+        0.2637391067538127,
+        0.16898828976034858
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/log/+y.png": {
+      "u0": 0.70703125,
+      "v0": 0.4140625,
+      "u1": 0.73046875,
+      "v1": 0.4609375,
+      "averageRGB": [
+        0.643348311546841,
+        0.41163534858387796,
+        0.24630310457516338
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/log/+z.png": {
+      "u0": 0.76953125,
+      "v0": 0.4140625,
+      "u1": 0.79296875,
+      "v1": 0.4609375,
+      "averageRGB": [
+        0.4494757625272331,
+        0.2637391067538127,
+        0.16898828976034858
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/log/-x.png": {
+      "u0": 0.83203125,
+      "v0": 0.4140625,
+      "u1": 0.85546875,
+      "v1": 0.4609375,
+      "averageRGB": [
+        0.4494757625272331,
+        0.2637391067538127,
+        0.16898828976034858
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/log/-y.png": {
+      "u0": 0.89453125,
+      "v0": 0.4140625,
+      "u1": 0.91796875,
+      "v1": 0.4609375,
+      "averageRGB": [
+        0.643348311546841,
+        0.41163534858387796,
+        0.24630310457516338
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/log/-z.png": {
+      "u0": 0.95703125,
+      "v0": 0.4140625,
+      "u1": 0.98046875,
+      "v1": 0.4609375,
+      "averageRGB": [
+        0.4494757625272331,
+        0.2637391067538127,
+        0.16898828976034858
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/mossy-coblestone.png": {
+      "u0": 0.01953125,
+      "v0": 0.5390625,
+      "u1": 0.04296875,
+      "v1": 0.5859375,
+      "averageRGB": [
+        0.46979166666666666,
+        0.48850081699346404,
+        0.45642701525054463
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/nuit-leaves.png": {
+      "u0": 0.08203125,
+      "v0": 0.5390625,
+      "u1": 0.10546875,
+      "v1": 0.5859375,
+      "averageRGB": [
+        0.11475354030501089,
+        0.082979302832244,
+        0.32623229847494556
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/nuit.png": {
+      "u0": 0.14453125,
+      "v0": 0.5390625,
+      "u1": 0.16796875,
+      "v1": 0.5859375,
+      "averageRGB": [
+        0.6893995098039216,
+        0.5192742374727668,
+        0.14507080610021786
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/oak-leaves.png": {
+      "u0": 0.20703125,
+      "v0": 0.5390625,
+      "u1": 0.23046875,
+      "v1": 0.5859375,
+      "averageRGB": [
+        0.13400735294117647,
+        0.3618395969498911,
+        0.20011574074074073
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/oak-planks-dark-knotty.png": {
+      "u0": 0.26953125,
+      "v0": 0.5390625,
+      "u1": 0.29296875,
+      "v1": 0.5859375,
+      "averageRGB": [
+        0.503519880174292,
+        0.36243191721132895,
+        0.16826661220043573
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/oak-planks-dark.png": {
+      "u0": 0.33203125,
+      "v0": 0.5390625,
+      "u1": 0.35546875,
+      "v1": 0.5859375,
+      "averageRGB": [
+        0.5177219498910676,
+        0.3722630718954248,
+        0.17148692810457516
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/oak-planks-leafy.png": {
+      "u0": 0.39453125,
+      "v0": 0.5390625,
+      "u1": 0.41796875,
+      "v1": 0.5859375,
+      "averageRGB": [
+        0.5274918300653595,
+        0.4400531045751634,
+        0.2565223311546841
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/oak-planks-leafyer.png": {
+      "u0": 0.45703125,
+      "v0": 0.5390625,
+      "u1": 0.48046875,
+      "v1": 0.5859375,
+      "averageRGB": [
+        0.3670819716775599,
+        0.4095656318082789,
+        0.23340822440087144
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/oak-planks-leafyerer.png": {
+      "u0": 0.51953125,
+      "v0": 0.5390625,
+      "u1": 0.54296875,
+      "v1": 0.5859375,
+      "averageRGB": [
+        0.2510280501089324,
+        0.3880718954248366,
+        0.21941040305010895
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/oak-planks-vertical.png": {
+      "u0": 0.58203125,
+      "v0": 0.5390625,
+      "u1": 0.60546875,
+      "v1": 0.5859375,
+      "averageRGB": [
+        0.7360566448801743,
+        0.47774373638344225,
+        0.28286356209150326
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/oak-planks.png": {
+      "u0": 0.64453125,
+      "v0": 0.5390625,
+      "u1": 0.66796875,
+      "v1": 0.5859375,
+      "averageRGB": [
+        0.7360566448801743,
+        0.47774373638344225,
+        0.28286356209150326
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/oak-slats-dark.png": {
+      "u0": 0.70703125,
+      "v0": 0.5390625,
+      "u1": 0.73046875,
+      "v1": 0.5859375,
+      "averageRGB": [
+        0.3641407952069717,
+        0.24707924836601308,
+        0.15725762527233114
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/oak-slats.png": {
+      "u0": 0.76953125,
+      "v0": 0.5390625,
+      "u1": 0.79296875,
+      "v1": 0.5859375,
+      "averageRGB": [
+        0.7379561546840959,
+        0.4675857843137255,
+        0.26010348583877996
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/sand-light.png": {
+      "u0": 0.83203125,
+      "v0": 0.5390625,
+      "u1": 0.85546875,
+      "v1": 0.5859375,
+      "averageRGB": [
+        0.9395424836601307,
+        0.9121936274509804,
+        0.7733796296296296
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/sand.png": {
+      "u0": 0.89453125,
+      "v0": 0.5390625,
+      "u1": 0.91796875,
+      "v1": 0.5859375,
+      "averageRGB": [
+        0.9234749455337691,
+        0.7223379629629629,
+        0.4153458605664488
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/sandstone-light-waterlogged.png": {
+      "u0": 0.95703125,
+      "v0": 0.5390625,
+      "u1": 0.98046875,
+      "v1": 0.5859375,
+      "averageRGB": [
+        0.7521241830065359,
+        0.8623842592592593,
+        0.8280433006535948
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/sandstone-light.png": {
+      "u0": 0.01953125,
+      "v0": 0.6640625,
+      "u1": 0.04296875,
+      "v1": 0.7109375,
+      "averageRGB": [
+        0.9353485838779956,
+        0.9060797930283224,
+        0.7612881263616558
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/sandstone.png": {
+      "u0": 0.08203125,
+      "v0": 0.6640625,
+      "u1": 0.10546875,
+      "v1": 0.7109375,
+      "averageRGB": [
+        0.9691380718954249,
+        0.8103145424836602,
+        0.4604575163398693
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/shadow-pebble.png": {
+      "u0": 0.14453125,
+      "v0": 0.6640625,
+      "u1": 0.16796875,
+      "v1": 0.7109375,
+      "averageRGB": [
+        0.37050653594771243,
+        0.3020765250544662,
+        0.4876021241830066
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/shadowrock.png": {
+      "u0": 0.20703125,
+      "v0": 0.6640625,
+      "u1": 0.23046875,
+      "v1": 0.7109375,
+      "averageRGB": [
+        0.2107979302832244,
+        0.20819035947712417,
+        0.3130038126361656
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/shale-cliff-bottom/+x.png": {
+      "u0": 0.26953125,
+      "v0": 0.6640625,
+      "u1": 0.29296875,
+      "v1": 0.7109375,
+      "averageRGB": [
+        0.34963235294117645,
+        0.335968137254902,
+        0.24762391067538125
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/shale-cliff-bottom/+y.png": {
+      "u0": 0.33203125,
+      "v0": 0.6640625,
+      "u1": 0.35546875,
+      "v1": 0.7109375,
+      "averageRGB": [
+        0.3573937908496732,
+        0.31615604575163403,
+        0.2670751633986928
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/shale-cliff-bottom/+z.png": {
+      "u0": 0.39453125,
+      "v0": 0.6640625,
+      "u1": 0.41796875,
+      "v1": 0.7109375,
+      "averageRGB": [
+        0.34963235294117645,
+        0.335968137254902,
+        0.24762391067538125
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/shale-cliff-bottom/-x.png": {
+      "u0": 0.45703125,
+      "v0": 0.6640625,
+      "u1": 0.48046875,
+      "v1": 0.7109375,
+      "averageRGB": [
+        0.34963235294117645,
+        0.335968137254902,
+        0.24762391067538125
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/shale-cliff-bottom/-y.png": {
+      "u0": 0.51953125,
+      "v0": 0.6640625,
+      "u1": 0.54296875,
+      "v1": 0.7109375,
+      "averageRGB": [
+        0.5242578976034858,
+        0.616019880174292,
+        0.23321759259259262
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/shale-cliff-bottom/-z.png": {
+      "u0": 0.58203125,
+      "v0": 0.6640625,
+      "u1": 0.60546875,
+      "v1": 0.7109375,
+      "averageRGB": [
+        0.34963235294117645,
+        0.335968137254902,
+        0.24762391067538125
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/shale-cliff-top/+x.png": {
+      "u0": 0.64453125,
+      "v0": 0.6640625,
+      "u1": 0.66796875,
+      "v1": 0.7109375,
+      "averageRGB": [
+        0.3820942265795207,
+        0.42287581699346405,
+        0.24389978213507624
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/shale-cliff-top/+y.png": {
+      "u0": 0.70703125,
+      "v0": 0.6640625,
+      "u1": 0.73046875,
+      "v1": 0.7109375,
+      "averageRGB": [
+        0.5242578976034858,
+        0.616019880174292,
+        0.23321759259259262
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/shale-cliff-top/+z.png": {
+      "u0": 0.76953125,
+      "v0": 0.6640625,
+      "u1": 0.79296875,
+      "v1": 0.7109375,
+      "averageRGB": [
+        0.3820942265795207,
+        0.42287581699346405,
+        0.24389978213507624
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/shale-cliff-top/-x.png": {
+      "u0": 0.83203125,
+      "v0": 0.6640625,
+      "u1": 0.85546875,
+      "v1": 0.7109375,
+      "averageRGB": [
+        0.3820942265795207,
+        0.42287581699346405,
+        0.24389978213507624
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/shale-cliff-top/-y.png": {
+      "u0": 0.89453125,
+      "v0": 0.6640625,
+      "u1": 0.91796875,
+      "v1": 0.7109375,
+      "averageRGB": [
+        0.3573937908496732,
+        0.31615604575163403,
+        0.2670751633986928
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/shale-cliff-top/-z.png": {
+      "u0": 0.95703125,
+      "v0": 0.6640625,
+      "u1": 0.98046875,
+      "v1": 0.7109375,
+      "averageRGB": [
+        0.3820942265795207,
+        0.42287581699346405,
+        0.24389978213507624
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/shale-rock.png": {
+      "u0": 0.01953125,
+      "v0": 0.7890625,
+      "u1": 0.04296875,
+      "v1": 0.8359375,
+      "averageRGB": [
+        0.3573937908496732,
+        0.31615604575163403,
+        0.2670751633986928
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/snow-icy.png": {
+      "u0": 0.08203125,
+      "v0": 0.7890625,
+      "u1": 0.10546875,
+      "v1": 0.8359375,
+      "averageRGB": [
+        0.8625068082788672,
+        0.9491013071895426,
+        0.997800925925926
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/snow-pebbles.png": {
+      "u0": 0.14453125,
+      "v0": 0.7890625,
+      "u1": 0.16796875,
+      "v1": 0.8359375,
+      "averageRGB": [
+        0.9293641067538126,
+        0.9371119281045751,
+        0.9462282135076253
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/snow-rocks.png": {
+      "u0": 0.20703125,
+      "v0": 0.7890625,
+      "u1": 0.23046875,
+      "v1": 0.8359375,
+      "averageRGB": [
+        0.7775939542483661,
+        0.8011233660130719,
+        0.8245915032679739
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/snow-rough.png": {
+      "u0": 0.26953125,
+      "v0": 0.7890625,
+      "u1": 0.29296875,
+      "v1": 0.8359375,
+      "averageRGB": [
+        0.9369485294117647,
+        0.9606004901960784,
+        0.9742783224400872
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/snow.png": {
+      "u0": 0.33203125,
+      "v0": 0.7890625,
+      "u1": 0.35546875,
+      "v1": 0.8359375,
+      "averageRGB": [
+        0.9884803921568628,
+        0.9935729847494553,
+        0.9978622004357298
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/stone-bricks.png": {
+      "u0": 0.39453125,
+      "v0": 0.7890625,
+      "u1": 0.41796875,
+      "v1": 0.8359375,
+      "averageRGB": [
+        0.5519880174291939,
+        0.5405773420479303,
+        0.5510757080610021
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/stone.png": {
+      "u0": 0.45703125,
+      "v0": 0.7890625,
+      "u1": 0.48046875,
+      "v1": 0.8359375,
+      "averageRGB": [
+        0.5492102396514161,
+        0.5384055010893246,
+        0.5531318082788671
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/swirl-rune.png": {
+      "u0": 0.51953125,
+      "v0": 0.7890625,
+      "u1": 0.54296875,
+      "v1": 0.8359375,
+      "averageRGB": [
+        0.3030705337690632,
+        0.40156590413943355,
+        0.6454588779956427
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/void-sand.png": {
+      "u0": 0.58203125,
+      "v0": 0.7890625,
+      "u1": 0.60546875,
+      "v1": 0.8359375,
+      "averageRGB": [
+        0.15528322440087144,
+        0.1633169934640523,
+        0.2528867102396514
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/void_grass/+x.png": {
+      "u0": 0.64453125,
+      "v0": 0.7890625,
+      "u1": 0.66796875,
+      "v1": 0.8359375,
+      "averageRGB": [
+        0.22920070806100218,
+        0.10027233115468409,
+        0.3037309368191721
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/void_grass/+y.png": {
+      "u0": 0.70703125,
+      "v0": 0.7890625,
+      "u1": 0.73046875,
+      "v1": 0.8359375,
+      "averageRGB": [
+        0.05190631808278867,
+        0.05972222222222222,
+        0.1802015250544662
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/void_grass/+z.png": {
+      "u0": 0.76953125,
+      "v0": 0.7890625,
+      "u1": 0.79296875,
+      "v1": 0.8359375,
+      "averageRGB": [
+        0.22920070806100218,
+        0.10027233115468409,
+        0.3037309368191721
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/void_grass/-x.png": {
+      "u0": 0.83203125,
+      "v0": 0.7890625,
+      "u1": 0.85546875,
+      "v1": 0.8359375,
+      "averageRGB": [
+        0.22920070806100218,
+        0.10027233115468409,
+        0.3037309368191721
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/void_grass/-y.png": {
+      "u0": 0.89453125,
+      "v0": 0.7890625,
+      "u1": 0.91796875,
+      "v1": 0.8359375,
+      "averageRGB": [
+        0.05190631808278867,
+        0.05972222222222222,
+        0.1802015250544662
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/void_grass/-z.png": {
+      "u0": 0.95703125,
+      "v0": 0.7890625,
+      "u1": 0.98046875,
+      "v1": 0.8359375,
+      "averageRGB": [
+        0.22920070806100218,
+        0.10027233115468409,
+        0.3037309368191721
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/voidsoil.png": {
+      "u0": 0.01953125,
+      "v0": 0.9140625,
+      "u1": 0.04296875,
+      "v1": 0.9609375,
+      "averageRGB": [
+        0.47074482570806103,
+        0.18412990196078433,
+        0.5019539760348584
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/water-flow.png": {
+      "u0": 0.08203125,
+      "v0": 0.9140625,
+      "u1": 0.10546875,
+      "v1": 0.9609375,
+      "averageRGB": [
+        0.41215277777777776,
+        0.6278799019607844,
+        0.8324822984749456
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/water-still.png": {
+      "u0": 0.14453125,
+      "v0": 0.9140625,
+      "u1": 0.16796875,
+      "v1": 0.9609375,
+      "averageRGB": [
+        0.44223856209150325,
+        0.6986383442265794,
+        0.86994825708061
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    }
+  },
+  "sourceHash": "96e189a7b39e0501ec8a2c52ead118af3de27a28db8e3853838541338bcd98c6"
+}

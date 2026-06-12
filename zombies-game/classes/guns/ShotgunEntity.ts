@@ -1,5 +1,5 @@
-import { Quaternion } from 'hytopia';
-import type { PlayerEntity, QuaternionLike, Vector3Like } from 'hytopia';
+import { Quaternion } from 'highchair';
+import type { PlayerEntity, QuaternionLike, Vector3Like } from 'highchair';
 
 import GunEntity from '../GunEntity';
 import type { GunEntityOptions } from '../GunEntity';

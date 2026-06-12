@@ -11,9 +11,9 @@ import {
   World,
   Quaternion,
   Vector3,
-} from 'hytopia';
+} from 'highchair';
 
-import type { EventPayloads, QuaternionLike, Vector3Like } from 'hytopia';
+import type { EventPayloads, QuaternionLike, Vector3Like } from 'highchair';
 
 import PistolEntity from './guns/PistolEntity';
 
@@ -70,11 +70,6 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     // Setup UI
     this.player.ui.load('ui/index.html');
 
-    // Setup first person camera
-    this.player.camera.setMode(PlayerCameraMode.FIRST_PERSON);
-    this.player.camera.setViewModelHiddenNodes([ 'head', 'neck', 'torso', 'leg_right', 'leg_left' ]);
-    this.player.camera.setOffset({ x: 0, y: 0.5, z: 0 });
-  
     // Set base stats
     this.health = BASE_HEALTH;
     this.maxHealth = BASE_HEALTH;
@@ -116,6 +111,11 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
 
   public override spawn(world: World, position: Vector3Like, rotation?: QuaternionLike): void {
     super.spawn(world, position, rotation);
+
+    // Camera sync expects the entity id assigned by spawn().
+    this.player.camera.setMode(PlayerCameraMode.FIRST_PERSON);
+    this.player.camera.setViewModelHiddenNodes([ 'head', 'neck', 'torso', 'leg_right', 'leg_left' ]);
+    this.player.camera.setOffset({ x: 0, y: 0.5, z: 0 });
 
     // Prevent players from colliding, setup appropriate collision groups for invisible walls, etc.
     this.setCollisionGroupsForSolidColliders({
@@ -360,4 +360,3 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     }, 1000);
   }
 }
-

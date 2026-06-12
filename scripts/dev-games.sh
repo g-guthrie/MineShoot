@@ -9,6 +9,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PLAY_URL="http://localhost:5173"
+export PATH="$ROOT/scripts:$PATH"
 
 # Reclaim our dev ports from leftover instances of these same processes.
 # Anything else holding a port is a real conflict, so bail instead.
@@ -19,7 +20,7 @@ reclaim_port() {
   for pid in $pids; do
     local cmd
     cmd=$(ps -o command= -p "$pid")
-    if echo "$cmd" | grep -qE 'tsx[ /]|local-hytopia-proxy|vite'; then
+    if echo "$cmd" | grep -qE 'tsx[ /]|local-highchair-proxy|vite'; then
       echo "Stopping leftover dev process on :$port (pid $pid)"
       kill "$pid" 2>/dev/null || true
     else
@@ -50,15 +51,15 @@ echo "Starting zombies server on :8080..."
 pids+=($!)
 
 echo "Starting pvp server on :8082..."
-(cd "$ROOT/hytopia-game" && PORT=8082 npx tsx index.ts) &
+(cd "$ROOT/highchair-game" && PORT=8082 npx tsx index.ts) &
 pids+=($!)
 
 echo "Starting proxy on :8081 (zombies) and :8083 (pvp)..."
-node "$ROOT/scripts/local-hytopia-proxy.mjs" &
+node "$ROOT/scripts/local-highchair-proxy.mjs" &
 pids+=($!)
 
 echo "Starting client on :5173..."
-(cd "$ROOT/hytopia-client" && npx vite --port 5173 --strictPort) &
+(cd "$ROOT/highchair-client" && npx vite --port 5173 --strictPort) &
 pids+=($!)
 
 # Wait for the servers to come up (model preload takes a few seconds).

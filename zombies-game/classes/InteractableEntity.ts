@@ -1,6 +1,6 @@
 import {
   Entity,
-} from 'hytopia';
+} from 'highchair';
 
 import type GamePlayerEntity from './GamePlayerEntity';
 

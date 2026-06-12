@@ -5,9 +5,9 @@ import {
   RigidBodyType,
   SceneUI,
   World,
-} from 'hytopia';
+} from 'highchair';
 
-import type { BlockColliderOptions, QuaternionLike, Vector3Like } from 'hytopia';
+import type { BlockColliderOptions, QuaternionLike, Vector3Like } from 'highchair';
 
 import GameManager from './GameManager';
 import GamePlayerEntity from './GamePlayerEntity';

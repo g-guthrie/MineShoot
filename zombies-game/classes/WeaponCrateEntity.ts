@@ -5,9 +5,9 @@ import {
   World,
   SceneUI,
   ColliderShape,
-} from 'hytopia';
+} from 'highchair';
 
-import type { QuaternionLike, Vector3Like } from 'hytopia';
+import type { QuaternionLike, Vector3Like } from 'highchair';
 
 import GamePlayerEntity from './GamePlayerEntity';
 import InteractableEntity from './InteractableEntity';

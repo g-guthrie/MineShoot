@@ -1,4 +1,4 @@
-import { EntityModelAnimationLoopMode, PathfindingEntityController, RigidBodyType } from 'hytopia';
+import { EntityModelAnimationLoopMode, PathfindingEntityController, RigidBodyType } from 'highchair';
 
 import EnemyEntity from '../EnemyEntity';
 import type { EnemyEntityOptions } from '../EnemyEntity';

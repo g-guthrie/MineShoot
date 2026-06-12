@@ -1,5 +1,5 @@
-import { CollisionGroup, Quaternion } from 'hytopia';
-import type { Vector3Like } from 'hytopia';
+import { CollisionGroup, Quaternion } from 'highchair';
+import type { Vector3Like } from 'highchair';
 
 export const INVISIBLE_WALL_COLLISION_GROUP = CollisionGroup.GROUP_1;
 

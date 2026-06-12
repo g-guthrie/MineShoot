@@ -1,0 +1,33 @@
+{
+  "name": "highchair-game",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "node node_modules/highchair/bin/scripts.js build",
+    "package": "node node_modules/highchair/bin/scripts.js package",
+    "upgrade-assets-library": "node node_modules/highchair/bin/scripts.js upgrade-assets-library",
+    "upgrade-project": "node node_modules/highchair/bin/scripts.js upgrade-project",
+    "typecheck": "tsc --noEmit",
+    "start": "PATH=../scripts:$PATH tsx index.ts",
+    "postinstall": "node dev/patch-webtransport.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "highchair": "npm:hytopia@^0.15.2"
+  },
+  "optionalDependencies": {
+    "@highchair.com/assets": "npm:@hytopia.com/assets@^0.4.11"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}

@@ -1,7 +1,7 @@
-import { Quaternion } from 'hytopia';
+import { Quaternion } from 'highchair';
 import PistolEntity from './PistolEntity';
 import type { GunEntityOptions } from '../GunEntity';
-import type { PlayerEntity, QuaternionLike, Vector3Like } from 'hytopia';
+import type { PlayerEntity, QuaternionLike, Vector3Like } from 'highchair';
 
 // fire behavior is very similar to a pistol, so we inherit from it.
 export default class AR15Entity extends PistolEntity {

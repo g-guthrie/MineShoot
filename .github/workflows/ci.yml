@@ -25,18 +25,18 @@ jobs:
       - run: npm run typecheck
 
   client-build:
-    name: hytopia-client typecheck + build
+    name: highchair-client typecheck + build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
       run:
-        working-directory: hytopia-client
+        working-directory: highchair-client
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: hytopia-client/package-lock.json
+          cache-dependency-path: highchair-client/package-lock.json
       - run: npm ci
       - run: npm run build

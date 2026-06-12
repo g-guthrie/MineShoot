@@ -1,5 +1,5 @@
-import { EntityModelAnimationLoopMode, GameServer, PathfindingEntityController, RigidBodyType } from 'hytopia';
-import type { QuaternionLike, Vector3Like, World } from 'hytopia';
+import { EntityModelAnimationLoopMode, GameServer, PathfindingEntityController, RigidBodyType } from 'highchair';
+import type { QuaternionLike, Vector3Like, World } from 'highchair';
 
 import EnemyEntity from '../EnemyEntity';
 import type { EnemyEntityOptions } from '../EnemyEntity';

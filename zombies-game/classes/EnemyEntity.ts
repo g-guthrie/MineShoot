@@ -3,9 +3,9 @@ import {
   Entity,
   EntityEvent,
   PathfindingEntityController,
-} from 'hytopia';
+} from 'highchair';
 
-import type { EventPayloads, ModelEntityOptions, QuaternionLike, Vector3Like, World } from 'hytopia';
+import type { EventPayloads, ModelEntityOptions, QuaternionLike, Vector3Like, World } from 'highchair';
 
 import GamePlayerEntity from './GamePlayerEntity';
 
