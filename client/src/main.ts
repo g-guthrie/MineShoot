@@ -6,6 +6,8 @@
 import { createScene } from './render/scene';
 import { buildTerrainMesh } from './render/terrain';
 import { EntityRenderer } from './render/entities';
+import { ModelLibrary } from './render/models';
+import { Viewmodel } from './render/viewmodel';
 import { Net } from './net';
 import { InputState } from './input';
 import { Prediction } from './prediction';
@@ -25,11 +27,15 @@ const lobbyError = document.getElementById('lobby-error')!;
 
 const { renderer, scene, camera } = createScene(canvas);
 const input = new InputState(canvas);
+// Debug/testing hook (used by headless verification; harmless in prod).
+(window as unknown as Record<string, unknown>).__game = { input };
 const hud = new Hud();
 const sfx = new Sfx();
-const entities = new EntityRenderer(scene);
+const models = new ModelLibrary();
+let entities: EntityRenderer | null = null;
+let viewmodel: Viewmodel | null = null;
 
-// ---- map load (starts immediately; join waits on it) ----
+// ---- asset load (starts immediately; join waits on it) ----
 const mapReady: Promise<{ map: VoxelMap; data: MapData }> = fetch('/maps/terrain.json')
   .then(r => {
     if (!r.ok) throw new Error(`map fetch failed: ${r.status}`);
@@ -40,8 +46,14 @@ const mapReady: Promise<{ map: VoxelMap; data: MapData }> = fetch('/maps/terrain
     return { map: new VoxelMap(data), data };
   });
 
-mapReady.catch(() => {
-  lobbyError.textContent = 'Failed to load the map — reload the page.';
+const assetsReady: Promise<VoxelMap> = Promise.all([mapReady, models.load()]).then(([m]) => {
+  entities = new EntityRenderer(scene, models);
+  viewmodel = new Viewmodel(models, camera);
+  return m.map;
+});
+
+assetsReady.catch(() => {
+  lobbyError.textContent = 'Failed to load game assets — reload the page.';
 });
 
 // ---- lobby ----
@@ -75,7 +87,7 @@ async function join(): Promise<void> {
 
   let map: VoxelMap;
   try {
-    map = (await mapReady).map;
+    map = await assetsReady;
   } catch {
     joining = false;
     joinButton.textContent = 'Join Room';
@@ -83,6 +95,19 @@ async function join(): Promise<void> {
   }
 
   startGame(map, roomCode, name);
+}
+
+// ---- ambient music (reference: audio/music/bg.mp3, looped at 0.4) ----
+let music: HTMLAudioElement | null = null;
+
+function startMusic(): void {
+  if (music) return;
+  music = new Audio('/audio/music/bg.mp3');
+  music.loop = true;
+  music.volume = 0.4;
+  void music.play().catch(() => {
+    music = null; // autoplay blocked; retried on the next join click
+  });
 }
 
 // ---- game ----
@@ -98,6 +123,7 @@ function startGame(map: VoxelMap, roomCode: string, name: string): void {
     onWelcome: () => {
       lobby.style.display = 'none';
       document.body.classList.add('playing');
+      startMusic();
       const url = new URL(location.href);
       url.searchParams.set('room', roomCode);
       history.replaceState(null, '', url);
@@ -119,9 +145,14 @@ function startGame(map: VoxelMap, roomCode: string, name: string): void {
       const now = performance.now();
       for (const event of events) {
         if (event.type === 'shot') {
-          entities.addShotTracer(event, snapshot.players.find(p => p.id === event.playerId), now);
+          entities?.addShotTracer(event, snapshot.players.find(p => p.id === event.playerId), now);
+          if (event.playerId === net.playerId) {
+            viewmodel?.onShot();
+          } else {
+            entities?.playerShot(event.playerId, event.weapon);
+          }
         } else if (event.type === 'enemyHurt') {
-          entities.flashEnemy(event.enemyId, now);
+          entities?.flashEnemy(event.enemyId, now);
         }
       }
     },
@@ -169,7 +200,7 @@ function startGame(map: VoxelMap, roomCode: string, name: string): void {
     // Remote entities render ~120ms in the past, interpolated.
     const sample = net.sampleAt(now - 120);
     if (sample) {
-      entities.update(sample.a, sample.b, sample.t, net.playerId, now, camera.position);
+      entities?.update(sample.a, sample.b, sample.t, net.playerId, now, camera.position, dt);
     }
 
     // Camera: predicted body, or a free-fly spectator camera.
@@ -188,6 +219,15 @@ function startGame(map: VoxelMap, roomCode: string, name: string): void {
     }
     camera.rotation.y = input.yaw;
     camera.rotation.x = input.pitch;
+
+    // First-person weapon follows the local player's state.
+    if (viewmodel && me && !me.spectator) {
+      viewmodel.setWeapon(me.weapon);
+      viewmodel.setVisible(!me.downed);
+      viewmodel.update(dt, Math.hypot(me.vx, me.vz), me.reloading);
+    } else {
+      viewmodel?.setVisible(false);
+    }
 
     hud.update(latest, me);
     renderer.render(scene, camera);

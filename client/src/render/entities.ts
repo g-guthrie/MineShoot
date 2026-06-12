@@ -1,15 +1,25 @@
 /**
- * Dynamic world objects: remote players, enemies, purchase barriers, weapon
- * crates, shot tracers. Positions come interpolated from snapshot pairs.
+ * Dynamic world objects rendered from snapshots: remote players, enemies,
+ * purchase barriers, weapon crates, shot tracers. Uses the reference
+ * build's GLTF models with their embedded animation clips; clip choice is
+ * derived from snapshot state (speed, downed, weapon).
  */
 import * as THREE from 'three';
-import type { Snapshot, WireEnemy, WirePlayer } from '../../../protocol/index';
+import type { Snapshot, WirePlayer } from '../../../protocol/index';
 import type { SimEvent } from '../../../sim/types';
-import { PURCHASE_BARRIERS, WEAPON_CRATES, barrierHalfExtents } from '../../../sim/mapConfig';
+import { PURCHASE_BARRIERS, WEAPON_CRATES } from '../../../sim/mapConfig';
 import { WEAPONS, PLAYER_EYE_HEIGHT } from '../../../sim/constants';
+import type { WeaponId } from '../../../sim/constants';
+import { AnimSlot, ModelLibrary, WEAPON_MODEL_SCALE } from './models';
+import type { ModelInstance } from './models';
 
 /** Labels only readable up close, like the reference build's SceneUI viewDistance. */
 const LABEL_VIEW_DISTANCE = 12;
+
+/** Reference modelScale values. */
+const SOLDIER_SCALE = 0.5;
+const ZOMBIE_SCALE = 0.55;
+const RIPPER_SCALE = 0.5;
 
 function makeTextSprite(lines: string[], color = '#e8e0d0', throughWalls = false): THREE.Sprite {
   const canvas = document.createElement('canvas');
@@ -35,17 +45,31 @@ function makeTextSprite(lines: string[], color = '#e8e0d0', throughWalls = false
   return sprite;
 }
 
+/** Upper-body pose per weapon (reference GunEntity idle/shoot animations). */
+function gunPose(weapon: WeaponId): { idle: string; shoot: string } {
+  const oneHanded = weapon === 'pistol' || weapon === 'auto-pistol';
+  return oneHanded
+    ? { idle: 'idle_gun_right', shoot: 'shoot_gun_right' }
+    : { idle: 'idle_gun_both', shoot: 'shoot_gun_both' };
+}
+
 interface PlayerVisual {
   group: THREE.Group;
-  body: THREE.Mesh;
+  model: ModelInstance;
+  lower: AnimSlot;
+  upper: AnimSlot;
   label: THREE.Sprite;
-  downed: boolean;
+  handAnchor: THREE.Object3D | null;
+  weaponId: WeaponId | null;
+  weaponMesh: THREE.Object3D | null;
 }
 
 interface EnemyVisual {
-  mesh: THREE.Mesh;
-  material: THREE.MeshLambertMaterial;
+  kind: 'zombie' | 'ripper';
+  model: ModelInstance;
+  anim: AnimSlot;
   flashUntil: number;
+  tintables: THREE.MeshStandardMaterial[];
 }
 
 interface Tracer {
@@ -64,6 +88,19 @@ function lerpAngle(a: number, b: number, t: number): number {
   return a + d * t;
 }
 
+/** Collect materials for damage tinting (clone so instances tint independently). */
+function collectTintables(root: THREE.Object3D): THREE.MeshStandardMaterial[] {
+  const result: THREE.MeshStandardMaterial[] = [];
+  root.traverse(obj => {
+    const mesh = obj as THREE.Mesh;
+    if (mesh.isMesh && mesh.material instanceof THREE.MeshStandardMaterial) {
+      mesh.material = mesh.material.clone();
+      result.push(mesh.material as THREE.MeshStandardMaterial);
+    }
+  });
+  return result;
+}
+
 export class EntityRenderer {
   private players = new Map<string, PlayerVisual>();
   private enemies = new Map<number, EnemyVisual>();
@@ -73,29 +110,35 @@ export class EntityRenderer {
   private crateLabelKeys: string[] = [];
   private tracers: Tracer[] = [];
 
-  private playerGeo = new THREE.CapsuleGeometry(0.4, 1.0, 4, 12);
-  private zombieGeo = new THREE.CapsuleGeometry(0.35, 1.0, 4, 10);
-  private ripperGeo = new THREE.CapsuleGeometry(0.55, 1.4, 4, 12);
-
-  constructor(private readonly scene: THREE.Scene) {
+  constructor(
+    private readonly scene: THREE.Scene,
+    private readonly models: ModelLibrary,
+  ) {
     this.buildBarriers();
     this.buildCrates();
   }
 
   private buildBarriers(): void {
     for (const config of PURCHASE_BARRIERS) {
-      const half = barrierHalfExtents(config);
       const group = new THREE.Group();
+      const floorY = config.position.y - 0.5; // barrier centers sit 0.5 above the floor
 
-      const fence = new THREE.Mesh(
-        new THREE.BoxGeometry(half.x * 2, 2.4, half.z * 2),
-        new THREE.MeshLambertMaterial({ color: 0x7a5a30, transparent: true, opacity: 0.55 }),
-      );
-      fence.position.set(config.position.x, 1.2, config.position.z);
-      group.add(fence);
+      // One fence segment per block of width, matching the reference's
+      // child-entity row.
+      const count = Math.max(1, Math.round(config.width));
+      const offset = (count - 1) / 2;
+      for (let i = 0; i < count; i++) {
+        const fence = this.models.instance('fence', 1).root;
+        const along = i - offset;
+        fence.position.x = config.position.x + (config.axis === 'x' ? along : 0);
+        fence.position.z = config.position.z + (config.axis === 'z' ? along : 0);
+        fence.position.y += floorY;
+        if (config.axis === 'z') fence.rotation.y = Math.PI / 2;
+        group.add(fence);
+      }
 
       const label = makeTextSprite([config.name, `$${config.removalPrice} — [E] unlock`], '#ffd27d');
-      label.position.set(config.position.x, 3.1, config.position.z);
+      label.position.set(config.position.x, floorY + 2.6, config.position.z);
       group.add(label);
       this.barrierLabels.push(label);
 
@@ -106,16 +149,14 @@ export class EntityRenderer {
 
   private buildCrates(): void {
     for (const config of WEAPON_CRATES) {
-      const crate = new THREE.Mesh(
-        new THREE.BoxGeometry(1.2, 0.9, 1.2),
-        new THREE.MeshLambertMaterial({ color: 0x6b4226 }),
-      );
-      crate.position.set(config.position.x, config.position.y - 0.5, config.position.z);
+      const floorY = config.position.y - 0.5; // crate centers sit 0.5 above the floor
+      const crate = this.models.instance('weaponbox', 0.5).root;
+      crate.position.set(config.position.x, crate.position.y + floorY, config.position.z);
       crate.rotation.y = (config.yawDeg * Math.PI) / 180;
       this.scene.add(crate);
 
       const label = makeTextSprite([config.name, `$${config.price} — [E] roll`], '#9ad1ff');
-      label.position.set(config.position.x, config.position.y + 1.2, config.position.z);
+      label.position.set(config.position.x, floorY + 2.2, config.position.z);
       this.scene.add(label);
       this.crateLabels.push(label);
       this.crateLabelKeys.push('');
@@ -130,26 +171,24 @@ export class EntityRenderer {
     myPlayerId: string | null,
     now: number,
     cameraPos: THREE.Vector3,
+    dt: number,
   ): void {
-    this.updatePlayers(a, b, t, myPlayerId);
-    this.updateEnemies(a, b, t, now);
+    const snapDtMs = Math.max(1, b.timeMs - a.timeMs);
+    this.updatePlayers(a, b, t, myPlayerId, dt);
+    this.updateEnemies(a, b, t, now, dt, snapDtMs);
     this.updateBarriers(b);
     this.updateCrates(b, myPlayerId);
     this.updateLabelVisibility(cameraPos);
     this.updateTracers(now);
   }
 
-  /** Price labels are readable only up close, and never through walls. */
-  private updateLabelVisibility(cameraPos: THREE.Vector3): void {
-    const within = (sprite: THREE.Sprite) => {
-      const world = sprite.getWorldPosition(tmpVec);
-      return world.distanceTo(cameraPos) <= LABEL_VIEW_DISTANCE;
-    };
-    for (const label of this.barrierLabels) label.visible = within(label);
-    for (const label of this.crateLabels) label.visible = within(label);
-  }
-
-  private updatePlayers(a: Snapshot, b: Snapshot, t: number, myPlayerId: string | null): void {
+  private updatePlayers(
+    a: Snapshot,
+    b: Snapshot,
+    t: number,
+    myPlayerId: string | null,
+    dt: number,
+  ): void {
     const prev = new Map(a.players.map(p => [p.id, p]));
     const seen = new Set<string>();
 
@@ -159,17 +198,30 @@ export class EntityRenderer {
 
       let visual = this.players.get(player.id);
       if (!visual) {
-        const body = new THREE.Mesh(
-          this.playerGeo,
-          new THREE.MeshLambertMaterial({ color: 0x4a6fa5 }),
-        );
-        const label = makeTextSprite([player.name], '#e8e0d0', true); // names show through walls
+        const model = this.models.instance('soldier', SOLDIER_SCALE);
         const group = new THREE.Group();
-        group.add(body);
-        label.position.y = 1.6;
+        group.add(model.root);
+
+        const label = makeTextSprite([player.name], '#e8e0d0', true); // names show through walls
+        label.position.y = 2.0;
         group.add(label);
+
+        const handAnchor =
+          model.root.getObjectByName('hand_right_anchor') ??
+          model.root.getObjectByName('hand_right') ??
+          null;
+
         this.scene.add(group);
-        visual = { group, body, label, downed: false };
+        visual = {
+          group,
+          model,
+          lower: new AnimSlot(model.mixer!, model.clips),
+          upper: new AnimSlot(model.mixer!, model.clips),
+          label,
+          handAnchor,
+          weaponId: null,
+          weaponMesh: null,
+        };
         this.players.set(player.id, visual);
       }
 
@@ -179,17 +231,20 @@ export class EntityRenderer {
         lerp(from.y, player.y, t),
         lerp(from.z, player.z, t),
       );
-      visual.body.rotation.y = lerpAngle(from.yaw, player.yaw, t);
+      visual.group.rotation.y = lerpAngle(from.yaw, player.yaw, t);
 
-      if (player.downed !== visual.downed) {
-        visual.downed = player.downed;
-        visual.body.rotation.x = player.downed ? Math.PI / 2 : 0;
-        (visual.body.material as THREE.MeshLambertMaterial).color.set(
-          player.downed ? 0x666666 : 0x4a6fa5,
-        );
+      // Animation choice mirrors the reference controller settings.
+      const speed = Math.hypot(player.vx, player.vz);
+      if (player.downed) {
+        visual.lower.play(speed > 0.2 ? 'crawling' : 'sleep');
+        visual.upper.play(speed > 0.2 ? 'crawling' : 'sleep');
+      } else {
+        visual.lower.play(speed > 5.5 ? 'run_lower' : speed > 0.3 ? 'walk_lower' : 'idle_lower');
+        visual.upper.play(gunPose(player.weapon).idle);
       }
-      // Capsule origin is its center; feet sit at group position.
-      visual.body.position.y = player.downed ? 0.45 : 0.9;
+
+      this.syncHeldWeapon(visual, player.downed ? null : player.weapon);
+      visual.model.mixer?.update(dt);
     }
 
     for (const [id, visual] of this.players) {
@@ -200,7 +255,38 @@ export class EntityRenderer {
     }
   }
 
-  private updateEnemies(a: Snapshot, b: Snapshot, t: number, now: number): void {
+  /** Attach/swap the gun model in the soldier's hand. */
+  private syncHeldWeapon(visual: PlayerVisual, weapon: WeaponId | null): void {
+    if (visual.weaponId === weapon || !visual.handAnchor) return;
+    if (visual.weaponMesh) {
+      visual.weaponMesh.removeFromParent();
+      visual.weaponMesh = null;
+    }
+    visual.weaponId = weapon;
+    if (weapon) {
+      const gun = this.models.instance(weapon, WEAPON_MODEL_SCALE[weapon], false).root;
+      // Reference: gun spawns at {0,0,-0.2} rotated Euler(-90,0,0) in the hand.
+      gun.position.set(0, 0, -0.2);
+      gun.rotation.set(-Math.PI / 2, 0, 0);
+      visual.handAnchor.add(gun);
+      visual.weaponMesh = gun;
+    }
+  }
+
+  /** Play the shoot pose on a remote player when their shot event arrives. */
+  playerShot(playerId: string, weapon: WeaponId): void {
+    const visual = this.players.get(playerId);
+    if (visual) visual.upper.oneShot(gunPose(weapon).shoot);
+  }
+
+  private updateEnemies(
+    a: Snapshot,
+    b: Snapshot,
+    t: number,
+    now: number,
+    dt: number,
+    snapDtMs: number,
+  ): void {
     const prev = new Map(a.enemies.map(e => [e.id, e]));
     const seen = new Set<number>();
 
@@ -208,33 +294,55 @@ export class EntityRenderer {
       seen.add(enemy.id);
       let visual = this.enemies.get(enemy.id);
       if (!visual) {
-        const material = new THREE.MeshLambertMaterial({
-          color: enemy.kind === 'ripper' ? 0x8a1d1d : 0x4d7a3a,
-        });
-        const mesh = new THREE.Mesh(
-          enemy.kind === 'ripper' ? this.ripperGeo : this.zombieGeo,
-          material,
-        );
-        this.scene.add(mesh);
-        visual = { mesh, material, flashUntil: 0 };
+        const model =
+          enemy.kind === 'ripper'
+            ? this.models.instance('ripper', RIPPER_SCALE)
+            : this.models.instance('zombie', ZOMBIE_SCALE);
+        this.scene.add(model.root);
+        visual = {
+          kind: enemy.kind,
+          model,
+          anim: new AnimSlot(model.mixer!, model.clips),
+          flashUntil: 0,
+          tintables: collectTintables(model.root),
+        };
         this.enemies.set(enemy.id, visual);
       }
 
       const from = prev.get(enemy.id) ?? enemy;
-      const centerY = enemy.kind === 'ripper' ? 1.2 : 0.85;
-      visual.mesh.position.set(
+      const groundOffset = visual.model.root.userData.groundOffset ?? visual.model.root.position.y;
+      visual.model.root.userData.groundOffset = groundOffset;
+      visual.model.root.position.set(
         lerp(from.x, enemy.x, t),
-        lerp(from.y, enemy.y, t) + centerY,
+        lerp(from.y, enemy.y, t) + groundOffset,
         lerp(from.z, enemy.z, t),
       );
-      visual.mesh.rotation.y = lerpAngle(from.yaw, enemy.yaw, t);
+      visual.model.root.rotation.y = lerpAngle(from.yaw, enemy.yaw, t);
 
-      visual.material.emissive.setHex(now < visual.flashUntil ? 0x991111 : 0x000000);
+      // Clip thresholds from the reference enemy constructors.
+      const speed = (Math.hypot(enemy.x - from.x, enemy.z - from.z) / snapDtMs) * 1000;
+      if (visual.kind === 'ripper') {
+        visual.anim.play(
+          speed > 6
+            ? 'animation.ripper_zombie.sprint'
+            : speed > 0.3
+              ? 'animation.ripper_zombie.walk'
+              : 'animation.ripper_zombie.idle',
+        );
+      } else {
+        visual.anim.play(speed > 5 ? 'run' : speed > 3 ? 'walk' : 'crawling');
+      }
+
+      const flashing = now < visual.flashUntil;
+      for (const material of visual.tintables) {
+        material.emissive.setHex(flashing ? 0x991111 : 0x000000);
+      }
+      visual.model.mixer?.update(dt);
     }
 
     for (const [id, visual] of this.enemies) {
       if (!seen.has(id)) {
-        this.scene.remove(visual.mesh);
+        this.scene.remove(visual.model.root);
         this.enemies.delete(id);
       }
     }
@@ -275,8 +383,22 @@ export class EntityRenderer {
     });
   }
 
+  /** Price labels are readable only up close, and never through walls. */
+  private updateLabelVisibility(cameraPos: THREE.Vector3): void {
+    const within = (sprite: THREE.Sprite) => {
+      const world = sprite.getWorldPosition(tmpVec);
+      return world.distanceTo(cameraPos) <= LABEL_VIEW_DISTANCE;
+    };
+    for (const label of this.barrierLabels) label.visible = within(label);
+    for (const label of this.crateLabels) label.visible = within(label);
+  }
+
   /** Spawn a tracer line for a shot event. */
-  addShotTracer(event: Extract<SimEvent, { type: 'shot' }>, shooter: WirePlayer | undefined, now: number): void {
+  addShotTracer(
+    event: Extract<SimEvent, { type: 'shot' }>,
+    shooter: WirePlayer | undefined,
+    now: number,
+  ): void {
     if (!shooter) return;
     const origin = new THREE.Vector3(shooter.x, shooter.y + PLAYER_EYE_HEIGHT - 0.15, shooter.z);
 

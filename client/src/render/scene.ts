@@ -19,8 +19,18 @@ export function createScene(canvas: HTMLCanvasElement): GameScene {
   scene.background = new THREE.Color(0x12080a);
   scene.fog = new THREE.Fog(0x12080a, 30, 95);
 
+  // Night sky: the reference skybox, dimmed hard for the horror mood.
+  new THREE.CubeTextureLoader()
+    .setPath('/skyboxes/partly-cloudy/')
+    .load(['+x.png', '-x.png', '+y.png', '-y.png', '+z.png', '-z.png'], texture => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      scene.background = texture;
+      scene.backgroundIntensity = 0.18;
+    });
+
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 300);
   camera.rotation.order = 'YXZ';
+  scene.add(camera); // the first-person viewmodel hangs off the camera
 
   const ambient = new THREE.AmbientLight(0xffd6d6, 0.85);
   scene.add(ambient);
