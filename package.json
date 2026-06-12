@@ -1,0 +1,32 @@
+{
+  "name": "shooter-zombies",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser-native multiplayer zombies shooter on Cloudflare Workers + Durable Objects",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "concurrently -n worker,client -c yellow,cyan \"npm:dev:worker\" \"npm:dev:client\"",
+    "dev:worker": "wrangler dev --port 8787",
+    "dev:client": "vite --config client/vite.config.ts",
+    "build": "vite build --config client/vite.config.ts",
+    "typecheck": "tsc -p sim && tsc -p protocol && tsc -p worker && tsc -p client",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "node e2e/two-client.mjs",
+    "deploy": "npm run build && wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260605.0",
+    "@types/three": "^0.182.0",
+    "concurrently": "^9.1.2",
+    "three": "^0.182.0",
+    "typescript": "^5.8.3",
+    "vite": "^7.0.0",
+    "vitest": "^3.2.0",
+    "wrangler": "^4.20.0"
+  }
+}

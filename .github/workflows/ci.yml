@@ -7,8 +7,28 @@ on:
   pull_request:
 
 jobs:
-  server-typecheck:
-    name: zombies-game typecheck
+  game:
+    name: typecheck + tests + build + e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Two-client multiplayer smoke test (wrangler dev + Durable Object)
+        run: npm run e2e
+
+  # Legacy reference stacks (the Node/SDK build the rewrite was ported from).
+  # Kept compiling so the gameplay reference stays usable.
+  reference-server:
+    name: 'reference: zombies-game typecheck'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -24,8 +44,8 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
 
-  client-build:
-    name: highchair-client typecheck + build
+  reference-client:
+    name: 'reference: highchair-client build'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:

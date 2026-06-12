@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mansion Zombies</title>
+  <style>
+    :root {
+      --blood: #c81e1e;
+      --bone: #e8e0d0;
+      --money: #7dff8a;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #0a0a0d;
+      font-family: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+      color: var(--bone);
+      user-select: none;
+    }
+    #game-canvas { position: fixed; inset: 0; display: block; }
+
+    /* ---- lobby ---- */
+    #lobby {
+      position: fixed; inset: 0; z-index: 30;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px;
+      background:
+        radial-gradient(ellipse at center, rgba(40, 8, 8, 0.85), rgba(5, 5, 8, 0.97)),
+        #0a0a0d;
+    }
+    #lobby h1 {
+      font-size: 56px; margin: 0 0 6px;
+      color: var(--blood);
+      letter-spacing: 4px;
+      text-shadow: 0 0 24px rgba(200, 30, 30, 0.6);
+      text-transform: uppercase;
+    }
+    #lobby p.tagline { margin: 0 0 18px; opacity: 0.7; }
+    #lobby input {
+      width: 260px; padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(232, 224, 208, 0.35);
+      border-radius: 6px;
+      color: var(--bone); font-size: 16px; text-align: center;
+      outline: none;
+    }
+    #lobby input:focus { border-color: var(--blood); }
+    #lobby button {
+      width: 260px; padding: 12px;
+      margin-top: 6px;
+      background: var(--blood);
+      color: #fff; font-size: 18px; font-weight: bold;
+      border: 0; border-radius: 6px; cursor: pointer;
+      letter-spacing: 2px; text-transform: uppercase;
+    }
+    #lobby button:hover { filter: brightness(1.15); }
+    #lobby .hint { font-size: 13px; opacity: 0.55; max-width: 420px; text-align: center; line-height: 1.5; }
+    #lobby .error { color: #ff6b6b; min-height: 18px; font-size: 14px; }
+
+    /* ---- HUD ---- */
+    .hud-layer { position: fixed; inset: 0; z-index: 10; pointer-events: none; display: none; }
+    body.playing .hud-layer { display: block; }
+
+    #crosshair {
+      position: absolute; left: 50%; top: 50%;
+      width: 4px; height: 4px; margin: -2px 0 0 -2px;
+      background: rgba(255, 255, 255, 0.9); border-radius: 50%;
+      box-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+    }
+    #vignette {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+    }
+    #damage-flash {
+      position: absolute; inset: 0; opacity: 0;
+      background: radial-gradient(ellipse at center, transparent 40%, rgba(200, 20, 20, 0.55) 100%);
+      transition: opacity 0.35s ease-out;
+    }
+
+    #top-right {
+      position: absolute; top: 16px; right: 20px; text-align: right;
+      text-shadow: 0 2px 4px #000;
+    }
+    #wave-label { font-size: 26px; font-weight: bold; color: var(--blood); letter-spacing: 2px; }
+    #phase-label { font-size: 14px; opacity: 0.8; margin-top: 4px; }
+
+    #boss-bar {
+      position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+      width: 420px; display: none; text-align: center;
+    }
+    #boss-bar .name { font-size: 16px; letter-spacing: 3px; color: var(--blood); text-shadow: 0 2px 4px #000; }
+    #boss-bar .track {
+      margin-top: 4px; height: 10px; border: 1px solid rgba(232, 224, 208, 0.5);
+      background: rgba(0, 0, 0, 0.5); border-radius: 5px; overflow: hidden;
+    }
+    #boss-bar .fill { height: 100%; width: 100%; background: var(--blood); transition: width 0.2s; }
+
+    #announce {
+      position: absolute; top: 32%; left: 0; right: 0; text-align: center;
+      font-size: 52px; font-weight: bold; color: var(--blood);
+      letter-spacing: 6px; text-transform: uppercase;
+      text-shadow: 0 0 30px rgba(200, 30, 30, 0.8), 0 2px 4px #000;
+      opacity: 0; transition: opacity 0.5s;
+    }
+
+    #messages {
+      position: absolute; left: 20px; top: 16px; max-width: 40vw;
+      font-size: 14px; line-height: 1.5; text-shadow: 0 1px 3px #000;
+    }
+    #messages div { opacity: 0.95; margin-bottom: 2px; }
+
+    #bottom-bar {
+      position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 22px;
+      display: flex; justify-content: space-between; align-items: flex-end;
+    }
+    #weapon-box {
+      display: flex; align-items: center; gap: 14px;
+      background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(232, 224, 208, 0.25);
+      padding: 10px 16px; border-radius: 8px;
+    }
+    #weapon-box img { width: 84px; height: auto; image-rendering: pixelated; }
+    #weapon-name { font-size: 18px; font-weight: bold; }
+    #weapon-ammo { font-size: 15px; opacity: 0.85; margin-top: 2px; }
+    #weapon-ammo.reloading { color: #ffb86b; }
+
+    #status-box { text-align: right; }
+    #money { font-size: 24px; color: var(--money); font-weight: bold; text-shadow: 0 2px 4px #000; }
+    #health-track {
+      width: 280px; height: 18px; margin-top: 8px;
+      border: 1px solid rgba(232, 224, 208, 0.4); border-radius: 9px;
+      background: rgba(0, 0, 0, 0.55); overflow: hidden; position: relative;
+    }
+    #health-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #8c1212, #d43030); transition: width 0.15s; }
+    #health-text {
+      position: absolute; inset: 0; text-align: center; font-size: 12px; line-height: 18px;
+      color: #fff; text-shadow: 0 1px 2px #000;
+    }
+
+    #center-overlay {
+      position: absolute; left: 0; right: 0; top: 42%; text-align: center;
+      font-size: 24px; text-shadow: 0 2px 6px #000; display: none;
+    }
+    #center-overlay .big { font-size: 40px; font-weight: bold; color: var(--blood); letter-spacing: 3px; }
+    #center-overlay .sub { font-size: 17px; opacity: 0.85; margin-top: 8px; }
+
+    #interact-hint {
+      position: absolute; left: 0; right: 0; bottom: 24%; text-align: center;
+      font-size: 16px; text-shadow: 0 2px 4px #000; opacity: 0.9; display: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+
+  <div id="lobby">
+    <h1>Mansion Zombies</h1>
+    <p class="tagline">Survive the horde. Buy your way deeper. Don't go down alone.</p>
+    <input id="lobby-name" maxlength="16" placeholder="Your name" autocomplete="off" />
+    <input id="lobby-room" maxlength="16" placeholder="Room code" autocomplete="off" />
+    <button id="lobby-join">Join Room</button>
+    <div class="error" id="lobby-error"></div>
+    <div class="hint">
+      Share the room code with friends — everyone who enters the same code plays in the
+      same world. WASD to move, mouse to aim, click to shoot, R reload, E interact, Shift sprint.
+    </div>
+  </div>
+
+  <div class="hud-layer">
+    <div id="vignette"></div>
+    <div id="damage-flash"></div>
+    <div id="crosshair"></div>
+
+    <div id="boss-bar">
+      <div class="name">BOSS: RIPPER</div>
+      <div class="track"><div class="fill"></div></div>
+    </div>
+
+    <div id="top-right">
+      <div id="wave-label">Wave 0</div>
+      <div id="phase-label"></div>
+    </div>
+
+    <div id="announce"></div>
+    <div id="messages"></div>
+    <div id="center-overlay"></div>
+    <div id="interact-hint"></div>
+
+    <div id="bottom-bar">
+      <div id="weapon-box">
+        <img id="weapon-icon" src="/icons/pistol.png" alt="" />
+        <div>
+          <div id="weapon-name">Pistol</div>
+          <div id="weapon-ammo">10 / 10</div>
+        </div>
+      </div>
+      <div id="status-box">
+        <div id="money">$0</div>
+        <div id="health-track">
+          <div id="health-fill"></div>
+          <div id="health-text">100 / 100</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
