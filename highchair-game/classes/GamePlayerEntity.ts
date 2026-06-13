@@ -17,6 +17,8 @@ import {
 import GunEntity from './GunEntity';
 import ItemEntity from './ItemEntity';
 import PickaxeEntity from './weapons/PickaxeEntity';
+import ItemFactory from './ItemFactory';
+import { DEFAULT_LOADOUT, GUN_CATALOG, LOADOUT_SLOTS, isCatalogGun } from './GunCatalog';
 import MeleeWeaponEntity from './MeleeWeaponEntity';
 import { BUILD_BLOCK_ID, RANKS, RANK_KILL_EXP, RANK_SAVE_INTERVAL_EXP } from '../gameConfig';
 import GameManager from './GameManager';
@@ -51,6 +53,9 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   private _dead: boolean = false;
   private _health: number = BASE_HEALTH;
   private _inventoryActiveSlotIndex: number = 0;
+  /** Gun ids (slots 1..N) re-equipped at spawn and on loadout changes. */
+  private _loadout: string[] = [...DEFAULT_LOADOUT];
+  private _equippingLoadout = false;
   private _lastExpSave: number = 0;
   private _maxHealth: number = MAX_HEALTH;
   private _maxShield: number = MAX_SHIELD;
@@ -177,7 +182,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
         this.focusCameraOnPlayer(attacker);
       }
 
-      this.dropAllInventoryItems();
+      this._despawnGuns(); // loadout guns return fresh at respawn, nothing drops
 
       if (this.isSpawned && this.world) {
         // reset player inputs
@@ -305,6 +310,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this._setupPlayerCamera();
     this.setActiveInventorySlotIndex(0);
     this.setPosition(GameManager.instance.getRandomSpawnPosition());
+    void this._equipLoadout();
   }
 
   public savePersistedData(): void {
@@ -413,6 +419,64 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     const pickaxe = new PickaxeEntity();
     pickaxe.spawn(this.world!, this.position);
     pickaxe.pickup(this);
+
+    void this._equipLoadout();
+  }
+
+  /** Despawn every gun (slots 1..N); the pickaxe in slot 0 stays. */
+  private _despawnGuns(): void {
+    for (let i = 1; i < this._inventory.length; i++) {
+      const item = this._inventory[i];
+      if (!item) continue;
+      if (item.isSpawned) item.despawn();
+      this._inventory[i] = undefined;
+    }
+    this._updatePlayerUIInventory();
+    this._updatePlayerUIInventoryActiveSlot();
+  }
+
+  /**
+   * Equips the player's chosen guns into slots 1..N with deep ammo
+   * reserves. There are no weapon pickups: the loadout IS the arsenal.
+   */
+  private async _equipLoadout(): Promise<void> {
+    if (this._equippingLoadout || !this.world || !this.isSpawned) return;
+    this._equippingLoadout = true;
+
+    try {
+      this._despawnGuns();
+
+      for (const gunId of this._loadout.slice(0, LOADOUT_SLOTS)) {
+        if (!this.isSpawned || !this.world) break;
+        const item = await ItemFactory.createItem(gunId);
+        if (item instanceof GunEntity) {
+          item.setReserveAmmo(9999); // before pickup so the HUD shows it
+        }
+        item.spawn(this.world, this.position);
+        item.pickup(this);
+      }
+    } finally {
+      this._equippingLoadout = false;
+    }
+  }
+
+  /** Validate + apply a loadout from the UI; refreshes guns immediately. */
+  public setLoadout(gunIds: unknown[]): void {
+    const unique = [...new Set(gunIds.filter(isCatalogGun))].slice(0, LOADOUT_SLOTS);
+    if (!unique.length) return;
+    this._loadout = unique;
+    void this._equipLoadout();
+    this._sendLoadoutUI(true);
+  }
+
+  private _sendLoadoutUI(applied = false): void {
+    this.player.ui.sendData({
+      type: 'loadout',
+      catalog: GUN_CATALOG,
+      selected: this._loadout,
+      maxSlots: LOADOUT_SLOTS,
+      applied,
+    });
   }
 
   public setupPlayerUI(): void {
@@ -436,6 +500,14 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
 
       if (data.type === 'inventory-select') {
         this.setActiveInventorySlotIndex(data.index);
+      }
+
+      if (data.type === 'request-loadout') {
+        this._sendLoadoutUI();
+      }
+
+      if (data.type === 'set-loadout' && Array.isArray(data.guns)) {
+        this.setLoadout(data.guns);
       }
     });
   }

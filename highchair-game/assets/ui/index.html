@@ -6,6 +6,17 @@
 <!-- UI-->
 <div class="crosshair"></div>
 
+<div class="loadout-toggle">LOADOUT</div>
+<div class="loadout-panel">
+  <div class="loadout-title">Choose your guns</div>
+  <div class="loadout-hint">Pick up to <span class="loadout-max">5</span>. Applied immediately and on every respawn.</div>
+  <div class="loadout-grid"></div>
+  <div class="loadout-actions">
+    <button class="loadout-apply">APPLY</button>
+    <button class="loadout-cancel">CLOSE</button>
+  </div>
+</div>
+
 <div class="damage-indicator-container">
   <div class="damage-indicator top"></div>
   <div class="damage-indicator right"></div>
@@ -217,6 +228,56 @@
   highchair.sendData({
     type: 'client-platform',
     isMobile: isMobileClient,
+  });
+
+  // ---- loadout menu ----
+  let loadoutCatalog = [];
+  let loadoutSelected = [];
+  let loadoutMaxSlots = 5;
+  const loadoutPanel = document.querySelector('.loadout-panel');
+  const loadoutGrid = document.querySelector('.loadout-grid');
+
+  highchair.sendData({ type: 'request-loadout' });
+
+  function renderLoadoutGrid() {
+    document.querySelector('.loadout-max').textContent = loadoutMaxSlots;
+    loadoutGrid.innerHTML = '';
+    for (const gun of loadoutCatalog) {
+      const card = document.createElement('div');
+      const slotIndex = loadoutSelected.indexOf(gun.id);
+      card.className = 'loadout-gun' + (slotIndex !== -1 ? ' selected' : '');
+      card.innerHTML = `
+        <img src="{{CDN_ASSETS_URL}}/${gun.icon}" alt="${gun.label}">
+        <div class="gun-name">${gun.label}</div>
+        <div class="gun-slot">${slotIndex !== -1 ? 'SLOT ' + (slotIndex + 1) : ''}</div>
+      `;
+      card.addEventListener('click', () => {
+        const at = loadoutSelected.indexOf(gun.id);
+        if (at !== -1) {
+          loadoutSelected.splice(at, 1);
+        } else if (loadoutSelected.length < loadoutMaxSlots) {
+          loadoutSelected.push(gun.id);
+        }
+        renderLoadoutGrid();
+      });
+      loadoutGrid.appendChild(card);
+    }
+  }
+
+  document.querySelector('.loadout-toggle').addEventListener('click', () => {
+    loadoutPanel.classList.toggle('open');
+    if (loadoutPanel.classList.contains('open') && !loadoutCatalog.length) {
+      highchair.sendData({ type: 'request-loadout' });
+    }
+  });
+  document.querySelector('.loadout-cancel').addEventListener('click', () => {
+    loadoutPanel.classList.remove('open');
+  });
+  document.querySelector('.loadout-apply').addEventListener('click', () => {
+    if (loadoutSelected.length) {
+      highchair.sendData({ type: 'set-loadout', guns: loadoutSelected });
+    }
+    loadoutPanel.classList.remove('open');
   });
 
   function updateLeaderboard() {
@@ -451,6 +512,13 @@
 
     if (type === 'game-start') {
       showGameStartAnnouncement();
+    }
+
+    if (type === 'loadout') {
+      loadoutCatalog = data.catalog || [];
+      loadoutSelected = (data.selected || []).slice();
+      loadoutMaxSlots = data.maxSlots || 5;
+      renderLoadoutGrid();
     }
 
     if (type === 'announce-winner') {
@@ -1839,4 +1907,89 @@
   body.mobile .rank-up-name {
     font-size: 30px;
   }
+
+  /* ---- loadout menu ---- */
+  .loadout-toggle {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    padding: 8px 14px;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 6px;
+    color: #fff;
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 60;
+  }
+  .loadout-toggle:hover { background: rgba(30, 30, 30, 0.8); }
+
+  .loadout-panel {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 560px;
+    max-width: 92vw;
+    background: rgba(10, 10, 14, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    padding: 18px 20px;
+    color: #fff;
+    font-family: Arial, sans-serif;
+    pointer-events: auto;
+    z-index: 70;
+  }
+  .loadout-panel.open { display: block; }
+  .loadout-title { font-size: 20px; font-weight: bold; letter-spacing: 1px; margin-bottom: 4px; }
+  .loadout-hint { font-size: 12px; opacity: 0.7; margin-bottom: 14px; }
+  .loadout-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .loadout-gun {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 2px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .loadout-gun:hover { background: rgba(255, 255, 255, 0.12); }
+  .loadout-gun.selected {
+    border-color: #ffd24a;
+    background: rgba(255, 210, 74, 0.12);
+  }
+  .loadout-gun img { width: 56px; height: 36px; object-fit: contain; }
+  .loadout-gun .gun-name { font-size: 11px; text-align: center; opacity: 0.9; }
+  .loadout-gun .gun-slot {
+    font-size: 10px;
+    color: #ffd24a;
+    min-height: 12px;
+    font-weight: bold;
+  }
+  .loadout-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .loadout-actions button {
+    padding: 8px 22px;
+    border: 0;
+    border-radius: 6px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+  .loadout-apply { background: #ffd24a; color: #1a1a1a; }
+  .loadout-cancel { background: rgba(255, 255, 255, 0.15); color: #fff; }
 </style>

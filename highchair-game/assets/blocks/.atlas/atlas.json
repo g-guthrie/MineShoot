@@ -3,13 +3,13 @@
   "textureSize": 24,
   "padding": 20,
   "atlasWidth": 1024,
-  "atlasHeight": 512,
+  "atlasHeight": 1024,
   "textures": {
     "blocks/bamboo-slats.png": {
       "u0": 0.01953125,
-      "v0": 0.0390625,
+      "v0": 0.01953125,
       "u1": 0.04296875,
-      "v1": 0.0859375,
+      "v1": 0.04296875,
       "averageRGB": [
         0.8446078431372549,
         0.6914624183006536,
@@ -19,11 +19,1033 @@
       "needsAlphaTest": false,
       "transparencyRatio": 0
     },
-    "blocks/bricks.png": {
+    "blocks/boxman/boxman-1a1a1e.png": {
       "u0": 0.08203125,
-      "v0": 0.0390625,
+      "v0": 0.01953125,
       "u1": 0.10546875,
-      "v1": 0.0859375,
+      "v1": 0.04296875,
+      "averageRGB": [
+        0.10196078431372549,
+        0.10196078431372549,
+        0.11764705882352941
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-1a4a1a.png": {
+      "u0": 0.14453125,
+      "v0": 0.01953125,
+      "u1": 0.16796875,
+      "v1": 0.04296875,
+      "averageRGB": [
+        0.10196078431372549,
+        0.2901960784313726,
+        0.10196078431372549
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-1a5c2a.png": {
+      "u0": 0.20703125,
+      "v0": 0.01953125,
+      "u1": 0.23046875,
+      "v1": 0.04296875,
+      "averageRGB": [
+        0.10196078431372549,
+        0.3607843137254902,
+        0.16470588235294117
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-265e26.png": {
+      "u0": 0.26953125,
+      "v0": 0.01953125,
+      "u1": 0.29296875,
+      "v1": 0.04296875,
+      "averageRGB": [
+        0.14901960784313725,
+        0.3686274509803922,
+        0.14901960784313725
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-2a1e1e.png": {
+      "u0": 0.33203125,
+      "v0": 0.01953125,
+      "u1": 0.35546875,
+      "v1": 0.04296875,
+      "averageRGB": [
+        0.16470588235294117,
+        0.11764705882352941,
+        0.11764705882352941
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-2a6a6a.png": {
+      "u0": 0.39453125,
+      "v0": 0.01953125,
+      "u1": 0.41796875,
+      "v1": 0.04296875,
+      "averageRGB": [
+        0.16470588235294117,
+        0.41568627450980394,
+        0.41568627450980394
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-2a7a3a.png": {
+      "u0": 0.45703125,
+      "v0": 0.01953125,
+      "u1": 0.48046875,
+      "v1": 0.04296875,
+      "averageRGB": [
+        0.16470588235294117,
+        0.47843137254901963,
+        0.22745098039215686
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-2c2a32.png": {
+      "u0": 0.51953125,
+      "v0": 0.01953125,
+      "u1": 0.54296875,
+      "v1": 0.04296875,
+      "averageRGB": [
+        0.17254901960784313,
+        0.16470588235294117,
+        0.19607843137254902
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-2d6b2d.png": {
+      "u0": 0.58203125,
+      "v0": 0.01953125,
+      "u1": 0.60546875,
+      "v1": 0.04296875,
+      "averageRGB": [
+        0.17647058823529413,
+        0.4196078431372549,
+        0.17647058823529413
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-382818.png": {
+      "u0": 0.64453125,
+      "v0": 0.01953125,
+      "u1": 0.66796875,
+      "v1": 0.04296875,
+      "averageRGB": [
+        0.2196078431372549,
+        0.1568627450980392,
+        0.09411764705882353
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-3a2a15.png": {
+      "u0": 0.70703125,
+      "v0": 0.01953125,
+      "u1": 0.73046875,
+      "v1": 0.04296875,
+      "averageRGB": [
+        0.22745098039215686,
+        0.16470588235294117,
+        0.08235294117647059
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-3a3a3a.png": {
+      "u0": 0.76953125,
+      "v0": 0.01953125,
+      "u1": 0.79296875,
+      "v1": 0.04296875,
+      "averageRGB": [
+        0.22745098039215686,
+        0.22745098039215686,
+        0.22745098039215686
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-3a4a3a.png": {
+      "u0": 0.83203125,
+      "v0": 0.01953125,
+      "u1": 0.85546875,
+      "v1": 0.04296875,
+      "averageRGB": [
+        0.22745098039215686,
+        0.2901960784313726,
+        0.22745098039215686
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-3a8a8a.png": {
+      "u0": 0.89453125,
+      "v0": 0.01953125,
+      "u1": 0.91796875,
+      "v1": 0.04296875,
+      "averageRGB": [
+        0.22745098039215686,
+        0.5411764705882353,
+        0.5411764705882353
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-3d2e2e.png": {
+      "u0": 0.95703125,
+      "v0": 0.01953125,
+      "u1": 0.98046875,
+      "v1": 0.04296875,
+      "averageRGB": [
+        0.23921568627450981,
+        0.1803921568627451,
+        0.1803921568627451
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-3d4a32.png": {
+      "u0": 0.01953125,
+      "v0": 0.08203125,
+      "u1": 0.04296875,
+      "v1": 0.10546875,
+      "averageRGB": [
+        0.23921568627450981,
+        0.2901960784313726,
+        0.19607843137254902
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-3f7a2e.png": {
+      "u0": 0.08203125,
+      "v0": 0.08203125,
+      "u1": 0.10546875,
+      "v1": 0.10546875,
+      "averageRGB": [
+        0.24705882352941178,
+        0.47843137254901963,
+        0.1803921568627451
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-4a2e1a.png": {
+      "u0": 0.14453125,
+      "v0": 0.08203125,
+      "u1": 0.16796875,
+      "v1": 0.10546875,
+      "averageRGB": [
+        0.2901960784313726,
+        0.1803921568627451,
+        0.10196078431372549
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-4a3520.png": {
+      "u0": 0.20703125,
+      "v0": 0.08203125,
+      "u1": 0.23046875,
+      "v1": 0.10546875,
+      "averageRGB": [
+        0.2901960784313726,
+        0.20784313725490197,
+        0.12549019607843137
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-4a4a3e.png": {
+      "u0": 0.26953125,
+      "v0": 0.08203125,
+      "u1": 0.29296875,
+      "v1": 0.10546875,
+      "averageRGB": [
+        0.2901960784313726,
+        0.2901960784313726,
+        0.24313725490196078
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-4a5040.png": {
+      "u0": 0.33203125,
+      "v0": 0.08203125,
+      "u1": 0.35546875,
+      "v1": 0.10546875,
+      "averageRGB": [
+        0.2901960784313726,
+        0.3137254901960784,
+        0.25098039215686274
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-4f8a3d.png": {
+      "u0": 0.39453125,
+      "v0": 0.08203125,
+      "u1": 0.41796875,
+      "v1": 0.10546875,
+      "averageRGB": [
+        0.30980392156862746,
+        0.5411764705882353,
+        0.23921568627450981
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-556677.png": {
+      "u0": 0.45703125,
+      "v0": 0.08203125,
+      "u1": 0.48046875,
+      "v1": 0.10546875,
+      "averageRGB": [
+        0.3333333333333333,
+        0.4,
+        0.4666666666666667
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-5a4a3a.png": {
+      "u0": 0.51953125,
+      "v0": 0.08203125,
+      "u1": 0.54296875,
+      "v1": 0.10546875,
+      "averageRGB": [
+        0.35294117647058826,
+        0.2901960784313726,
+        0.22745098039215686
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-5a6a5a.png": {
+      "u0": 0.58203125,
+      "v0": 0.08203125,
+      "u1": 0.60546875,
+      "v1": 0.10546875,
+      "averageRGB": [
+        0.35294117647058826,
+        0.41568627450980394,
+        0.35294117647058826
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-5b4b42.png": {
+      "u0": 0.64453125,
+      "v0": 0.08203125,
+      "u1": 0.66796875,
+      "v1": 0.10546875,
+      "averageRGB": [
+        0.3568627450980392,
+        0.29411764705882354,
+        0.25882352941176473
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-5c3d1e.png": {
+      "u0": 0.70703125,
+      "v0": 0.08203125,
+      "u1": 0.73046875,
+      "v1": 0.10546875,
+      "averageRGB": [
+        0.3607843137254902,
+        0.23921568627450981,
+        0.11764705882352941
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-61696f.png": {
+      "u0": 0.76953125,
+      "v0": 0.08203125,
+      "u1": 0.79296875,
+      "v1": 0.10546875,
+      "averageRGB": [
+        0.3803921568627451,
+        0.4117647058823529,
+        0.43529411764705883
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-666655.png": {
+      "u0": 0.83203125,
+      "v0": 0.08203125,
+      "u1": 0.85546875,
+      "v1": 0.10546875,
+      "averageRGB": [
+        0.4,
+        0.4,
+        0.3333333333333333
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-696f66.png": {
+      "u0": 0.89453125,
+      "v0": 0.08203125,
+      "u1": 0.91796875,
+      "v1": 0.10546875,
+      "averageRGB": [
+        0.4117647058823529,
+        0.43529411764705883,
+        0.4
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-6a4a2a.png": {
+      "u0": 0.95703125,
+      "v0": 0.08203125,
+      "u1": 0.98046875,
+      "v1": 0.10546875,
+      "averageRGB": [
+        0.41568627450980394,
+        0.2901960784313726,
+        0.16470588235294117
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-6a7a52.png": {
+      "u0": 0.01953125,
+      "v0": 0.14453125,
+      "u1": 0.04296875,
+      "v1": 0.16796875,
+      "averageRGB": [
+        0.41568627450980394,
+        0.47843137254901963,
+        0.3215686274509804
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-6ab8e0-t.png": {
+      "u0": 0.08203125,
+      "v0": 0.14453125,
+      "u1": 0.10546875,
+      "v1": 0.16796875,
+      "averageRGB": [
+        0.41568627450980394,
+        0.7215686274509804,
+        0.8784313725490196
+      ],
+      "isTransparent": true,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0.2509803921568619
+    },
+    "blocks/boxman/boxman-6b4226.png": {
+      "u0": 0.14453125,
+      "v0": 0.14453125,
+      "u1": 0.16796875,
+      "v1": 0.16796875,
+      "averageRGB": [
+        0.4196078431372549,
+        0.25882352941176473,
+        0.14901960784313725
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-6b4f8e.png": {
+      "u0": 0.20703125,
+      "v0": 0.14453125,
+      "u1": 0.23046875,
+      "v1": 0.16796875,
+      "averageRGB": [
+        0.4196078431372549,
+        0.30980392156862746,
+        0.5568627450980392
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-6b5335.png": {
+      "u0": 0.26953125,
+      "v0": 0.14453125,
+      "u1": 0.29296875,
+      "v1": 0.16796875,
+      "averageRGB": [
+        0.4196078431372549,
+        0.3254901960784314,
+        0.20784313725490197
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-6b8299.png": {
+      "u0": 0.33203125,
+      "v0": 0.14453125,
+      "u1": 0.35546875,
+      "v1": 0.16796875,
+      "averageRGB": [
+        0.4196078431372549,
+        0.5098039215686274,
+        0.6
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-6b868a.png": {
+      "u0": 0.39453125,
+      "v0": 0.14453125,
+      "u1": 0.41796875,
+      "v1": 0.16796875,
+      "averageRGB": [
+        0.4196078431372549,
+        0.5254901960784314,
+        0.5411764705882353
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-777777.png": {
+      "u0": 0.45703125,
+      "v0": 0.14453125,
+      "u1": 0.48046875,
+      "v1": 0.16796875,
+      "averageRGB": [
+        0.4666666666666667,
+        0.4666666666666667,
+        0.4666666666666667
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-7a5b3d.png": {
+      "u0": 0.51953125,
+      "v0": 0.14453125,
+      "u1": 0.54296875,
+      "v1": 0.16796875,
+      "averageRGB": [
+        0.47843137254901963,
+        0.3568627450980392,
+        0.23921568627450981
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-7a8a7a.png": {
+      "u0": 0.58203125,
+      "v0": 0.14453125,
+      "u1": 0.60546875,
+      "v1": 0.16796875,
+      "averageRGB": [
+        0.47843137254901963,
+        0.5411764705882353,
+        0.47843137254901963
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-7aa84a.png": {
+      "u0": 0.64453125,
+      "v0": 0.14453125,
+      "u1": 0.66796875,
+      "v1": 0.16796875,
+      "averageRGB": [
+        0.47843137254901963,
+        0.6588235294117647,
+        0.2901960784313726
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-7bb8d4.png": {
+      "u0": 0.70703125,
+      "v0": 0.14453125,
+      "u1": 0.73046875,
+      "v1": 0.16796875,
+      "averageRGB": [
+        0.4823529411764706,
+        0.7215686274509804,
+        0.8313725490196079
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-7cc88a.png": {
+      "u0": 0.76953125,
+      "v0": 0.14453125,
+      "u1": 0.79296875,
+      "v1": 0.16796875,
+      "averageRGB": [
+        0.48627450980392156,
+        0.7843137254901961,
+        0.5411764705882353
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-808080.png": {
+      "u0": 0.83203125,
+      "v0": 0.14453125,
+      "u1": 0.85546875,
+      "v1": 0.16796875,
+      "averageRGB": [
+        0.5019607843137255,
+        0.5019607843137255,
+        0.5019607843137255
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-816e61.png": {
+      "u0": 0.89453125,
+      "v0": 0.14453125,
+      "u1": 0.91796875,
+      "v1": 0.16796875,
+      "averageRGB": [
+        0.5058823529411764,
+        0.43137254901960786,
+        0.3803921568627451
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-888899.png": {
+      "u0": 0.95703125,
+      "v0": 0.14453125,
+      "u1": 0.98046875,
+      "v1": 0.16796875,
+      "averageRGB": [
+        0.5333333333333333,
+        0.5333333333333333,
+        0.6
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-8a6b4a.png": {
+      "u0": 0.01953125,
+      "v0": 0.20703125,
+      "u1": 0.04296875,
+      "v1": 0.23046875,
+      "averageRGB": [
+        0.5411764705882353,
+        0.4196078431372549,
+        0.2901960784313726
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-8a7a5a.png": {
+      "u0": 0.08203125,
+      "v0": 0.20703125,
+      "u1": 0.10546875,
+      "v1": 0.23046875,
+      "averageRGB": [
+        0.5411764705882353,
+        0.47843137254901963,
+        0.35294117647058826
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-8b6fae.png": {
+      "u0": 0.14453125,
+      "v0": 0.20703125,
+      "u1": 0.16796875,
+      "v1": 0.23046875,
+      "averageRGB": [
+        0.5450980392156862,
+        0.43529411764705883,
+        0.6823529411764706
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-8b7355.png": {
+      "u0": 0.20703125,
+      "v0": 0.20703125,
+      "u1": 0.23046875,
+      "v1": 0.23046875,
+      "averageRGB": [
+        0.5450980392156862,
+        0.45098039215686275,
+        0.3333333333333333
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-9090a0.png": {
+      "u0": 0.26953125,
+      "v0": 0.20703125,
+      "u1": 0.29296875,
+      "v1": 0.23046875,
+      "averageRGB": [
+        0.5647058823529412,
+        0.5647058823529412,
+        0.6274509803921569
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-97887a.png": {
+      "u0": 0.33203125,
+      "v0": 0.20703125,
+      "u1": 0.35546875,
+      "v1": 0.23046875,
+      "averageRGB": [
+        0.592156862745098,
+        0.5333333333333333,
+        0.47843137254901963
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-9a7a50.png": {
+      "u0": 0.39453125,
+      "v0": 0.20703125,
+      "u1": 0.41796875,
+      "v1": 0.23046875,
+      "averageRGB": [
+        0.6039215686274509,
+        0.47843137254901963,
+        0.3137254901960784
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-9b7fbe.png": {
+      "u0": 0.45703125,
+      "v0": 0.20703125,
+      "u1": 0.48046875,
+      "v1": 0.23046875,
+      "averageRGB": [
+        0.6078431372549019,
+        0.4980392156862745,
+        0.7450980392156863
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-9b8565.png": {
+      "u0": 0.51953125,
+      "v0": 0.20703125,
+      "u1": 0.54296875,
+      "v1": 0.23046875,
+      "averageRGB": [
+        0.6078431372549019,
+        0.5215686274509804,
+        0.396078431372549
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-b07842.png": {
+      "u0": 0.58203125,
+      "v0": 0.20703125,
+      "u1": 0.60546875,
+      "v1": 0.23046875,
+      "averageRGB": [
+        0.6901960784313725,
+        0.47058823529411764,
+        0.25882352941176473
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-b59d88.png": {
+      "u0": 0.64453125,
+      "v0": 0.20703125,
+      "u1": 0.66796875,
+      "v1": 0.23046875,
+      "averageRGB": [
+        0.7098039215686275,
+        0.615686274509804,
+        0.5333333333333333
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-b89cd8.png": {
+      "u0": 0.70703125,
+      "v0": 0.20703125,
+      "u1": 0.73046875,
+      "v1": 0.23046875,
+      "averageRGB": [
+        0.7215686274509804,
+        0.611764705882353,
+        0.8470588235294118
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-bbbbaa.png": {
+      "u0": 0.76953125,
+      "v0": 0.20703125,
+      "u1": 0.79296875,
+      "v1": 0.23046875,
+      "averageRGB": [
+        0.7333333333333333,
+        0.7333333333333333,
+        0.6666666666666666
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-c49a5c.png": {
+      "u0": 0.83203125,
+      "v0": 0.20703125,
+      "u1": 0.85546875,
+      "v1": 0.23046875,
+      "averageRGB": [
+        0.7686274509803922,
+        0.6039215686274509,
+        0.3607843137254902
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-c5b17c.png": {
+      "u0": 0.89453125,
+      "v0": 0.20703125,
+      "u1": 0.91796875,
+      "v1": 0.23046875,
+      "averageRGB": [
+        0.7725490196078432,
+        0.6941176470588235,
+        0.48627450980392156
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-c8e8f8.png": {
+      "u0": 0.95703125,
+      "v0": 0.20703125,
+      "u1": 0.98046875,
+      "v1": 0.23046875,
+      "averageRGB": [
+        0.7843137254901961,
+        0.9098039215686274,
+        0.9725490196078431
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-c9b88a.png": {
+      "u0": 0.01953125,
+      "v0": 0.26953125,
+      "u1": 0.04296875,
+      "v1": 0.29296875,
+      "averageRGB": [
+        0.788235294117647,
+        0.7215686274509804,
+        0.5411764705882353
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-cccccc.png": {
+      "u0": 0.08203125,
+      "v0": 0.26953125,
+      "u1": 0.10546875,
+      "v1": 0.29296875,
+      "averageRGB": [
+        0.8,
+        0.8,
+        0.8
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-d8c89a.png": {
+      "u0": 0.14453125,
+      "v0": 0.26953125,
+      "u1": 0.16796875,
+      "v1": 0.29296875,
+      "averageRGB": [
+        0.8470588235294118,
+        0.7843137254901961,
+        0.6039215686274509
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-dcc878.png": {
+      "u0": 0.20703125,
+      "v0": 0.26953125,
+      "u1": 0.23046875,
+      "v1": 0.29296875,
+      "averageRGB": [
+        0.8627450980392157,
+        0.7843137254901961,
+        0.47058823529411764
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-e0d39a.png": {
+      "u0": 0.26953125,
+      "v0": 0.26953125,
+      "u1": 0.29296875,
+      "v1": 0.29296875,
+      "averageRGB": [
+        0.8784313725490196,
+        0.8274509803921568,
+        0.6039215686274509
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-e88ba8.png": {
+      "u0": 0.33203125,
+      "v0": 0.26953125,
+      "u1": 0.35546875,
+      "v1": 0.29296875,
+      "averageRGB": [
+        0.9098039215686274,
+        0.5450980392156862,
+        0.6588235294117647
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-e8f4ff.png": {
+      "u0": 0.39453125,
+      "v0": 0.26953125,
+      "u1": 0.41796875,
+      "v1": 0.29296875,
+      "averageRGB": [
+        0.9098039215686274,
+        0.9568627450980393,
+        1
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-f0a050.png": {
+      "u0": 0.45703125,
+      "v0": 0.26953125,
+      "u1": 0.48046875,
+      "v1": 0.29296875,
+      "averageRGB": [
+        0.9411764705882353,
+        0.6274509803921569,
+        0.3137254901960784
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-f5c0a0.png": {
+      "u0": 0.51953125,
+      "v0": 0.26953125,
+      "u1": 0.54296875,
+      "v1": 0.29296875,
+      "averageRGB": [
+        0.9607843137254902,
+        0.7529411764705882,
+        0.6274509803921569
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/boxman/boxman-f5d86e.png": {
+      "u0": 0.58203125,
+      "v0": 0.26953125,
+      "u1": 0.60546875,
+      "v1": 0.29296875,
+      "averageRGB": [
+        0.9607843137254902,
+        0.8470588235294118,
+        0.43137254901960786
+      ],
+      "isTransparent": false,
+      "needsAlphaTest": false,
+      "transparencyRatio": 0
+    },
+    "blocks/bricks.png": {
+      "u0": 0.64453125,
+      "v0": 0.26953125,
+      "u1": 0.66796875,
+      "v1": 0.29296875,
       "averageRGB": [
         0.82260348583878,
         0.42995642701525055,
@@ -34,10 +1056,10 @@
       "transparencyRatio": 0
     },
     "blocks/clay.png": {
-      "u0": 0.14453125,
-      "v0": 0.0390625,
-      "u1": 0.16796875,
-      "v1": 0.0859375,
+      "u0": 0.70703125,
+      "v0": 0.26953125,
+      "u1": 0.73046875,
+      "v1": 0.29296875,
       "averageRGB": [
         0.43826933551198255,
         0.5242578976034858,
@@ -48,10 +1070,10 @@
       "transparencyRatio": 0
     },
     "blocks/coal-ore.png": {
-      "u0": 0.20703125,
-      "v0": 0.0390625,
-      "u1": 0.23046875,
-      "v1": 0.0859375,
+      "u0": 0.76953125,
+      "v0": 0.26953125,
+      "u1": 0.79296875,
+      "v1": 0.29296875,
       "averageRGB": [
         0.39108796296296294,
         0.379786220043573,
@@ -62,10 +1084,10 @@
       "transparencyRatio": 0
     },
     "blocks/cobblestone-dark.png": {
-      "u0": 0.26953125,
-      "v0": 0.0390625,
-      "u1": 0.29296875,
-      "v1": 0.0859375,
+      "u0": 0.83203125,
+      "v0": 0.26953125,
+      "u1": 0.85546875,
+      "v1": 0.29296875,
       "averageRGB": [
         0.4062431917211329,
         0.4082175925925926,
@@ -76,10 +1098,10 @@
       "transparencyRatio": 0
     },
     "blocks/cobblestone-large-dark.png": {
-      "u0": 0.33203125,
-      "v0": 0.0390625,
-      "u1": 0.35546875,
-      "v1": 0.0859375,
+      "u0": 0.89453125,
+      "v0": 0.26953125,
+      "u1": 0.91796875,
+      "v1": 0.29296875,
       "averageRGB": [
         0.38560729847494557,
         0.38560729847494557,
@@ -90,10 +1112,10 @@
       "transparencyRatio": 0
     },
     "blocks/cobblestone-mossy.png": {
-      "u0": 0.39453125,
-      "v0": 0.0390625,
-      "u1": 0.41796875,
-      "v1": 0.0859375,
+      "u0": 0.95703125,
+      "v0": 0.26953125,
+      "u1": 0.98046875,
+      "v1": 0.29296875,
       "averageRGB": [
         0.46979166666666666,
         0.48850081699346404,
@@ -104,10 +1126,10 @@
       "transparencyRatio": 0
     },
     "blocks/cobblestone.png": {
-      "u0": 0.45703125,
-      "v0": 0.0390625,
-      "u1": 0.48046875,
-      "v1": 0.0859375,
+      "u0": 0.01953125,
+      "v0": 0.33203125,
+      "u1": 0.04296875,
+      "v1": 0.35546875,
       "averageRGB": [
         0.5032407407407408,
         0.4851988017429194,
@@ -118,10 +1140,10 @@
       "transparencyRatio": 0
     },
     "blocks/cracked_sand/+x.png": {
-      "u0": 0.51953125,
-      "v0": 0.0390625,
-      "u1": 0.54296875,
-      "v1": 0.0859375,
+      "u0": 0.08203125,
+      "v0": 0.33203125,
+      "u1": 0.10546875,
+      "v1": 0.35546875,
       "averageRGB": [
         0.7200708061002178,
         0.5021650326797386,
@@ -132,10 +1154,10 @@
       "transparencyRatio": 0
     },
     "blocks/cracked_sand/+y.png": {
-      "u0": 0.58203125,
-      "v0": 0.0390625,
-      "u1": 0.60546875,
-      "v1": 0.0859375,
+      "u0": 0.14453125,
+      "v0": 0.33203125,
+      "u1": 0.16796875,
+      "v1": 0.35546875,
       "averageRGB": [
         0.7200708061002178,
         0.5021650326797386,
@@ -146,10 +1168,10 @@
       "transparencyRatio": 0
     },
     "blocks/cracked_sand/+z.png": {
-      "u0": 0.64453125,
-      "v0": 0.0390625,
-      "u1": 0.66796875,
-      "v1": 0.0859375,
+      "u0": 0.20703125,
+      "v0": 0.33203125,
+      "u1": 0.23046875,
+      "v1": 0.35546875,
       "averageRGB": [
         0.7200708061002178,
         0.5021650326797386,
@@ -160,10 +1182,10 @@
       "transparencyRatio": 0
     },
     "blocks/cracked_sand/-x.png": {
-      "u0": 0.70703125,
-      "v0": 0.0390625,
-      "u1": 0.73046875,
-      "v1": 0.0859375,
+      "u0": 0.26953125,
+      "v0": 0.33203125,
+      "u1": 0.29296875,
+      "v1": 0.35546875,
       "averageRGB": [
         0.7200708061002178,
         0.5021650326797386,
@@ -174,10 +1196,10 @@
       "transparencyRatio": 0
     },
     "blocks/cracked_sand/-y.png": {
-      "u0": 0.76953125,
-      "v0": 0.0390625,
-      "u1": 0.79296875,
-      "v1": 0.0859375,
+      "u0": 0.33203125,
+      "v0": 0.33203125,
+      "u1": 0.35546875,
+      "v1": 0.35546875,
       "averageRGB": [
         0.7200708061002178,
         0.5021650326797386,
@@ -188,10 +1210,10 @@
       "transparencyRatio": 0
     },
     "blocks/cracked_sand/-z.png": {
-      "u0": 0.83203125,
-      "v0": 0.0390625,
-      "u1": 0.85546875,
-      "v1": 0.0859375,
+      "u0": 0.39453125,
+      "v0": 0.33203125,
+      "u1": 0.41796875,
+      "v1": 0.35546875,
       "averageRGB": [
         0.7200708061002178,
         0.5021650326797386,
@@ -202,10 +1224,10 @@
       "transparencyRatio": 0
     },
     "blocks/creep.png": {
-      "u0": 0.89453125,
-      "v0": 0.0390625,
-      "u1": 0.91796875,
-      "v1": 0.0859375,
+      "u0": 0.45703125,
+      "v0": 0.33203125,
+      "u1": 0.48046875,
+      "v1": 0.35546875,
       "averageRGB": [
         0.7879901960784313,
         0.32573529411764707,
@@ -216,10 +1238,10 @@
       "transparencyRatio": 0
     },
     "blocks/diamond-block.png": {
-      "u0": 0.95703125,
-      "v0": 0.0390625,
-      "u1": 0.98046875,
-      "v1": 0.0859375,
+      "u0": 0.51953125,
+      "v0": 0.33203125,
+      "u1": 0.54296875,
+      "v1": 0.35546875,
       "averageRGB": [
         0.4613221677559913,
         0.687568082788671,
@@ -230,10 +1252,10 @@
       "transparencyRatio": 0
     },
     "blocks/diamond-ore.png": {
-      "u0": 0.01953125,
-      "v0": 0.1640625,
-      "u1": 0.04296875,
-      "v1": 0.2109375,
+      "u0": 0.58203125,
+      "v0": 0.33203125,
+      "u1": 0.60546875,
+      "v1": 0.35546875,
       "averageRGB": [
         0.5100626361655773,
         0.5893450435729848,
@@ -244,10 +1266,10 @@
       "transparencyRatio": 0
     },
     "blocks/dirt.png": {
-      "u0": 0.08203125,
-      "v0": 0.1640625,
-      "u1": 0.10546875,
-      "v1": 0.2109375,
+      "u0": 0.64453125,
+      "v0": 0.33203125,
+      "u1": 0.66796875,
+      "v1": 0.35546875,
       "averageRGB": [
         0.5147058823529411,
         0.296207788671024,
@@ -258,10 +1280,10 @@
       "transparencyRatio": 0
     },
     "blocks/dragon_block/+x.png": {
-      "u0": 0.14453125,
-      "v0": 0.1640625,
-      "u1": 0.16796875,
-      "v1": 0.2109375,
+      "u0": 0.70703125,
+      "v0": 0.33203125,
+      "u1": 0.73046875,
+      "v1": 0.35546875,
       "averageRGB": [
         0.1619485294117647,
         0.1335171568627451,
@@ -272,10 +1294,10 @@
       "transparencyRatio": 0
     },
     "blocks/dragon_block/+y.png": {
-      "u0": 0.20703125,
-      "v0": 0.1640625,
-      "u1": 0.23046875,
-      "v1": 0.2109375,
+      "u0": 0.76953125,
+      "v0": 0.33203125,
+      "u1": 0.79296875,
+      "v1": 0.35546875,
       "averageRGB": [
         0.22261029411764705,
         0.17944580610021788,
@@ -286,10 +1308,10 @@
       "transparencyRatio": 0
     },
     "blocks/dragon_block/+z.png": {
-      "u0": 0.26953125,
-      "v0": 0.1640625,
-      "u1": 0.29296875,
-      "v1": 0.2109375,
+      "u0": 0.83203125,
+      "v0": 0.33203125,
+      "u1": 0.85546875,
+      "v1": 0.35546875,
       "averageRGB": [
         0.1619485294117647,
         0.1335171568627451,
@@ -300,10 +1322,10 @@
       "transparencyRatio": 0
     },
     "blocks/dragon_block/-x.png": {
-      "u0": 0.33203125,
-      "v0": 0.1640625,
-      "u1": 0.35546875,
-      "v1": 0.2109375,
+      "u0": 0.89453125,
+      "v0": 0.33203125,
+      "u1": 0.91796875,
+      "v1": 0.35546875,
       "averageRGB": [
         0.1619485294117647,
         0.1335171568627451,
@@ -314,10 +1336,10 @@
       "transparencyRatio": 0
     },
     "blocks/dragon_block/-y.png": {
-      "u0": 0.39453125,
-      "v0": 0.1640625,
-      "u1": 0.41796875,
-      "v1": 0.2109375,
+      "u0": 0.95703125,
+      "v0": 0.33203125,
+      "u1": 0.98046875,
+      "v1": 0.35546875,
       "averageRGB": [
         0.1382693355119826,
         0.11570669934640522,
@@ -328,10 +1350,10 @@
       "transparencyRatio": 0
     },
     "blocks/dragon_block/-z.png": {
-      "u0": 0.45703125,
-      "v0": 0.1640625,
-      "u1": 0.48046875,
-      "v1": 0.2109375,
+      "u0": 0.01953125,
+      "v0": 0.39453125,
+      "u1": 0.04296875,
+      "v1": 0.41796875,
       "averageRGB": [
         0.1619485294117647,
         0.1335171568627451,
@@ -342,10 +1364,10 @@
       "transparencyRatio": 0
     },
     "blocks/dragons-stone.png": {
-      "u0": 0.51953125,
-      "v0": 0.1640625,
-      "u1": 0.54296875,
-      "v1": 0.2109375,
+      "u0": 0.08203125,
+      "v0": 0.39453125,
+      "u1": 0.10546875,
+      "v1": 0.41796875,
       "averageRGB": [
         0.1382693355119826,
         0.11570669934640522,
@@ -356,10 +1378,10 @@
       "transparencyRatio": 0
     },
     "blocks/emerald-block.png": {
-      "u0": 0.58203125,
-      "v0": 0.1640625,
-      "u1": 0.60546875,
-      "v1": 0.2109375,
+      "u0": 0.14453125,
+      "v0": 0.39453125,
+      "u1": 0.16796875,
+      "v1": 0.41796875,
       "averageRGB": [
         0.2411764705882353,
         0.7804806644880175,
@@ -370,10 +1392,10 @@
       "transparencyRatio": 0
     },
     "blocks/emerald-ore.png": {
-      "u0": 0.64453125,
-      "v0": 0.1640625,
-      "u1": 0.66796875,
-      "v1": 0.2109375,
+      "u0": 0.20703125,
+      "v0": 0.39453125,
+      "u1": 0.23046875,
+      "v1": 0.41796875,
       "averageRGB": [
         0.4410947712418301,
         0.6215618191721133,
@@ -384,10 +1406,10 @@
       "transparencyRatio": 0
     },
     "blocks/error.png": {
-      "u0": 0.70703125,
-      "v0": 0.1640625,
-      "u1": 0.73046875,
-      "v1": 0.2109375,
+      "u0": 0.26953125,
+      "v0": 0.39453125,
+      "u1": 0.29296875,
+      "v1": 0.41796875,
       "averageRGB": [
         0.48627450980392156,
         0,
@@ -398,10 +1420,10 @@
       "transparencyRatio": 0
     },
     "blocks/ghost-dirt.png": {
-      "u0": 0.76953125,
-      "v0": 0.1640625,
-      "u1": 0.79296875,
-      "v1": 0.2109375,
+      "u0": 0.33203125,
+      "v0": 0.39453125,
+      "u1": 0.35546875,
+      "v1": 0.41796875,
       "averageRGB": [
         0.7733728213507626,
         0.8011846405228759,
@@ -412,10 +1434,10 @@
       "transparencyRatio": 0
     },
     "blocks/glass-window-divided.png": {
-      "u0": 0.83203125,
-      "v0": 0.1640625,
-      "u1": 0.85546875,
-      "v1": 0.2109375,
+      "u0": 0.39453125,
+      "v0": 0.39453125,
+      "u1": 0.41796875,
+      "v1": 0.41796875,
       "averageRGB": [
         0.6670411220043573,
         0.7000816993464053,
@@ -426,10 +1448,10 @@
       "transparencyRatio": 0.5399305555555556
     },
     "blocks/glass-window.png": {
-      "u0": 0.89453125,
-      "v0": 0.1640625,
-      "u1": 0.91796875,
-      "v1": 0.2109375,
+      "u0": 0.45703125,
+      "v0": 0.39453125,
+      "u1": 0.48046875,
+      "v1": 0.41796875,
       "averageRGB": [
         0.11570669934640522,
         0.15014297385620917,
@@ -440,10 +1462,10 @@
       "transparencyRatio": 0.6788194444444444
     },
     "blocks/glass.png": {
-      "u0": 0.95703125,
-      "v0": 0.1640625,
-      "u1": 0.98046875,
-      "v1": 0.2109375,
+      "u0": 0.51953125,
+      "v0": 0.39453125,
+      "u1": 0.54296875,
+      "v1": 0.41796875,
       "averageRGB": [
         0.9303581154684096,
         0.9739038671023965,
@@ -454,10 +1476,10 @@
       "transparencyRatio": 0.8055555555555556
     },
     "blocks/gold-ore.png": {
-      "u0": 0.01953125,
-      "v0": 0.2890625,
-      "u1": 0.04296875,
-      "v1": 0.3359375,
+      "u0": 0.58203125,
+      "v0": 0.39453125,
+      "u1": 0.60546875,
+      "v1": 0.41796875,
       "averageRGB": [
         0.6935661764705883,
         0.5881059368191721,
@@ -468,10 +1490,10 @@
       "transparencyRatio": 0
     },
     "blocks/grass.png": {
-      "u0": 0.08203125,
-      "v0": 0.2890625,
-      "u1": 0.10546875,
-      "v1": 0.3359375,
+      "u0": 0.64453125,
+      "v0": 0.39453125,
+      "u1": 0.66796875,
+      "v1": 0.41796875,
       "averageRGB": [
         0.49923066448801745,
         0.6703976034858388,
@@ -482,10 +1504,10 @@
       "transparencyRatio": 0
     },
     "blocks/grass/+x.png": {
-      "u0": 0.14453125,
-      "v0": 0.2890625,
-      "u1": 0.16796875,
-      "v1": 0.3359375,
+      "u0": 0.70703125,
+      "v0": 0.39453125,
+      "u1": 0.73046875,
+      "v1": 0.41796875,
       "averageRGB": [
         0.478724128540305,
         0.40051742919389977,
@@ -496,10 +1518,10 @@
       "transparencyRatio": 0
     },
     "blocks/grass/+y.png": {
-      "u0": 0.20703125,
-      "v0": 0.2890625,
-      "u1": 0.23046875,
-      "v1": 0.3359375,
+      "u0": 0.76953125,
+      "v0": 0.39453125,
+      "u1": 0.79296875,
+      "v1": 0.41796875,
       "averageRGB": [
         0.5242578976034858,
         0.616019880174292,
@@ -510,10 +1532,10 @@
       "transparencyRatio": 0
     },
     "blocks/grass/+z.png": {
-      "u0": 0.26953125,
-      "v0": 0.2890625,
-      "u1": 0.29296875,
-      "v1": 0.3359375,
+      "u0": 0.83203125,
+      "v0": 0.39453125,
+      "u1": 0.85546875,
+      "v1": 0.41796875,
       "averageRGB": [
         0.478724128540305,
         0.40051742919389977,
@@ -524,10 +1546,10 @@
       "transparencyRatio": 0
     },
     "blocks/grass/-x.png": {
-      "u0": 0.33203125,
-      "v0": 0.2890625,
-      "u1": 0.35546875,
-      "v1": 0.3359375,
+      "u0": 0.89453125,
+      "v0": 0.39453125,
+      "u1": 0.91796875,
+      "v1": 0.41796875,
       "averageRGB": [
         0.478724128540305,
         0.40051742919389977,
@@ -538,10 +1560,10 @@
       "transparencyRatio": 0
     },
     "blocks/grass/-y.png": {
-      "u0": 0.39453125,
-      "v0": 0.2890625,
-      "u1": 0.41796875,
-      "v1": 0.3359375,
+      "u0": 0.95703125,
+      "v0": 0.39453125,
+      "u1": 0.98046875,
+      "v1": 0.41796875,
       "averageRGB": [
         0.5145288671023965,
         0.29707924836601307,
@@ -552,10 +1574,10 @@
       "transparencyRatio": 0
     },
     "blocks/grass/-z.png": {
-      "u0": 0.45703125,
-      "v0": 0.2890625,
-      "u1": 0.48046875,
-      "v1": 0.3359375,
+      "u0": 0.01953125,
+      "v0": 0.45703125,
+      "u1": 0.04296875,
+      "v1": 0.48046875,
       "averageRGB": [
         0.478724128540305,
         0.40051742919389977,
@@ -566,10 +1588,10 @@
       "transparencyRatio": 0
     },
     "blocks/gravel.png": {
-      "u0": 0.51953125,
-      "v0": 0.2890625,
-      "u1": 0.54296875,
-      "v1": 0.3359375,
+      "u0": 0.08203125,
+      "v0": 0.45703125,
+      "u1": 0.10546875,
+      "v1": 0.48046875,
       "averageRGB": [
         0.48997821350762527,
         0.48018790849673204,
@@ -580,10 +1602,10 @@
       "transparencyRatio": 0
     },
     "blocks/ice-block.png": {
-      "u0": 0.58203125,
-      "v0": 0.2890625,
-      "u1": 0.60546875,
-      "v1": 0.3359375,
+      "u0": 0.14453125,
+      "v0": 0.45703125,
+      "u1": 0.16796875,
+      "v1": 0.48046875,
       "averageRGB": [
         0.7345928649237472,
         0.8818831699346406,
@@ -594,10 +1616,10 @@
       "transparencyRatio": 0.4334082244008701
     },
     "blocks/ice.png": {
-      "u0": 0.64453125,
-      "v0": 0.2890625,
-      "u1": 0.66796875,
-      "v1": 0.3359375,
+      "u0": 0.20703125,
+      "v0": 0.45703125,
+      "u1": 0.23046875,
+      "v1": 0.48046875,
       "averageRGB": [
         0.7054466230936819,
         0.8693899782135077,
@@ -608,10 +1630,10 @@
       "transparencyRatio": 0.2509803921568619
     },
     "blocks/infected-shadowrock-core.png": {
-      "u0": 0.70703125,
-      "v0": 0.2890625,
-      "u1": 0.73046875,
-      "v1": 0.3359375,
+      "u0": 0.26953125,
+      "v0": 0.45703125,
+      "u1": 0.29296875,
+      "v1": 0.48046875,
       "averageRGB": [
         0.2996459694989107,
         0.22459831154684096,
@@ -622,10 +1644,10 @@
       "transparencyRatio": 0
     },
     "blocks/infected-shadowrock.png": {
-      "u0": 0.76953125,
-      "v0": 0.2890625,
-      "u1": 0.79296875,
-      "v1": 0.3359375,
+      "u0": 0.33203125,
+      "v0": 0.45703125,
+      "u1": 0.35546875,
+      "v1": 0.48046875,
       "averageRGB": [
         0.28220315904139437,
         0.21132216775599127,
@@ -636,10 +1658,10 @@
       "transparencyRatio": 0
     },
     "blocks/iron-ore.png": {
-      "u0": 0.83203125,
-      "v0": 0.2890625,
-      "u1": 0.85546875,
-      "v1": 0.3359375,
+      "u0": 0.39453125,
+      "v0": 0.45703125,
+      "u1": 0.41796875,
+      "v1": 0.48046875,
       "averageRGB": [
         0.614161220043573,
         0.5363834422657952,
@@ -650,10 +1672,10 @@
       "transparencyRatio": 0
     },
     "blocks/jungle-block-damaged.png": {
-      "u0": 0.89453125,
-      "v0": 0.2890625,
-      "u1": 0.91796875,
-      "v1": 0.3359375,
+      "u0": 0.45703125,
+      "v0": 0.45703125,
+      "u1": 0.48046875,
+      "v1": 0.48046875,
       "averageRGB": [
         0.7654888344226579,
         0.6218137254901961,
@@ -664,10 +1686,10 @@
       "transparencyRatio": 0
     },
     "blocks/jungle-block-face.png": {
-      "u0": 0.95703125,
-      "v0": 0.2890625,
-      "u1": 0.98046875,
-      "v1": 0.3359375,
+      "u0": 0.51953125,
+      "v0": 0.45703125,
+      "u1": 0.54296875,
+      "v1": 0.48046875,
       "averageRGB": [
         0.7708197167755991,
         0.625660403050109,
@@ -678,10 +1700,10 @@
       "transparencyRatio": 0
     },
     "blocks/jungle-block-mossy.png": {
-      "u0": 0.01953125,
-      "v0": 0.4140625,
-      "u1": 0.04296875,
-      "v1": 0.4609375,
+      "u0": 0.58203125,
+      "v0": 0.45703125,
+      "u1": 0.60546875,
+      "v1": 0.48046875,
       "averageRGB": [
         0.6732298474945534,
         0.6097017973856209,
@@ -692,10 +1714,10 @@
       "transparencyRatio": 0
     },
     "blocks/jungle-block.png": {
-      "u0": 0.08203125,
-      "v0": 0.4140625,
-      "u1": 0.10546875,
-      "v1": 0.4609375,
+      "u0": 0.64453125,
+      "v0": 0.45703125,
+      "u1": 0.66796875,
+      "v1": 0.48046875,
       "averageRGB": [
         0.7914760348583878,
         0.6451388888888888,
@@ -706,10 +1728,10 @@
       "transparencyRatio": 0
     },
     "blocks/jungle-dirt-roots.png": {
-      "u0": 0.14453125,
-      "v0": 0.4140625,
-      "u1": 0.16796875,
-      "v1": 0.4609375,
+      "u0": 0.70703125,
+      "v0": 0.45703125,
+      "u1": 0.73046875,
+      "v1": 0.48046875,
       "averageRGB": [
         0.8083946078431372,
         0.665284586056645,
@@ -720,10 +1742,10 @@
       "transparencyRatio": 0
     },
     "blocks/jungle-dirt-trampled.png": {
-      "u0": 0.20703125,
-      "v0": 0.4140625,
-      "u1": 0.23046875,
-      "v1": 0.4609375,
+      "u0": 0.76953125,
+      "v0": 0.45703125,
+      "u1": 0.79296875,
+      "v1": 0.48046875,
       "averageRGB": [
         0.8380106209150328,
         0.6884531590413943,
@@ -734,10 +1756,10 @@
       "transparencyRatio": 0
     },
     "blocks/jungle-dirt.png": {
-      "u0": 0.26953125,
-      "v0": 0.4140625,
-      "u1": 0.29296875,
-      "v1": 0.4609375,
+      "u0": 0.83203125,
+      "v0": 0.45703125,
+      "u1": 0.85546875,
+      "v1": 0.48046875,
       "averageRGB": [
         0.789099945533769,
         0.6411356209150327,
@@ -748,10 +1770,10 @@
       "transparencyRatio": 0
     },
     "blocks/lava-dirt-cracked.png": {
-      "u0": 0.33203125,
-      "v0": 0.4140625,
-      "u1": 0.35546875,
-      "v1": 0.4609375,
+      "u0": 0.89453125,
+      "v0": 0.45703125,
+      "u1": 0.91796875,
+      "v1": 0.48046875,
       "averageRGB": [
         0.3656113834422658,
         0.1375068082788671,
@@ -762,10 +1784,10 @@
       "transparencyRatio": 0
     },
     "blocks/lava-dirt.png": {
-      "u0": 0.39453125,
-      "v0": 0.4140625,
-      "u1": 0.41796875,
-      "v1": 0.4609375,
+      "u0": 0.95703125,
+      "v0": 0.45703125,
+      "u1": 0.98046875,
+      "v1": 0.48046875,
       "averageRGB": [
         0.3030433006535948,
         0.11933551198257081,
@@ -776,10 +1798,10 @@
       "transparencyRatio": 0
     },
     "blocks/lava-rocky-cracked.png": {
-      "u0": 0.45703125,
-      "v0": 0.4140625,
-      "u1": 0.48046875,
-      "v1": 0.4609375,
+      "u0": 0.01953125,
+      "v0": 0.51953125,
+      "u1": 0.04296875,
+      "v1": 0.54296875,
       "averageRGB": [
         0.5562091503267974,
         0.20862608932461874,
@@ -790,10 +1812,10 @@
       "transparencyRatio": 0
     },
     "blocks/lava-rocky.png": {
-      "u0": 0.51953125,
-      "v0": 0.4140625,
-      "u1": 0.54296875,
-      "v1": 0.4609375,
+      "u0": 0.08203125,
+      "v0": 0.51953125,
+      "u1": 0.10546875,
+      "v1": 0.54296875,
       "averageRGB": [
         0.7200980392156863,
         0.30872140522875813,
@@ -804,10 +1826,10 @@
       "transparencyRatio": 0
     },
     "blocks/lava.png": {
-      "u0": 0.58203125,
-      "v0": 0.4140625,
-      "u1": 0.60546875,
-      "v1": 0.4609375,
+      "u0": 0.14453125,
+      "v0": 0.51953125,
+      "u1": 0.16796875,
+      "v1": 0.54296875,
       "averageRGB": [
         0.9575571895424837,
         0.3249455337690632,
@@ -818,10 +1840,10 @@
       "transparencyRatio": 0
     },
     "blocks/log/+x.png": {
-      "u0": 0.64453125,
-      "v0": 0.4140625,
-      "u1": 0.66796875,
-      "v1": 0.4609375,
+      "u0": 0.20703125,
+      "v0": 0.51953125,
+      "u1": 0.23046875,
+      "v1": 0.54296875,
       "averageRGB": [
         0.4494757625272331,
         0.2637391067538127,
@@ -832,10 +1854,10 @@
       "transparencyRatio": 0
     },
     "blocks/log/+y.png": {
-      "u0": 0.70703125,
-      "v0": 0.4140625,
-      "u1": 0.73046875,
-      "v1": 0.4609375,
+      "u0": 0.26953125,
+      "v0": 0.51953125,
+      "u1": 0.29296875,
+      "v1": 0.54296875,
       "averageRGB": [
         0.643348311546841,
         0.41163534858387796,
@@ -846,10 +1868,10 @@
       "transparencyRatio": 0
     },
     "blocks/log/+z.png": {
-      "u0": 0.76953125,
-      "v0": 0.4140625,
-      "u1": 0.79296875,
-      "v1": 0.4609375,
+      "u0": 0.33203125,
+      "v0": 0.51953125,
+      "u1": 0.35546875,
+      "v1": 0.54296875,
       "averageRGB": [
         0.4494757625272331,
         0.2637391067538127,
@@ -860,10 +1882,10 @@
       "transparencyRatio": 0
     },
     "blocks/log/-x.png": {
-      "u0": 0.83203125,
-      "v0": 0.4140625,
-      "u1": 0.85546875,
-      "v1": 0.4609375,
+      "u0": 0.39453125,
+      "v0": 0.51953125,
+      "u1": 0.41796875,
+      "v1": 0.54296875,
       "averageRGB": [
         0.4494757625272331,
         0.2637391067538127,
@@ -874,10 +1896,10 @@
       "transparencyRatio": 0
     },
     "blocks/log/-y.png": {
-      "u0": 0.89453125,
-      "v0": 0.4140625,
-      "u1": 0.91796875,
-      "v1": 0.4609375,
+      "u0": 0.45703125,
+      "v0": 0.51953125,
+      "u1": 0.48046875,
+      "v1": 0.54296875,
       "averageRGB": [
         0.643348311546841,
         0.41163534858387796,
@@ -888,10 +1910,10 @@
       "transparencyRatio": 0
     },
     "blocks/log/-z.png": {
-      "u0": 0.95703125,
-      "v0": 0.4140625,
-      "u1": 0.98046875,
-      "v1": 0.4609375,
+      "u0": 0.51953125,
+      "v0": 0.51953125,
+      "u1": 0.54296875,
+      "v1": 0.54296875,
       "averageRGB": [
         0.4494757625272331,
         0.2637391067538127,
@@ -902,10 +1924,10 @@
       "transparencyRatio": 0
     },
     "blocks/mossy-coblestone.png": {
-      "u0": 0.01953125,
-      "v0": 0.5390625,
-      "u1": 0.04296875,
-      "v1": 0.5859375,
+      "u0": 0.58203125,
+      "v0": 0.51953125,
+      "u1": 0.60546875,
+      "v1": 0.54296875,
       "averageRGB": [
         0.46979166666666666,
         0.48850081699346404,
@@ -916,10 +1938,10 @@
       "transparencyRatio": 0
     },
     "blocks/nuit-leaves.png": {
-      "u0": 0.08203125,
-      "v0": 0.5390625,
-      "u1": 0.10546875,
-      "v1": 0.5859375,
+      "u0": 0.64453125,
+      "v0": 0.51953125,
+      "u1": 0.66796875,
+      "v1": 0.54296875,
       "averageRGB": [
         0.11475354030501089,
         0.082979302832244,
@@ -930,10 +1952,10 @@
       "transparencyRatio": 0
     },
     "blocks/nuit.png": {
-      "u0": 0.14453125,
-      "v0": 0.5390625,
-      "u1": 0.16796875,
-      "v1": 0.5859375,
+      "u0": 0.70703125,
+      "v0": 0.51953125,
+      "u1": 0.73046875,
+      "v1": 0.54296875,
       "averageRGB": [
         0.6893995098039216,
         0.5192742374727668,
@@ -944,10 +1966,10 @@
       "transparencyRatio": 0
     },
     "blocks/oak-leaves.png": {
-      "u0": 0.20703125,
-      "v0": 0.5390625,
-      "u1": 0.23046875,
-      "v1": 0.5859375,
+      "u0": 0.76953125,
+      "v0": 0.51953125,
+      "u1": 0.79296875,
+      "v1": 0.54296875,
       "averageRGB": [
         0.13400735294117647,
         0.3618395969498911,
@@ -958,10 +1980,10 @@
       "transparencyRatio": 0
     },
     "blocks/oak-planks-dark-knotty.png": {
-      "u0": 0.26953125,
-      "v0": 0.5390625,
-      "u1": 0.29296875,
-      "v1": 0.5859375,
+      "u0": 0.83203125,
+      "v0": 0.51953125,
+      "u1": 0.85546875,
+      "v1": 0.54296875,
       "averageRGB": [
         0.503519880174292,
         0.36243191721132895,
@@ -972,10 +1994,10 @@
       "transparencyRatio": 0
     },
     "blocks/oak-planks-dark.png": {
-      "u0": 0.33203125,
-      "v0": 0.5390625,
-      "u1": 0.35546875,
-      "v1": 0.5859375,
+      "u0": 0.89453125,
+      "v0": 0.51953125,
+      "u1": 0.91796875,
+      "v1": 0.54296875,
       "averageRGB": [
         0.5177219498910676,
         0.3722630718954248,
@@ -986,10 +2008,10 @@
       "transparencyRatio": 0
     },
     "blocks/oak-planks-leafy.png": {
-      "u0": 0.39453125,
-      "v0": 0.5390625,
-      "u1": 0.41796875,
-      "v1": 0.5859375,
+      "u0": 0.95703125,
+      "v0": 0.51953125,
+      "u1": 0.98046875,
+      "v1": 0.54296875,
       "averageRGB": [
         0.5274918300653595,
         0.4400531045751634,
@@ -1000,10 +2022,10 @@
       "transparencyRatio": 0
     },
     "blocks/oak-planks-leafyer.png": {
-      "u0": 0.45703125,
-      "v0": 0.5390625,
-      "u1": 0.48046875,
-      "v1": 0.5859375,
+      "u0": 0.01953125,
+      "v0": 0.58203125,
+      "u1": 0.04296875,
+      "v1": 0.60546875,
       "averageRGB": [
         0.3670819716775599,
         0.4095656318082789,
@@ -1014,10 +2036,10 @@
       "transparencyRatio": 0
     },
     "blocks/oak-planks-leafyerer.png": {
-      "u0": 0.51953125,
-      "v0": 0.5390625,
-      "u1": 0.54296875,
-      "v1": 0.5859375,
+      "u0": 0.08203125,
+      "v0": 0.58203125,
+      "u1": 0.10546875,
+      "v1": 0.60546875,
       "averageRGB": [
         0.2510280501089324,
         0.3880718954248366,
@@ -1028,10 +2050,10 @@
       "transparencyRatio": 0
     },
     "blocks/oak-planks-vertical.png": {
-      "u0": 0.58203125,
-      "v0": 0.5390625,
-      "u1": 0.60546875,
-      "v1": 0.5859375,
+      "u0": 0.14453125,
+      "v0": 0.58203125,
+      "u1": 0.16796875,
+      "v1": 0.60546875,
       "averageRGB": [
         0.7360566448801743,
         0.47774373638344225,
@@ -1042,10 +2064,10 @@
       "transparencyRatio": 0
     },
     "blocks/oak-planks.png": {
-      "u0": 0.64453125,
-      "v0": 0.5390625,
-      "u1": 0.66796875,
-      "v1": 0.5859375,
+      "u0": 0.20703125,
+      "v0": 0.58203125,
+      "u1": 0.23046875,
+      "v1": 0.60546875,
       "averageRGB": [
         0.7360566448801743,
         0.47774373638344225,
@@ -1056,10 +2078,10 @@
       "transparencyRatio": 0
     },
     "blocks/oak-slats-dark.png": {
-      "u0": 0.70703125,
-      "v0": 0.5390625,
-      "u1": 0.73046875,
-      "v1": 0.5859375,
+      "u0": 0.26953125,
+      "v0": 0.58203125,
+      "u1": 0.29296875,
+      "v1": 0.60546875,
       "averageRGB": [
         0.3641407952069717,
         0.24707924836601308,
@@ -1070,10 +2092,10 @@
       "transparencyRatio": 0
     },
     "blocks/oak-slats.png": {
-      "u0": 0.76953125,
-      "v0": 0.5390625,
-      "u1": 0.79296875,
-      "v1": 0.5859375,
+      "u0": 0.33203125,
+      "v0": 0.58203125,
+      "u1": 0.35546875,
+      "v1": 0.60546875,
       "averageRGB": [
         0.7379561546840959,
         0.4675857843137255,
@@ -1084,10 +2106,10 @@
       "transparencyRatio": 0
     },
     "blocks/sand-light.png": {
-      "u0": 0.83203125,
-      "v0": 0.5390625,
-      "u1": 0.85546875,
-      "v1": 0.5859375,
+      "u0": 0.39453125,
+      "v0": 0.58203125,
+      "u1": 0.41796875,
+      "v1": 0.60546875,
       "averageRGB": [
         0.9395424836601307,
         0.9121936274509804,
@@ -1098,10 +2120,10 @@
       "transparencyRatio": 0
     },
     "blocks/sand.png": {
-      "u0": 0.89453125,
-      "v0": 0.5390625,
-      "u1": 0.91796875,
-      "v1": 0.5859375,
+      "u0": 0.45703125,
+      "v0": 0.58203125,
+      "u1": 0.48046875,
+      "v1": 0.60546875,
       "averageRGB": [
         0.9234749455337691,
         0.7223379629629629,
@@ -1112,10 +2134,10 @@
       "transparencyRatio": 0
     },
     "blocks/sandstone-light-waterlogged.png": {
-      "u0": 0.95703125,
-      "v0": 0.5390625,
-      "u1": 0.98046875,
-      "v1": 0.5859375,
+      "u0": 0.51953125,
+      "v0": 0.58203125,
+      "u1": 0.54296875,
+      "v1": 0.60546875,
       "averageRGB": [
         0.7521241830065359,
         0.8623842592592593,
@@ -1126,10 +2148,10 @@
       "transparencyRatio": 0
     },
     "blocks/sandstone-light.png": {
-      "u0": 0.01953125,
-      "v0": 0.6640625,
-      "u1": 0.04296875,
-      "v1": 0.7109375,
+      "u0": 0.58203125,
+      "v0": 0.58203125,
+      "u1": 0.60546875,
+      "v1": 0.60546875,
       "averageRGB": [
         0.9353485838779956,
         0.9060797930283224,
@@ -1140,10 +2162,10 @@
       "transparencyRatio": 0
     },
     "blocks/sandstone.png": {
-      "u0": 0.08203125,
-      "v0": 0.6640625,
-      "u1": 0.10546875,
-      "v1": 0.7109375,
+      "u0": 0.64453125,
+      "v0": 0.58203125,
+      "u1": 0.66796875,
+      "v1": 0.60546875,
       "averageRGB": [
         0.9691380718954249,
         0.8103145424836602,
@@ -1154,10 +2176,10 @@
       "transparencyRatio": 0
     },
     "blocks/shadow-pebble.png": {
-      "u0": 0.14453125,
-      "v0": 0.6640625,
-      "u1": 0.16796875,
-      "v1": 0.7109375,
+      "u0": 0.70703125,
+      "v0": 0.58203125,
+      "u1": 0.73046875,
+      "v1": 0.60546875,
       "averageRGB": [
         0.37050653594771243,
         0.3020765250544662,
@@ -1168,10 +2190,10 @@
       "transparencyRatio": 0
     },
     "blocks/shadowrock.png": {
-      "u0": 0.20703125,
-      "v0": 0.6640625,
-      "u1": 0.23046875,
-      "v1": 0.7109375,
+      "u0": 0.76953125,
+      "v0": 0.58203125,
+      "u1": 0.79296875,
+      "v1": 0.60546875,
       "averageRGB": [
         0.2107979302832244,
         0.20819035947712417,
@@ -1182,10 +2204,10 @@
       "transparencyRatio": 0
     },
     "blocks/shale-cliff-bottom/+x.png": {
-      "u0": 0.26953125,
-      "v0": 0.6640625,
-      "u1": 0.29296875,
-      "v1": 0.7109375,
+      "u0": 0.83203125,
+      "v0": 0.58203125,
+      "u1": 0.85546875,
+      "v1": 0.60546875,
       "averageRGB": [
         0.34963235294117645,
         0.335968137254902,
@@ -1196,10 +2218,10 @@
       "transparencyRatio": 0
     },
     "blocks/shale-cliff-bottom/+y.png": {
-      "u0": 0.33203125,
-      "v0": 0.6640625,
-      "u1": 0.35546875,
-      "v1": 0.7109375,
+      "u0": 0.89453125,
+      "v0": 0.58203125,
+      "u1": 0.91796875,
+      "v1": 0.60546875,
       "averageRGB": [
         0.3573937908496732,
         0.31615604575163403,
@@ -1210,10 +2232,10 @@
       "transparencyRatio": 0
     },
     "blocks/shale-cliff-bottom/+z.png": {
-      "u0": 0.39453125,
-      "v0": 0.6640625,
-      "u1": 0.41796875,
-      "v1": 0.7109375,
+      "u0": 0.95703125,
+      "v0": 0.58203125,
+      "u1": 0.98046875,
+      "v1": 0.60546875,
       "averageRGB": [
         0.34963235294117645,
         0.335968137254902,
@@ -1224,10 +2246,10 @@
       "transparencyRatio": 0
     },
     "blocks/shale-cliff-bottom/-x.png": {
-      "u0": 0.45703125,
-      "v0": 0.6640625,
-      "u1": 0.48046875,
-      "v1": 0.7109375,
+      "u0": 0.01953125,
+      "v0": 0.64453125,
+      "u1": 0.04296875,
+      "v1": 0.66796875,
       "averageRGB": [
         0.34963235294117645,
         0.335968137254902,
@@ -1238,10 +2260,10 @@
       "transparencyRatio": 0
     },
     "blocks/shale-cliff-bottom/-y.png": {
-      "u0": 0.51953125,
-      "v0": 0.6640625,
-      "u1": 0.54296875,
-      "v1": 0.7109375,
+      "u0": 0.08203125,
+      "v0": 0.64453125,
+      "u1": 0.10546875,
+      "v1": 0.66796875,
       "averageRGB": [
         0.5242578976034858,
         0.616019880174292,
@@ -1252,10 +2274,10 @@
       "transparencyRatio": 0
     },
     "blocks/shale-cliff-bottom/-z.png": {
-      "u0": 0.58203125,
-      "v0": 0.6640625,
-      "u1": 0.60546875,
-      "v1": 0.7109375,
+      "u0": 0.14453125,
+      "v0": 0.64453125,
+      "u1": 0.16796875,
+      "v1": 0.66796875,
       "averageRGB": [
         0.34963235294117645,
         0.335968137254902,
@@ -1266,10 +2288,10 @@
       "transparencyRatio": 0
     },
     "blocks/shale-cliff-top/+x.png": {
-      "u0": 0.64453125,
-      "v0": 0.6640625,
-      "u1": 0.66796875,
-      "v1": 0.7109375,
+      "u0": 0.20703125,
+      "v0": 0.64453125,
+      "u1": 0.23046875,
+      "v1": 0.66796875,
       "averageRGB": [
         0.3820942265795207,
         0.42287581699346405,
@@ -1280,10 +2302,10 @@
       "transparencyRatio": 0
     },
     "blocks/shale-cliff-top/+y.png": {
-      "u0": 0.70703125,
-      "v0": 0.6640625,
-      "u1": 0.73046875,
-      "v1": 0.7109375,
+      "u0": 0.26953125,
+      "v0": 0.64453125,
+      "u1": 0.29296875,
+      "v1": 0.66796875,
       "averageRGB": [
         0.5242578976034858,
         0.616019880174292,
@@ -1294,10 +2316,10 @@
       "transparencyRatio": 0
     },
     "blocks/shale-cliff-top/+z.png": {
-      "u0": 0.76953125,
-      "v0": 0.6640625,
-      "u1": 0.79296875,
-      "v1": 0.7109375,
+      "u0": 0.33203125,
+      "v0": 0.64453125,
+      "u1": 0.35546875,
+      "v1": 0.66796875,
       "averageRGB": [
         0.3820942265795207,
         0.42287581699346405,
@@ -1308,10 +2330,10 @@
       "transparencyRatio": 0
     },
     "blocks/shale-cliff-top/-x.png": {
-      "u0": 0.83203125,
-      "v0": 0.6640625,
-      "u1": 0.85546875,
-      "v1": 0.7109375,
+      "u0": 0.39453125,
+      "v0": 0.64453125,
+      "u1": 0.41796875,
+      "v1": 0.66796875,
       "averageRGB": [
         0.3820942265795207,
         0.42287581699346405,
@@ -1322,10 +2344,10 @@
       "transparencyRatio": 0
     },
     "blocks/shale-cliff-top/-y.png": {
-      "u0": 0.89453125,
-      "v0": 0.6640625,
-      "u1": 0.91796875,
-      "v1": 0.7109375,
+      "u0": 0.45703125,
+      "v0": 0.64453125,
+      "u1": 0.48046875,
+      "v1": 0.66796875,
       "averageRGB": [
         0.3573937908496732,
         0.31615604575163403,
@@ -1336,10 +2358,10 @@
       "transparencyRatio": 0
     },
     "blocks/shale-cliff-top/-z.png": {
-      "u0": 0.95703125,
-      "v0": 0.6640625,
-      "u1": 0.98046875,
-      "v1": 0.7109375,
+      "u0": 0.51953125,
+      "v0": 0.64453125,
+      "u1": 0.54296875,
+      "v1": 0.66796875,
       "averageRGB": [
         0.3820942265795207,
         0.42287581699346405,
@@ -1350,10 +2372,10 @@
       "transparencyRatio": 0
     },
     "blocks/shale-rock.png": {
-      "u0": 0.01953125,
-      "v0": 0.7890625,
-      "u1": 0.04296875,
-      "v1": 0.8359375,
+      "u0": 0.58203125,
+      "v0": 0.64453125,
+      "u1": 0.60546875,
+      "v1": 0.66796875,
       "averageRGB": [
         0.3573937908496732,
         0.31615604575163403,
@@ -1364,10 +2386,10 @@
       "transparencyRatio": 0
     },
     "blocks/snow-icy.png": {
-      "u0": 0.08203125,
-      "v0": 0.7890625,
-      "u1": 0.10546875,
-      "v1": 0.8359375,
+      "u0": 0.64453125,
+      "v0": 0.64453125,
+      "u1": 0.66796875,
+      "v1": 0.66796875,
       "averageRGB": [
         0.8625068082788672,
         0.9491013071895426,
@@ -1378,10 +2400,10 @@
       "transparencyRatio": 0
     },
     "blocks/snow-pebbles.png": {
-      "u0": 0.14453125,
-      "v0": 0.7890625,
-      "u1": 0.16796875,
-      "v1": 0.8359375,
+      "u0": 0.70703125,
+      "v0": 0.64453125,
+      "u1": 0.73046875,
+      "v1": 0.66796875,
       "averageRGB": [
         0.9293641067538126,
         0.9371119281045751,
@@ -1392,10 +2414,10 @@
       "transparencyRatio": 0
     },
     "blocks/snow-rocks.png": {
-      "u0": 0.20703125,
-      "v0": 0.7890625,
-      "u1": 0.23046875,
-      "v1": 0.8359375,
+      "u0": 0.76953125,
+      "v0": 0.64453125,
+      "u1": 0.79296875,
+      "v1": 0.66796875,
       "averageRGB": [
         0.7775939542483661,
         0.8011233660130719,
@@ -1406,10 +2428,10 @@
       "transparencyRatio": 0
     },
     "blocks/snow-rough.png": {
-      "u0": 0.26953125,
-      "v0": 0.7890625,
-      "u1": 0.29296875,
-      "v1": 0.8359375,
+      "u0": 0.83203125,
+      "v0": 0.64453125,
+      "u1": 0.85546875,
+      "v1": 0.66796875,
       "averageRGB": [
         0.9369485294117647,
         0.9606004901960784,
@@ -1420,10 +2442,10 @@
       "transparencyRatio": 0
     },
     "blocks/snow.png": {
-      "u0": 0.33203125,
-      "v0": 0.7890625,
-      "u1": 0.35546875,
-      "v1": 0.8359375,
+      "u0": 0.89453125,
+      "v0": 0.64453125,
+      "u1": 0.91796875,
+      "v1": 0.66796875,
       "averageRGB": [
         0.9884803921568628,
         0.9935729847494553,
@@ -1434,10 +2456,10 @@
       "transparencyRatio": 0
     },
     "blocks/stone-bricks.png": {
-      "u0": 0.39453125,
-      "v0": 0.7890625,
-      "u1": 0.41796875,
-      "v1": 0.8359375,
+      "u0": 0.95703125,
+      "v0": 0.64453125,
+      "u1": 0.98046875,
+      "v1": 0.66796875,
       "averageRGB": [
         0.5519880174291939,
         0.5405773420479303,
@@ -1448,10 +2470,10 @@
       "transparencyRatio": 0
     },
     "blocks/stone.png": {
-      "u0": 0.45703125,
-      "v0": 0.7890625,
-      "u1": 0.48046875,
-      "v1": 0.8359375,
+      "u0": 0.01953125,
+      "v0": 0.70703125,
+      "u1": 0.04296875,
+      "v1": 0.73046875,
       "averageRGB": [
         0.5492102396514161,
         0.5384055010893246,
@@ -1462,10 +2484,10 @@
       "transparencyRatio": 0
     },
     "blocks/swirl-rune.png": {
-      "u0": 0.51953125,
-      "v0": 0.7890625,
-      "u1": 0.54296875,
-      "v1": 0.8359375,
+      "u0": 0.08203125,
+      "v0": 0.70703125,
+      "u1": 0.10546875,
+      "v1": 0.73046875,
       "averageRGB": [
         0.3030705337690632,
         0.40156590413943355,
@@ -1476,10 +2498,10 @@
       "transparencyRatio": 0
     },
     "blocks/void-sand.png": {
-      "u0": 0.58203125,
-      "v0": 0.7890625,
-      "u1": 0.60546875,
-      "v1": 0.8359375,
+      "u0": 0.14453125,
+      "v0": 0.70703125,
+      "u1": 0.16796875,
+      "v1": 0.73046875,
       "averageRGB": [
         0.15528322440087144,
         0.1633169934640523,
@@ -1490,10 +2512,10 @@
       "transparencyRatio": 0
     },
     "blocks/void_grass/+x.png": {
-      "u0": 0.64453125,
-      "v0": 0.7890625,
-      "u1": 0.66796875,
-      "v1": 0.8359375,
+      "u0": 0.20703125,
+      "v0": 0.70703125,
+      "u1": 0.23046875,
+      "v1": 0.73046875,
       "averageRGB": [
         0.22920070806100218,
         0.10027233115468409,
@@ -1504,10 +2526,10 @@
       "transparencyRatio": 0
     },
     "blocks/void_grass/+y.png": {
-      "u0": 0.70703125,
-      "v0": 0.7890625,
-      "u1": 0.73046875,
-      "v1": 0.8359375,
+      "u0": 0.26953125,
+      "v0": 0.70703125,
+      "u1": 0.29296875,
+      "v1": 0.73046875,
       "averageRGB": [
         0.05190631808278867,
         0.05972222222222222,
@@ -1518,10 +2540,10 @@
       "transparencyRatio": 0
     },
     "blocks/void_grass/+z.png": {
-      "u0": 0.76953125,
-      "v0": 0.7890625,
-      "u1": 0.79296875,
-      "v1": 0.8359375,
+      "u0": 0.33203125,
+      "v0": 0.70703125,
+      "u1": 0.35546875,
+      "v1": 0.73046875,
       "averageRGB": [
         0.22920070806100218,
         0.10027233115468409,
@@ -1532,10 +2554,10 @@
       "transparencyRatio": 0
     },
     "blocks/void_grass/-x.png": {
-      "u0": 0.83203125,
-      "v0": 0.7890625,
-      "u1": 0.85546875,
-      "v1": 0.8359375,
+      "u0": 0.39453125,
+      "v0": 0.70703125,
+      "u1": 0.41796875,
+      "v1": 0.73046875,
       "averageRGB": [
         0.22920070806100218,
         0.10027233115468409,
@@ -1546,10 +2568,10 @@
       "transparencyRatio": 0
     },
     "blocks/void_grass/-y.png": {
-      "u0": 0.89453125,
-      "v0": 0.7890625,
-      "u1": 0.91796875,
-      "v1": 0.8359375,
+      "u0": 0.45703125,
+      "v0": 0.70703125,
+      "u1": 0.48046875,
+      "v1": 0.73046875,
       "averageRGB": [
         0.05190631808278867,
         0.05972222222222222,
@@ -1560,10 +2582,10 @@
       "transparencyRatio": 0
     },
     "blocks/void_grass/-z.png": {
-      "u0": 0.95703125,
-      "v0": 0.7890625,
-      "u1": 0.98046875,
-      "v1": 0.8359375,
+      "u0": 0.51953125,
+      "v0": 0.70703125,
+      "u1": 0.54296875,
+      "v1": 0.73046875,
       "averageRGB": [
         0.22920070806100218,
         0.10027233115468409,
@@ -1574,10 +2596,10 @@
       "transparencyRatio": 0
     },
     "blocks/voidsoil.png": {
-      "u0": 0.01953125,
-      "v0": 0.9140625,
-      "u1": 0.04296875,
-      "v1": 0.9609375,
+      "u0": 0.58203125,
+      "v0": 0.70703125,
+      "u1": 0.60546875,
+      "v1": 0.73046875,
       "averageRGB": [
         0.47074482570806103,
         0.18412990196078433,
@@ -1588,10 +2610,10 @@
       "transparencyRatio": 0
     },
     "blocks/water-flow.png": {
-      "u0": 0.08203125,
-      "v0": 0.9140625,
-      "u1": 0.10546875,
-      "v1": 0.9609375,
+      "u0": 0.64453125,
+      "v0": 0.70703125,
+      "u1": 0.66796875,
+      "v1": 0.73046875,
       "averageRGB": [
         0.41215277777777776,
         0.6278799019607844,
@@ -1602,10 +2624,10 @@
       "transparencyRatio": 0
     },
     "blocks/water-still.png": {
-      "u0": 0.14453125,
-      "v0": 0.9140625,
-      "u1": 0.16796875,
-      "v1": 0.9609375,
+      "u0": 0.70703125,
+      "v0": 0.70703125,
+      "u1": 0.73046875,
+      "v1": 0.73046875,
       "averageRGB": [
         0.44223856209150325,
         0.6986383442265794,
@@ -1616,5 +2638,5 @@
       "transparencyRatio": 0
     }
   },
-  "sourceHash": "96e189a7b39e0501ec8a2c52ead118af3de27a28db8e3853838541338bcd98c6"
+  "sourceHash": "9b622ebadeae77b101d698ba31c9a33dc0c9e8a14e7e1e6b50f9066c59783025"
 }

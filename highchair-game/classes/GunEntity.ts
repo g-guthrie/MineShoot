@@ -104,6 +104,11 @@ export default abstract class GunEntity extends ItemEntity {
     return this.totalAmmo;
   }
 
+  /** Loadout guns aren't resupplied by pickups, so they carry a deep reserve. */
+  public setReserveAmmo(amount: number): void {
+    this.totalAmmo = amount;
+  }
+
   public reload(): void {
     if (!this.parent?.world || this._reloading || !this.totalAmmo) return;
     this._startReload();

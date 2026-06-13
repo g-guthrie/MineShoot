@@ -6,7 +6,7 @@ import {
   World,
 } from 'highchair';
 
-import worldMap from '../assets/maps/arena.json' with { type: 'json' } ;
+import worldMap from '../assets/maps/boxman-arena.json' with { type: 'json' };
 
 import {
   BEDROCK_BLOCK_ID,
@@ -71,10 +71,11 @@ export default class GameManager {
     BotPlayerEntity.setWorldActive(this.world, true);
     this._gameStartAt = Date.now();
     
-    // Spawn initial game elements
-    this._spawnStartingChests();
-    this._spawnStartingItems();
-    this._startChestDropInterval();
+    // Weapons come from player loadouts now (see GunCatalog) — no chests,
+    // no scattered pickups. The spawn helpers are kept for easy re-enable.
+    // this._spawnStartingChests();
+    // this._spawnStartingItems();
+    // this._startChestDropInterval();
 
     // Move all players to random spawn positions
     this.world.entityManager.getAllPlayerEntities().forEach(playerEntity => {
@@ -341,9 +342,9 @@ export default class GameManager {
    * Creates bedrock floor for the game world
    */
   private _spawnBedrock(world: World) {
-    // Bounds match the generated biome arena (tools/build-map.mjs).
-    for (let x = -56; x <= 56; x++) {
-      for (let z = -56; z <= 56; z++) {
+    // Bounds cover the imported boxman arena (tools/import-boxman.mjs).
+    for (let x = -84; x <= 84; x++) {
+      for (let z = -84; z <= 84; z++) {
         world.chunkLattice.setBlock({ x, y: -1, z }, BEDROCK_BLOCK_ID);
       }
     }

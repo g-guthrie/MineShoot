@@ -26,7 +26,7 @@ import {
 
 import GameManager from './classes/GameManager';
 
-import worldMap from './assets/maps/biome-arena.json' with { type: 'json' };
+import worldMap from './assets/maps/boxman-arena.json' with { type: 'json' };
 import GamePlayerEntity from './classes/GamePlayerEntity';
 
 startServer(world => {

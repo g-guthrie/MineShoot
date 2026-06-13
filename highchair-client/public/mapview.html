@@ -28,8 +28,8 @@
       60: '#6a5530', 61: '#4a3c22', 62: '#5a5a62', 63: '#4a4a52', 64: '#7a5a35',
       65: '#a8824a', 66: '#6a4f2e', 67: '#c8b890', 68: '#bfdfe8',
     };
-    fetch('http://127.0.0.1:8083/maps/biome-arena.json')
-      .catch(() => fetch('/maps-biome-arena.json'))
+    const mapName = new URLSearchParams(location.search).get('map') ?? 'biome-arena';
+    fetch('http://127.0.0.1:8083/maps/' + mapName + '.json')
       .then(r => r.json())
       .then(map => {
         const top = new Map(); // "x,z" -> [y, id]
@@ -39,8 +39,13 @@
           const prev = top.get(k);
           if (!prev || y > prev[0]) top.set(k, [y, id]);
         }
+        // boxman-imported types encode their color in the name: boxman-<hex>
+        for (const t of map.blockTypes) {
+          const m = /^boxman-([0-9a-f]{6})/.exec(t.name);
+          if (m) COLORS[t.id] = '#' + m[1];
+        }
         const ctx = document.getElementById('map').getContext('2d');
-        const S = 8, R = 56;
+        const S = 6, R = 84;
         for (const [k, [y, id]] of top) {
           const [x, z] = k.split(',').map(Number);
           ctx.fillStyle = COLORS[id] ?? '#ff00ff';

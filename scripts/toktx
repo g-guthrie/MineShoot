@@ -25,6 +25,10 @@ if [ -f "$output" ]; then
   exit 0
 fi
 
-echo "local toktx shim: missing cached output $output" >&2
-echo "Install KTX Software to generate it with the real toktx binary." >&2
-exit 127
+# No cached KTX2: report success WITHOUT producing one. The engine keeps the
+# freshly generated atlas.json + atlas.png pair, the client's KTX2 fetch 404s,
+# and its built-in PNG-atlas fallback kicks in — which is always consistent
+# with the fresh metadata. (A stale cached KTX2 next to fresh metadata is how
+# every block face ended up rendering as a flat average color.)
+echo "local toktx shim: no cached $output — engine will serve the PNG atlas only" >&2
+exit 0
