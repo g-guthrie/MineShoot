@@ -6,7 +6,7 @@ import {
   World,
 } from 'highchair';
 
-import worldMap from '../assets/maps/boxman-arena.json' with { type: 'json' };
+import worldMap from '../assets/maps/mayhem-arena.json' with { type: 'json' };
 
 import {
   BEDROCK_BLOCK_ID,
