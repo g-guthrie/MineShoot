@@ -1,4 +1,5 @@
 import { Quaternion } from 'highchair';
+import arenaMeta from './assets/maps/biome-arena.meta.json' with { type: 'json' };
 
 export const BEDROCK_BLOCK_ID = 2;
 
@@ -19,6 +20,32 @@ export const BLOCK_ID_BREAK_DAMAGE: Record<string | number, number> = {
   30: 10, // sand
   36: 100, // stone bricks
   37: 40, // stone (also build block)
+  // biome-arena additions
+  9: 100, // dragon block
+  10: 70, // dragons-stone
+  11: 70, // emerald block
+  18: 20, // ice
+  23: 30, // log
+  25: 10, // nuit leaves
+  28: 30, // oak planks
+  29: 10, // sand light
+  31: 40, // sandstone light
+  32: 40, // sandstone
+  33: 15, // shadow pebble
+  34: 70, // shadowrock
+  38: 100, // swirl rune
+  44: 10, 45: 10, 46: 10, 47: 10, // snow variants
+  48: 30, // ice block
+  49: 70, 50: 70, // shale cliffs
+  51: 50, // shale rock
+  52: 15, 53: 15, // lava dirt
+  54: 30, // lava rocky
+  56: 50, 57: 50, 58: 40, // jungle blocks
+  59: 10, 60: 10, 61: 10, // jungle dirt
+  62: 50, 63: 50, // dark cobblestone
+  64: 30, 65: 30, 66: 30, // dark oak / slats
+  67: 10, // cracked sand
+  68: 10, // glass window
   default: 30, // default for all other blocks
 }
 
@@ -39,6 +66,25 @@ export const BLOCK_ID_MATERIALS: Record<string | number, number> = {
   36: 5, // stone bricks
   42: 0, // water flow
   43: 0, // water still
+  // biome-arena additions
+  9: 10, // dragon block
+  11: 10, // emerald block
+  18: 1, // ice
+  25: 0, // nuit leaves
+  27: 0, // oak leaves
+  31: 3, 32: 3, // sandstone
+  33: 1, // shadow pebble
+  34: 5, // shadowrock
+  38: 8, // swirl rune
+  44: 0, 45: 0, 46: 0, 47: 0, // snow
+  48: 2, // ice block
+  49: 5, 50: 5, 51: 4, // shale
+  52: 0, 53: 0, 54: 2, // lava ground
+  56: 4, 57: 4, 58: 3, // jungle blocks
+  59: 0, 60: 0, 61: 0, // jungle dirt
+  64: 2, 65: 2, 66: 2, // dark oak / slats
+  67: 0, // cracked sand
+  68: 0, // glass window
   default: 1, // default for all other blocks
 };
 
@@ -46,10 +92,7 @@ export const BUILD_BLOCK_ID = 37; // stone
 
 export const CHEST_DROP_INTERVAL_MS = 15 * 1000; // 15 seconds
 
-export const CHEST_DROP_REGION_AABB = {
-  min: { x: -25, y: 40, z: -25 },
-  max: { x: 28, y: 40, z: 22 },
-};
+export const CHEST_DROP_REGION_AABB = arenaMeta.chestDropRegion;
 
 export const CHEST_SPAWNS_AT_START = 20;
 
@@ -116,71 +159,16 @@ export const CHEST_DROP_ITEMS = [
   },
 ]
 
-export const CHEST_SPAWNS = [
-  // Positions are verified floor coordinates on the zombies arena map.
-  {
-    position: { x: 2.5, y: 2, z: 15 },
-    rotation: Quaternion.fromEuler(0, 180, 0),
-  },
-  {
-    position: { x: -8, y: 2, z: 18.5 },
-    rotation: Quaternion.fromEuler(0, 90, 0),
-  },
-  {
-    position: { x: 13, y: 2, z: 18.5 },
-    rotation: Quaternion.fromEuler(0, -90, 0),
-  },
-  {
-    position: { x: -15, y: 2, z: 3 },
-    rotation: Quaternion.fromEuler(0, 0, 0),
-  },
-  {
-    position: { x: 19, y: 2, z: 3 },
-    rotation: Quaternion.fromEuler(0, 0, 0),
-  },
-  {
-    position: { x: 26.5, y: 2, z: -2 },
-    rotation: Quaternion.fromEuler(0, -90, 0),
-  },
-  {
-    position: { x: -22, y: 2, z: -2 },
-    rotation: Quaternion.fromEuler(0, 90, 0),
-  },
-  {
-    position: { x: 0.5, y: 2, z: -26 },
-    rotation: Quaternion.fromEuler(0, 0, 0),
-  },
-  {
-    position: { x: -15, y: 2, z: -19 },
-    rotation: Quaternion.fromEuler(0, 0, 0),
-  },
-  {
-    position: { x: 20, y: 2, z: -19 },
-    rotation: Quaternion.fromEuler(0, 180, 0),
-  },
-];
+export const CHEST_SPAWNS = arenaMeta.chestSpawns.map(spawn => ({
+  position: spawn.position,
+  rotation: Quaternion.fromEuler(0, spawn.yawDeg, 0),
+}));
 
 export const GAME_DURATION_MS = 8 * 60 * 1000; // 8 minutes
 
 export const ITEM_DESPAWN_TIME_MS = 25 * 1000; // 25 seconds
 
-export const ITEM_SPAWNS = [
-  { position: { x: -3, y: 2, z: 16.5 } },
-  { position: { x: 10.5, y: 2, z: 16.5 } },
-  { position: { x: -27.5, y: 2, z: 2.5 } },
-  { position: { x: 22, y: 2, z: 7 } },
-  { position: { x: -23.5, y: 2, z: -24.5 } },
-  { position: { x: 31, y: 2, z: -14.5 } },
-  { position: { x: 0.5, y: 2, z: -29.5 } },
-  { position: { x: 2.5, y: 3, z: -4.5 } },
-  { position: { x: -8, y: 2, z: 12 } },
-  { position: { x: 8, y: 2, z: 15 } },
-  { position: { x: -22, y: 2, z: 16 } },
-  { position: { x: 31, y: 2, z: 15 } },
-  { position: { x: 26, y: 2, z: -26 } },
-  { position: { x: -29, y: 2, z: -18 } },
-  { position: { x: -26, y: 2, z: -2 } },
-];
+export const ITEM_SPAWNS = arenaMeta.itemSpawns.map(position => ({ position }));
 
 export const ITEM_SPAWN_ITEMS = [
   {
@@ -505,23 +493,6 @@ export const RANKS = [
   },
 ]
 
-// Known-good floor positions across the arena. An AABB random spawn (the
-// old approach) drops players onto walls or inside rooms' ceilings on an
-// interior map, so spawns are explicit points instead.
-export const SPAWN_POINTS = [
-  { x: 2.5, y: 3, z: 25 },
-  { x: -4, y: 3, z: 25 },
-  { x: 13, y: 3, z: 22 },
-  { x: 8, y: 3, z: 15 },
-  { x: -8, y: 3, z: 12 },
-  { x: -22, y: 3, z: 16 },
-  { x: -26, y: 3, z: -2 },
-  { x: 31, y: 3, z: 15 },
-  { x: 31, y: 3, z: -2 },
-  { x: 26, y: 3, z: -26 },
-  { x: -29, y: 3, z: -18 },
-  { x: 0.5, y: 3, z: -26 },
-  { x: -15, y: 3, z: -19 },
-  { x: 20, y: 3, z: -19 },
-  { x: 2.5, y: 4, z: -4.5 },
-];
+// Spawn points are generated alongside the map (tools/build-map.mjs) so they
+// always sit on real walkable floor.
+export const SPAWN_POINTS = arenaMeta.spawnPoints;

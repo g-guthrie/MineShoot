@@ -341,8 +341,9 @@ export default class GameManager {
    * Creates bedrock floor for the game world
    */
   private _spawnBedrock(world: World) {
-    for (let x = -50; x <= 50; x++) {
-      for (let z = -50; z <= 50; z++) {
+    // Bounds match the generated biome arena (tools/build-map.mjs).
+    for (let x = -56; x <= 56; x++) {
+      for (let z = -56; z <= 56; z++) {
         world.chunkLattice.setBlock({ x, y: -1, z }, BEDROCK_BLOCK_ID);
       }
     }

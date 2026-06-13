@@ -26,16 +26,16 @@ import {
 
 import GameManager from './classes/GameManager';
 
-import worldMap from './assets/maps/arena.json' with { type: 'json' } ;
+import worldMap from './assets/maps/biome-arena.json' with { type: 'json' };
 import GamePlayerEntity from './classes/GamePlayerEntity';
 
 startServer(world => {
   // Load the game map
   world.loadMap(worldMap);
 
-  // Set lighting
-  world.setAmbientLightIntensity(0.8);
-  world.setDirectionalLightIntensity(5);
+  // Set lighting: soft sun so terrain steps don't read as black checkering.
+  world.setAmbientLightIntensity(1.1);
+  world.setDirectionalLightIntensity(2.6);
 
   GameManager.instance.setupGame(world);
 
