@@ -26,12 +26,13 @@ import {
 
 import GameManager from './classes/GameManager';
 
-import worldMap from './assets/maps/mayhem-arena.json' with { type: 'json' };
+import worldMap from './assets/maps/boxman-shell.json' with { type: 'json' };
 import GamePlayerEntity from './classes/GamePlayerEntity';
 
 startServer(world => {
   // Load the game map
   world.loadMap(worldMap);
+  GameManager.instance._spawnWorldMesh(world);
 
   // Set lighting: soft sun so terrain steps don't read as black checkering.
   world.setAmbientLightIntensity(1.1);

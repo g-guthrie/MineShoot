@@ -154,6 +154,8 @@ export default class Renderer {
     this._renderer = new WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
     this._sceneUiRenderer = new CSS2DRenderer({ element: document.getElementById('scene-ui-container')! });
     this._scene = new Scene();
+    // Debug handle for headless verification tooling.
+    (globalThis as Record<string, unknown>).__scene = this._scene;
     this._viewModelScene = new Scene();
     this._overlayScene = new Scene();
     this._uiScene = new Scene();

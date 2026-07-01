@@ -1,5 +1,5 @@
 import { Quaternion } from 'highchair';
-import arenaMeta from './assets/maps/mayhem-arena.meta.json' with { type: 'json' };
+import arenaMeta from './assets/maps/boxman-arena.meta.json' with { type: 'json' };
 
 export const BEDROCK_BLOCK_ID = 2;
 

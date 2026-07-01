@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>model viewer</title>
+  <style>body { margin: 0; background: #202028; } #info { position: fixed; top: 8px; left: 8px; color: #eee; font: 12px monospace; white-space: pre; z-index: 5; }</style>
+  <script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.170.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/" } }</script>
+</head>
+<body>
+<div id="info">loading…</div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const url = new URLSearchParams(location.search).get('m')
+  ?? 'http://127.0.0.1:8083/models/environment/.optimized/boxman-world/boxman-world.glb';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87b5e0);
+scene.add(new THREE.AmbientLight(0xffffff, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 2);
+sun.position.set(100, 200, 80);
+scene.add(sun);
+scene.add(new THREE.AxesHelper(50));
+scene.add(new THREE.GridHelper(400, 40));
+
+new GLTFLoader().load(url, gltf => {
+  scene.add(gltf.scene);
+  const box = new THREE.Box3().setFromObject(gltf.scene);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  document.getElementById('info').textContent =
+    `min ${box.min.x.toFixed(1)},${box.min.y.toFixed(1)},${box.min.z.toFixed(1)}\n` +
+    `max ${box.max.x.toFixed(1)},${box.max.y.toFixed(1)},${box.max.z.toFixed(1)}\n` +
+    `size ${size.x.toFixed(1)},${size.y.toFixed(1)},${size.z.toFixed(1)}\n` +
+    `center ${center.x.toFixed(1)},${center.y.toFixed(1)},${center.z.toFixed(1)}`;
+
+  const dist = Math.max(size.x, size.z) * 1.2;
+  const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 5000);
+  camera.position.set(center.x + dist * 0.7, center.y + dist * 0.8, center.z + dist * 0.7);
+  camera.lookAt(center);
+  renderer.render(scene, camera);
+}, undefined, err => {
+  document.getElementById('info').textContent = 'LOAD ERROR: ' + err;
+});
+</script>
+</body>
+</html>
