@@ -176,6 +176,18 @@ export default class ItemEntity extends Entity {
     // until the next controller tick/update.
     this.parent.stopAllModelAnimations(a => idleLoopedAnimations.includes(a.name));
     for (const n of idleLoopedAnimations) { const a = this.parent.getModelAnimation(n); if (a) { a.setLoopMode(EntityModelAnimationLoopMode.LOOP); a.play(); } }
+
+    // Recoil must read as a sharp back-kick, not a sideways sway: the shoot
+    // clip blends against the still-playing idle hold pose on the same arm
+    // bones, so at equal weight the result is a 50/50 mix whose yaw offset
+    // looks like left-right wobble (worst on fast fire, where the default
+    // 0.1s fade-in never completes between shots). Heavy weight + no fade-in
+    // makes the kick dominate instantly; it still eases back out to idle.
+    const mlAnim = this.parent.getModelAnimation(this.mlAnimation);
+    if (mlAnim) {
+      mlAnim.setWeight(3);
+      mlAnim.setFadesIn(false);
+    }
   }
 
   public override spawn(world: World, position: Vector3Like, rotation?: QuaternionLike): void {
