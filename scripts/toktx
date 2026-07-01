@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Local dev fallback for the SDK's KTX atlas generation.
-# If a cached atlas already exists, keep it and report success. Install the
-# real KTX toktx binary before changing block textures or regenerating atlases.
+# Delegates to the real KTX-Software toktx when installed; otherwise keeps a
+# cached atlas (legacy dev fallback from before KTX-Software was available).
 set -euo pipefail
 
-if [ "$#" -lt 2 ]; then
-  echo "local toktx shim: expected output and input paths" >&2
-  exit 2
-fi
+for real in /opt/homebrew/bin/toktx /usr/local/bin/toktx; do
+  if [ -x "$real" ]; then
+    exec "$real" "$@"
+  fi
+done
 
 prev=
 last=
@@ -15,20 +15,12 @@ for arg in "$@"; do
   prev="$last"
   last="$arg"
 done
-
 output="$prev"
-input="$last"
 
 if [ -f "$output" ]; then
   touch "$output"
-  echo "local toktx shim: kept cached $output from $input" >&2
+  echo "local toktx shim: kept cached $output" >&2
   exit 0
 fi
-
-# No cached KTX2: report success WITHOUT producing one. The engine keeps the
-# freshly generated atlas.json + atlas.png pair, the client's KTX2 fetch 404s,
-# and its built-in PNG-atlas fallback kicks in — which is always consistent
-# with the fresh metadata. (A stale cached KTX2 next to fresh metadata is how
-# every block face ended up rendering as a flat average color.)
 echo "local toktx shim: no cached $output — engine will serve the PNG atlas only" >&2
 exit 0

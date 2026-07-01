@@ -39,6 +39,17 @@ startServer(world => {
 
   GameManager.instance.setupGame(world);
 
+  // Live calibration for step cadence: /stride 1.3 etc.
+  world.chatManager.registerCommand('/stride', (player, args) => {
+    const value = parseFloat(args?.[0] ?? '');
+    if (!Number.isFinite(value) || value <= 0 || value > 4) {
+      world.chatManager.sendPlayerMessage(player, 'Usage: /stride 0.5 .. 4 (current cadence multiplier)', 'FFAA00');
+      return;
+    }
+    GamePlayerEntity.setStrideTune(value);
+    world.chatManager.sendBroadcastMessage(`Stride cadence multiplier set to ${value}`, '00FF00');
+  });
+
   // Handle player joining the game
   world.on(PlayerEvent.JOINED_WORLD, ({ player }) => {
     GameManager.instance.spawnPlayerEntity(player);

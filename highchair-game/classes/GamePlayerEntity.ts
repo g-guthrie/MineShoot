@@ -56,6 +56,9 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   /** Gun ids (slots 1..N) re-equipped at spawn and on loadout changes. */
   private _loadout: string[] = [...DEFAULT_LOADOUT];
   private _equippingLoadout = false;
+  /** Multiplier for step-cadence-vs-speed matching; tune live with /stride. */
+  private static _strideTune = 1;
+  private _gaitRate = 1;
   private _lastExpSave: number = 0;
   private _maxHealth: number = MAX_HEALTH;
   private _maxShield: number = MAX_SHIELD;
@@ -179,7 +182,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
       if (attacker) {
         GameManager.instance.addKill(attacker.player.username);
         attacker.addExp(RANK_KILL_EXP);
-        this.focusCameraOnPlayer(attacker);
+        this.focusCameraOnPlayer(this); // death cam orbits your own body, not the killer
       }
 
       this._despawnGuns(); // loadout guns return fresh at respawn, nothing drops
@@ -396,7 +399,10 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   }
 
   private _setupPlayerController(): void {
-    this.playerController.applyDirectionalMovementRotations = true;
+    // FPS body facing: the model always faces the camera yaw. Rotating the
+    // body toward strafe direction twists the feet under a fixed aim and
+    // reads wrong from other players' view.
+    this.playerController.applyDirectionalMovementRotations = false;
     this.playerController.autoCancelMouseLeftClick = false;
 
     this.resetAnimations();
@@ -460,6 +466,11 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     }
   }
 
+  /** Re-equip the current loadout (round resets, respawn). */
+  public refreshLoadout(): void {
+    void this._equipLoadout();
+  }
+
   /** Validate + apply a loadout from the UI; refreshes guns immediately. */
   public setLoadout(gunIds: unknown[]): void {
     const unique = [...new Set(gunIds.filter(isCatalogGun))].slice(0, LOADOUT_SLOTS);
@@ -520,12 +531,40 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this.player.camera.setViewModelYawsWithCamera(true);
   }
 
+  public static setStrideTune(value: number): void {
+    GamePlayerEntity._strideTune = value;
+  }
+
+  /**
+   * Step cadence follows ground speed: the walk/run clips play at a rate
+   * proportional to actual velocity so feet stop sliding when speed and
+   * animation disagree (ADS, slows, knockback, tuning changes).
+   */
+  private _updateGaitCadence(): void {
+    const v = this.linearVelocity;
+    const speed = Math.hypot(v.x, v.z);
+    const walkV = this.playerController.walkVelocity || 4;
+    const runV = this.playerController.runVelocity || 8;
+    const ref = speed > walkV * 1.15 ? runV : walkV;
+    const target = speed < 0.3
+      ? 1
+      : Math.min(2.6, Math.max(0.5, (speed / ref) * GamePlayerEntity._strideTune));
+
+    if (Math.abs(target - this._gaitRate) < 0.08) return;
+    this._gaitRate = target;
+    for (const name of ['walk_lower', 'run_lower']) {
+      this.getModelAnimation(name)?.setPlaybackRate(target);
+    }
+  }
+
   private _onTickWithPlayerInput = (payload: EventPayloads[BaseEntityControllerEvent.TICK_WITH_PLAYER_INPUT]): void => {
     const { input } = payload;
 
     if (this._dead) {
       return;
     }
+
+    this._updateGaitCadence();
 
     this._applyMobileAutoFire(input);
 
