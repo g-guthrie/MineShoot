@@ -19,3 +19,7 @@ highchair-client/build/
 highchair-client/temp/
 highchair-game/bun.lock
 vendor-cache/
+
+# build artifacts
+highchair-game/index.mjs
+*.bak

@@ -1,6 +1,6 @@
 // Local dev proxy: browsers reject the Highchair dev server's self-signed
-// TLS, so each game mode gets a plain http/ws listener forwarded to its
-// https/wss server. Dev-only — never expose this (it disables certificate
+// TLS, so PvP gets a plain http/ws listener forwarded to its https/wss
+// server. Dev-only - never expose this (it disables certificate
 // verification and strips transport encryption).
 import http from 'node:http';
 import https from 'node:https';
@@ -8,9 +8,7 @@ import https from 'node:https';
 const LISTEN_HOST = '127.0.0.1';
 const TARGET_HOST = '127.0.0.1';
 
-// listenPort -> game server port
 const ROUTES = [
-  { name: 'zombies', listenPort: 8081, targetPort: 8080 },
   { name: 'pvp', listenPort: 8083, targetPort: 8082 },
 ];
 

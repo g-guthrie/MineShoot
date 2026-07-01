@@ -10,20 +10,12 @@ import worldMap from '../assets/maps/mayhem-arena.json' with { type: 'json' };
 
 import {
   BEDROCK_BLOCK_ID,
-  CHEST_SPAWNS,
-  CHEST_SPAWNS_AT_START,
-  CHEST_DROP_INTERVAL_MS,
-  CHEST_DROP_REGION_AABB,
   GAME_DURATION_MS,
-  ITEM_SPAWNS,
-  ITEM_SPAWNS_AT_START,
-  ITEM_SPAWN_ITEMS,
   SPAWN_POINTS,
   RANK_WIN_EXP,
 } from '../gameConfig';
 
 import GamePlayerEntity from './GamePlayerEntity';
-import ChestEntity from './ChestEntity';
 import ItemFactory from './ItemFactory';
 import BotPlayerEntity from './BotPlayerEntity';
 
@@ -31,7 +23,6 @@ export default class GameManager {
   public static readonly instance = new GameManager();
 
   public world: World | undefined;
-  private _chestDropInterval: NodeJS.Timeout | undefined;
   private _gameStartAt: number = 0;
   private _gameTimer: NodeJS.Timeout | undefined;
   private _playerCount: number = 0;
@@ -71,12 +62,6 @@ export default class GameManager {
     BotPlayerEntity.setWorldActive(this.world, true);
     this._gameStartAt = Date.now();
     
-    // Weapons come from player loadouts now (see GunCatalog) — no chests,
-    // no scattered pickups. The spawn helpers are kept for easy re-enable.
-    // this._spawnStartingChests();
-    // this._spawnStartingItems();
-    // this._startChestDropInterval();
-
     // Move all players to random spawn positions
     this.world.entityManager.getAllPlayerEntities().forEach(playerEntity => {
       playerEntity.setPosition(this.getRandomSpawnPosition());
@@ -244,11 +229,6 @@ export default class GameManager {
       clearTimeout(this._gameTimer);
       this._gameTimer = undefined;
     }
-    
-    if (this._chestDropInterval) {
-      clearInterval(this._chestDropInterval);
-      this._chestDropInterval = undefined;
-    }
 
     // Reset leaderboard
     this.resetLeaderboard();
@@ -333,10 +313,10 @@ export default class GameManager {
     if (!this.world) return;
     
     this.world.chatManager.sendPlayerMessage(player, 'Game started - most kills wins!', '00FF00');
-    this.world.chatManager.sendPlayerMessage(player, '- Search for chests and weapons to survive');
+    this.world.chatManager.sendPlayerMessage(player, '- You spawn with your full loadout: press LOADOUT (top left) to change guns');
     this.world.chatManager.sendPlayerMessage(player, '- Break blocks with your pickaxe to gain materials');
     this.world.chatManager.sendPlayerMessage(player, '- Right click to spend 3 materials to place a block');
-    this.world.chatManager.sendPlayerMessage(player, '- Some weapons zoom with "Z". Drop items with "Q"');
+    this.world.chatManager.sendPlayerMessage(player, '- Some weapons zoom with "Z"');
   }
 
   /**
@@ -351,71 +331,8 @@ export default class GameManager {
     }
   }
 
-  /**
-   * Spawns initial chests at random positions
-   */
-  private _spawnStartingChests() {
-    if (!this.world) return;
 
-    const shuffledChestSpawns = [...CHEST_SPAWNS].sort(() => Math.random() - 0.5);
-    const selectedChestSpawns = shuffledChestSpawns.slice(0, CHEST_SPAWNS_AT_START);
 
-    for (const spawn of selectedChestSpawns) {
-      const chest = new ChestEntity();
-      chest.spawn(this.world, spawn.position, spawn.rotation);
-    }
-  }
-
-  /**
-   * Spawns initial items at random positions
-   */
-  private _spawnStartingItems() {
-    if (!this.world) return;
-    
-    const shuffledItemSpawns = [...ITEM_SPAWNS].sort(() => Math.random() - 0.5);
-    const selectedItemSpawns = shuffledItemSpawns.slice(0, ITEM_SPAWNS_AT_START);
-    const totalWeight = ITEM_SPAWN_ITEMS.reduce((sum, item) => sum + item.pickWeight, 0);
-
-    selectedItemSpawns.forEach(async spawn => {
-      // Select random item based on weight
-      let random = Math.random() * totalWeight;
-      let selectedItem = ITEM_SPAWN_ITEMS[0];
-      
-      for (const item of ITEM_SPAWN_ITEMS) {
-        random -= item.pickWeight;
-        if (random <= 0) {
-          selectedItem = item;
-          break;
-        }
-      }
-
-      const item = await ItemFactory.createItem(selectedItem.itemId);
-      item.spawn(this.world!, spawn.position, Quaternion.fromEuler(0, Math.random() * 360 - 180, 0));
-    });
-  }
-
-  /**
-   * Starts the interval for dropping chests during the game
-   */
-  private _startChestDropInterval() {
-    if (this._chestDropInterval) {
-      clearInterval(this._chestDropInterval);
-    }
-
-    this._chestDropInterval = setInterval(() => {
-      if (!this.world || !this._gameActive) return;
-
-      const randomPosition = {
-        x: Math.floor(Math.random() * (CHEST_DROP_REGION_AABB.max.x - CHEST_DROP_REGION_AABB.min.x + 1)) + CHEST_DROP_REGION_AABB.min.x,
-        y: CHEST_DROP_REGION_AABB.min.y,
-        z: Math.floor(Math.random() * (CHEST_DROP_REGION_AABB.max.z - CHEST_DROP_REGION_AABB.min.z + 1)) + CHEST_DROP_REGION_AABB.min.z,
-      };
-      
-      const chest = new ChestEntity();
-      const randomRotation = Quaternion.fromEuler(0, [0, 90, -90, 180][Math.floor(Math.random() * 4)], 0);      
-      chest.spawn(this.world, randomPosition, randomRotation);
-    }, CHEST_DROP_INTERVAL_MS);
-  }
 
   /**
    * Updates the leaderboard UI for all players

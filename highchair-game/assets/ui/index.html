@@ -198,14 +198,6 @@
   </div>
 </template>
 
-<template id="chest-label-template">
-  <div class="item-label">
-    <div class="label-name"></div>
-    <div class="label-prompt"></div>
-    <div class="label-caret"></div>
-  </div>
-</template>
-
 <!-- UI Scripts-->
 <script>
   const CDN_ASSETS_URL = '{{CDN_ASSETS_URL}}';
@@ -464,25 +456,6 @@
 
       if (state.quantity !== undefined) {
         labelQuantity.textContent = state.quantity !== -1 ? state.quantity : '∞';
-      }
-    });
-
-    return clone;
-  });
-
-  highchair.registerSceneUITemplate('chest-label', (id, onState) => {
-    const template = document.getElementById('chest-label-template');
-    const clone = template.content.cloneNode(true);
-    const labelName = clone.querySelector('.label-name');
-    const labelPrompt = clone.querySelector('.label-prompt');
-
-    // Set prompt text based on platform
-    const isMobile = document.body.classList.contains('mobile');
-    labelPrompt.textContent = isMobile ? 'Tap to Open' : 'Click to Open';
-
-    onState(state => {
-      if (state.name) {
-        labelName.textContent = state.name;
       }
     });
 

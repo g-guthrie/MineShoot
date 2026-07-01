@@ -20,7 +20,7 @@
       20: '#5a3a6a', 21: '#b8a08a', 22: '#e85a1a', 23: '#6a4a2a', 24: '#6a8a5a',
       25: '#3a6a8a', 26: '#4a5a8a', 27: '#3a7a2a', 28: '#b8854a', 29: '#e8d8a8',
       30: '#dcc878', 31: '#e8d8a0', 32: '#d8b878', 33: '#4a4a52', 34: '#2a2a32',
-      35: '#f0f4f8', 36: '#7a7a82', 37: '#909098', 38: '#8a5adf', 39: '#caa8b8',
+      3: '#33333a', 35: '#f0f4f8', 36: '#7a7a82', 37: '#909098', 38: '#8a5adf', 39: '#caa8b8',
       40: '#8a4ab8', 41: '#3a2a3a', 43: '#3a6ad8',
       44: '#d8e8f0', 45: '#e0e8ea', 46: '#d0d8da', 47: '#c0ccd0', 48: '#a8d8e8',
       49: '#6a7a7a', 50: '#5a6a6a', 51: '#7a8a8a', 52: '#7a3a22', 53: '#8a4a2a',
@@ -28,7 +28,7 @@
       60: '#6a5530', 61: '#4a3c22', 62: '#5a5a62', 63: '#4a4a52', 64: '#7a5a35',
       65: '#a8824a', 66: '#6a4f2e', 67: '#c8b890', 68: '#bfdfe8',
     };
-    const mapName = new URLSearchParams(location.search).get('map') ?? 'biome-arena';
+    const mapName = new URLSearchParams(location.search).get('map') ?? 'mayhem-arena';
     fetch('http://127.0.0.1:8083/maps/' + mapName + '.json')
       .then(r => r.json())
       .then(map => {
@@ -55,7 +55,7 @@
           ctx.fillRect((x + R) * S, (z + R) * S, S, S);
         }
         document.getElementById('status').textContent =
-          'biome-arena top-down (north = up, ' + top.size + ' columns)';
+          mapName + ' top-down (north = up, ' + top.size + ' columns)';
       })
       .catch(err => { document.getElementById('status').textContent = 'failed: ' + err; });
   </script>

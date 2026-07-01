@@ -11,7 +11,6 @@ import {
   WorldLoopEvent,
 } from 'highchair';
 
-import ChestEntity from './ChestEntity';
 import GamePlayerEntity from './GamePlayerEntity';
 import GunEntity from './GunEntity';
 import ItemEntity from './ItemEntity';
@@ -278,7 +277,7 @@ export default class BotPlayerEntity extends GamePlayerEntity {
   private _behaviorState: BotBehaviorState = BotBehaviorState.IDLE;
   private _behaviorLockUntil = 0;
   private _targetEnemy: GamePlayerEntity | undefined;
-  private _targetLootEntity: ItemEntity | ChestEntity | undefined;
+  private _targetLootEntity: ItemEntity | undefined;
   private _idleDestination: Vector3Like | undefined;
   private _nextSenseAt = 0;
   private _strafeDirection: 1 | -1 = 1;
@@ -469,69 +468,8 @@ export default class BotPlayerEntity extends GamePlayerEntity {
 
     this._updateEnemyTarget(closestEnemy);
 
-    let closestGun: GunEntity | undefined;
-    let closestGunDist = Number.POSITIVE_INFINITY;
-    let closestChest: ChestEntity | undefined;
-    let closestChestDist = Number.POSITIVE_INFINITY;
-    let closestItem: ItemEntity | undefined;
-    let closestItemDist = Number.POSITIVE_INFINITY;
-
-    for (const entity of this.world.entityManager.getAllEntities()) {
-      if (!entity.isSpawned) {
-        continue;
-      }
-
-      if (Math.abs(entity.position.y - position.y) > MAX_VERTICAL_TARGET_DELTA) {
-        continue;
-      }
-
-      if (entity instanceof ChestEntity) {
-        if (entity.isOpened) {
-          continue;
-        }
-
-        const dist = this._distanceSq(position, entity.position);
-        if (dist < closestChestDist) {
-          closestChestDist = dist;
-          closestChest = entity;
-        }
-
-        continue;
-      }
-
-      if (!(entity instanceof ItemEntity)) {
-        continue;
-      }
-
-      if (entity.parent) {
-        continue;
-      }
-
-      if (entity instanceof GunEntity && this._isSpentGun(entity)) {
-        continue;
-      }
-
-      const dist = this._distanceSq(position, entity.position);
-      if (entity instanceof GunEntity) {
-        if (dist < closestGunDist) {
-          closestGunDist = dist;
-          closestGun = entity;
-        }
-      } else if (dist < closestItemDist) {
-        closestItemDist = dist;
-        closestItem = entity;
-      }
-    }
-
-    const weaponNeeded = !this._hasUsableGun();
-    const lowOnAmmo = this._shouldSeekAmmo();
-    const prioritizeWeapons = weaponNeeded || lowOnAmmo;
-
-    const desiredLoot = prioritizeWeapons
-      ? closestGun ?? closestChest ?? closestItem
-      : closestChest ?? closestGun ?? closestItem;
-
-    this._updateLootTarget(desiredLoot);
+    // Loadouts replaced chests and dropped weapons; there is no loot to seek.
+    this._updateLootTarget(undefined);
 
     if (!this._targetEnemy && !this._targetLootEntity) {
       if (!this._idleDestination || this._distanceSq(this._idleDestination, position) < 1) {
@@ -580,7 +518,7 @@ export default class BotPlayerEntity extends GamePlayerEntity {
     }
   }
 
-  private _updateLootTarget(candidate: ItemEntity | ChestEntity | undefined): void {
+  private _updateLootTarget(candidate: ItemEntity | undefined): void {
     const now = performance.now();
     const current = this._targetLootEntity;
 
@@ -616,7 +554,7 @@ export default class BotPlayerEntity extends GamePlayerEntity {
     }
   }
 
-  private _isValidLootTarget(entity: ItemEntity | ChestEntity | undefined): entity is ItemEntity | ChestEntity {
+  private _isValidLootTarget(entity: ItemEntity | undefined): entity is ItemEntity {
     if (!entity || !entity.isSpawned) {
       return false;
     }
@@ -625,57 +563,12 @@ export default class BotPlayerEntity extends GamePlayerEntity {
       return !entity.parent;
     }
 
-    if (entity instanceof ChestEntity) {
-      return !entity.isOpened;
-    }
 
     return true;
   }
 
-  private _findNearbyLootOpportunity(radius: number): ItemEntity | ChestEntity | undefined {
-    if (!this.world) {
-      return undefined;
-    }
-
-    const radiusSq = radius * radius;
-    let closestGun: GunEntity | undefined;
-    let closestGunDist = Number.POSITIVE_INFINITY;
-    let closestChest: ChestEntity | undefined;
-    let closestChestDist = Number.POSITIVE_INFINITY;
-
-    for (const entity of this.world.entityManager.getAllEntities()) {
-      if (!entity.isSpawned) {
-        continue;
-      }
-
-      const distSq = this._distanceSq(this.position, entity.position);
-      if (distSq > radiusSq) {
-        continue;
-      }
-
-      if (entity instanceof GunEntity) {
-        if (entity.parent || this._isSpentGun(entity)) {
-          continue;
-        }
-        if (distSq < closestGunDist) {
-          closestGun = entity;
-          closestGunDist = distSq;
-        }
-        continue;
-      }
-
-      if (entity instanceof ChestEntity) {
-        if (entity.isOpened) {
-          continue;
-        }
-        if (distSq < closestChestDist) {
-          closestChest = entity;
-          closestChestDist = distSq;
-        }
-      }
-    }
-
-    return closestGun ?? closestChest;
+  private _findNearbyLootOpportunity(_radius: number): ItemEntity | undefined {
+    return undefined; // loadouts: no world pickups exist
   }
 
   private _driveCombat(deltaTimeMs: number): void {
@@ -770,8 +663,6 @@ export default class BotPlayerEntity extends GamePlayerEntity {
     if (distance < LOOT_INTERACT_RANGE) {
       if (target instanceof ItemEntity) {
         target.pickup(this);
-      } else if (target instanceof ChestEntity) {
-        target.open();
       }
 
       this._targetLootEntity = undefined;

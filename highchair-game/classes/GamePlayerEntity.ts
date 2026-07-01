@@ -237,19 +237,6 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this._updatePlayerUIInventoryActiveSlot();
   }
 
-  public dropAllInventoryItems(): void {
-    // skip 0, we cannot drop the pickaxe
-    for (let i = 1; i < this._inventory.length; i++) {
-      const item = this._inventory[i];
-      if (!item) continue;
-
-      item.unequip();
-      item.drop(this.position, this.player.camera.facingDirection);
-      this._inventory[i] = undefined;
-    }
-
-    this._updatePlayerUIInventory();
-  }
 
   public getActiveItemName(): string {
     const activeItem = this._inventory[this._inventoryActiveSlotIndex];
@@ -577,7 +564,9 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     }
 
     if (input.q) {
-      this.dropActiveInventoryItem();
+      // Weapons are loadout-bound now; dropping them would only litter and
+      // desync the loadout. Point players at the menu instead.
+      this.world?.chatManager?.sendPlayerMessage(this.player, 'Your weapons are part of your loadout - change them via the LOADOUT menu.', 'FFAA00');
       input.q = false;
     }
 

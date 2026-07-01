@@ -7,45 +7,27 @@ on:
   pull_request:
 
 jobs:
-  game:
-    name: typecheck + tests + build + e2e
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
-      - name: Two-client multiplayer smoke test (wrangler dev + Durable Object)
-        run: npm run e2e
-
-  # Legacy reference stacks (the Node/SDK build the rewrite was ported from).
-  # Kept compiling so the gameplay reference stays usable.
-  reference-server:
-    name: 'reference: zombies-game typecheck'
+  pvp-server:
+    name: highchair-game typecheck + build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
       run:
-        working-directory: zombies-game
+        working-directory: highchair-game
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: zombies-game/package-lock.json
+          cache-dependency-path: highchair-game/package-lock.json
       - run: npm ci
+      # No asset build here: the SDK's model/atlas pipeline needs
+      # KTX-Software (ktx/toktx) which runners don't have installed.
       - run: npm run typecheck
 
-  reference-client:
-    name: 'reference: highchair-client build'
+  pvp-client:
+    name: highchair-client build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:

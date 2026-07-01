@@ -1,86 +1,77 @@
-# Mansion Zombies
+# Mayhem Arena PvP
 
-Browser-native multiplayer zombies shooter. One Cloudflare URL: the page,
-the assets, and the multiplayer rooms all come from a single Cloudflare
-Worker — no Node game server, no proxy, no game-engine SDK in production.
+Local browser PvP shooter using the Highchair runtime and the forked
+Highchair client. This is the active path because the Highchair animation
+engine is part of the game experience.
 
-## Architecture
+The old Cloudflare Worker/Durable Object rewrite is not the active runtime.
+Keep it as reference code only unless the animation engine is replaced.
 
-```
-client (browser)            worker (Cloudflare)
-┌──────────────────┐        ┌─────────────────────────────┐
-│ Three.js renderer│  WS    │ /api/room/:code/ws          │
-│ input → protocol ├───────►│   └► ZombiesRoom (DO)       │
-│ HUD (DOM)        │◄───────┤        ticks sim @ 20Hz     │
-│ prediction       │ snaps  │        broadcasts snapshots │
-└────────┬─────────┘        │ everything else → assets    │
-         │ shared code      └─────────────┬───────────────┘
-         ▼                                ▼
-   ┌──────────┐  pure rules        ┌─────────────┐
-   │   sim/   │◄───────────────────┤  protocol/  │ typed messages
-   └──────────┘                    └─────────────┘
-```
+## Active Stack
 
-- **`sim/`** — the entire game as pure TypeScript: voxel-map collision,
-  player movement, hitscan weapons, zombie/boss AI, waves, economy,
-  downed/revive. No sockets, no renderer, no wall clock, no `Math.random`
-  (seeded RNG). Unit-tested with vitest. The same movement code runs on the
-  server (authority) and in the browser (prediction), so reconciliation
-  converges exactly.
-- **`protocol/`** — typed WebSocket messages and snapshot building.
-  Clients send inputs; they never send game outcomes. All input is
-  validated/clamped at the server boundary.
-- **`worker/`** — the Worker entrypoint plus `ZombiesRoom`, a Durable
-  Object per room code. It accepts WebSockets, applies inputs, ticks the
-  sim at 20Hz while anyone is connected, and broadcasts full snapshots.
-- **`client/`** — Vite + Three.js. Builds the mansion mesh from
-  `terrain.json` with a runtime texture atlas, renders remote entities
-  interpolated ~120ms in the past, predicts the local player, and ports the
-  reference HUD as a DOM overlay.
-- **`assets/`** — terrain, block textures, weapon icons, SFX. Copied into
-  the client build and served as Cloudflare static assets.
+- `highchair-game/` - authoritative Highchair game server, Mayhem arena map,
+  deathmatch round flow, bots, weapons, loadouts, building, damage, ranks.
+- `highchair-client/` - browser client and rendering/animation engine.
+- `highchair-game/assets/maps/mayhem-arena.json` - active PvP world.
+- `highchair-game/assets/maps/mayhem-arena.meta.json` - PvP spawn, item, and
+  chest metadata generated alongside the arena.
+- `scripts/dev-games.sh` - one-command local PvP launcher.
+- `scripts/local-highchair-proxy.mjs` - dev-only HTTP/WS proxy from
+  `127.0.0.1:8083` to the Highchair TLS server on `127.0.0.1:8082`.
 
-## Develop
+## Run Locally
+
+Install package dependencies once:
 
 ```sh
-npm install
-npm run dev        # wrangler dev (worker+DO, :8787) + vite (client, :5173)
-npm test           # sim unit tests
-npm run typecheck  # all four tsconfigs
-npm run e2e        # builds nothing; runs two WS clients against wrangler dev
+npm --prefix highchair-game install
+npm --prefix highchair-client install
 ```
 
-Open `http://localhost:5173` (vite, hot reload, proxies /api to wrangler) or
-`http://localhost:8787` (the real worker serving the built client — run
-`npm run build` first). Two tabs with the same room code join the same room.
-`?countdown=5` shortens the 45s lobby countdown for testing.
-
-## Deploy
+Start PvP:
 
 ```sh
-npm run deploy
+npm run dev
 ```
 
-CI deploys `main` automatically via `.github/workflows/deploy.yml` using the
-`CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` repo secrets.
+Open:
 
-## Reference builds (do not extend)
+```text
+http://localhost:5173/?join=127.0.0.1:8083
+```
 
-The pre-rewrite stacks are kept as gameplay/visual reference only:
+The script starts:
 
-- `zombies-game/` — the original Node + Hytopia-SDK game server. The sim's
-  rules (weapon stats, wave pacing, economy, revive) were ported from here;
-  its `gameConfig.ts` coordinates match `sim/mapConfig.ts`.
-- `highchair-game/`, `highchair-client/` — the SDK arena game and forked
-  SDK client.
-- `scripts/dev-games.sh` — runs the legacy stacks locally.
+- PvP server: `https://127.0.0.1:8082`
+- Local proxy: `http://127.0.0.1:8083`
+- Browser client: `http://localhost:5173`
 
-## Known v1 simplifications
+## Verify
 
-- Enemies chase in a straight line with step-up/jump (no A* pathfinding);
-  they pass through windows and barriers like the original by design.
-- Snapshots are full-state JSON at 20Hz; delta/binary encoding is a later
-  optimization if rooms get big.
-- Entities render as capsules; GLB character/weapon models, animations and
-  the first-person viewmodel are the next visual milestone.
-- A hard cap of 80 live enemies protects the room (the reference had none).
+```sh
+npm run typecheck
+npm run build
+```
+
+`npm run build` builds both `highchair-game` and `highchair-client`.
+
+## Map Pipeline
+
+The current arena was built in two steps:
+
+1. `highchair-game/tools/import-boxman.mjs` imports the Boxman/MineShoot world
+   into `boxman-arena.json` plus metadata.
+2. `highchair-game/tools/build-mayhem.mjs` rebuilds that layout into the
+   textured 9-biome `mayhem-arena.json` used by PvP.
+
+Run the Mayhem generator from `highchair-game/` if the arena source changes:
+
+```sh
+node tools/build-mayhem.mjs
+```
+
+## Archived Reference
+
+The root `client/`, `sim/`, `protocol/`, `worker/`, `e2e/`, and
+`wrangler.jsonc` files are from the Cloudflare-native Zombies experiment. They
+are not the product direction now.
