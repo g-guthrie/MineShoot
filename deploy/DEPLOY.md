@@ -1,10 +1,8 @@
 # Going live — PvP by Greer
 
-Two pieces: the **game server** (Fly.io, ~$5/mo) and the **client**
-(Cloudflare Pages, free). Players open the Pages URL and are in a match —
-no `?join=` needed.
-
-## 1. Game server → Fly.io (one-time setup)
+One platform, one app, one URL. The Fly machine runs the game server and
+serves the client from the same origin — the page a player loads IS the
+server they're playing on, so there is nothing to configure. ~$5/mo.
 
 ```sh
 brew install flyctl        # if needed
@@ -14,28 +12,21 @@ fly launch --copy-config --no-deploy   # accepts fly.toml; pick app name/region
 fly deploy
 ```
 
-The app serves wss at `https://<app-name>.fly.dev` (Fly's edge terminates
-real TLS; inside the VM the plain-http proxy fronts the SDK's self-signed
-server, same architecture as local dev). Redeploy after changes: `fly deploy`.
-
-## 2. Client → Cloudflare Pages (free)
-
-```sh
-cd highchair-client
-VITE_PVP_HOST=<app-name>.fly.dev npm run build
-npx wrangler login         # first time only
-npx wrangler pages deploy dist --project-name pvp-by-greer
-```
-
-The printed `*.pages.dev` URL is the game. Instant join is the default;
-`?menu=1` shows the mode picker (zombies / custom server), and
-`?join=<host>` still overrides everything.
+That's it: `https://<app-name>.fly.dev` is the game. Instant join is the
+default; `?menu=1` shows the mode picker (zombies / custom server) and
+`?join=<host>` overrides the target. Redeploy after changes: `fly deploy`.
 
 ## Notes
 
-- Model/atlas caches are committed, so the server image needs no KTX or
+- Inside the VM: the plain-http proxy (:8083) serves the built client and
+  forwards everything else to the SDK's self-signed server (:8082) — the
+  exact local-dev architecture. Fly's edge provides the real TLS/wss.
+- Model/atlas caches are committed, so the image needs no KTX or
   gltf-transform toolchain — boot is cache-hit only.
-- `min_machines_running = 1` and `auto_stop_machines = false` keep the
-  match alive; don't let Fly scale the game server to zero.
-- Zombies can go live the same way later: second fly app on port 8080's
-  stack + a second proxy route.
+- `min_machines_running = 1` + `auto_stop_machines = false` keep matches
+  alive; don't let Fly scale the game server to zero.
+- Optional later: put the client on a CDN (Cloudflare Pages, free) with
+  `VITE_PVP_HOST=<app-name>.fly.dev npm run build` — only worth it if
+  first-load speed for far-away players starts to matter.
+- Zombies can go live the same way later: a second Fly app running the
+  zombies stack with its own proxy route.

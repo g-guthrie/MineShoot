@@ -9,10 +9,13 @@ const MINIMUM_SUPPORTED_SERVER_VERSION = '0.10.0';
 const DEV_LOCAL_HOSTNAME = '127.0.0.1:8081';
 const SERVER_HEALTH_CHECK_TIMEOUT_MS = 8000;
 
-// Production PvP endpoint: baked at build time (VITE_PVP_HOST=pvp.fly.dev
-// npm run build); local dev proxy otherwise. When no ?join= is present the
-// client joins this instantly — no landing prompt.
-const DEFAULT_PVP_HOSTNAME = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_PVP_HOST || '127.0.0.1:8083';
+// Production PvP endpoint. Single-app deploys serve the client from the
+// game server's own origin, so the page you loaded IS the server — no
+// configuration needed. VITE_PVP_HOST overrides at build time; local dev
+// (vite on :5173) falls back to the dev proxy.
+const DEFAULT_PVP_HOSTNAME =
+  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_PVP_HOST
+  || (isLocalServer(window.location.host) ? '127.0.0.1:8083' : window.location.host);
 
 // Game modes selectable from the landing prompt (?menu=1 only).
 const GAME_MODES = [
