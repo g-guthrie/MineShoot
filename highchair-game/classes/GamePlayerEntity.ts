@@ -10,8 +10,6 @@ import {
   QuaternionLike,
   World,
   PlayerUIEvent,
-  SceneUI,
-  ErrorHandler,
 } from 'highchair';
 
 import GunEntity from './GunEntity';
@@ -20,7 +18,7 @@ import PickaxeEntity from './weapons/PickaxeEntity';
 import ItemFactory from './ItemFactory';
 import { DEFAULT_LOADOUT, GUN_CATALOG, LOADOUT_SLOTS, isCatalogGun } from './GunCatalog';
 import MeleeWeaponEntity from './MeleeWeaponEntity';
-import { BUILD_BLOCK_ID, RANKS, RANK_KILL_EXP, RANK_SAVE_INTERVAL_EXP } from '../gameConfig';
+import { BUILD_BLOCK_ID } from '../gameConfig';
 import GameManager from './GameManager';
 
 const BASE_HEALTH = 100;
@@ -42,6 +40,7 @@ const MAX_HEALTH = 100;
 const MAX_SHIELD = 100;
 const TOTAL_INVENTORY_SLOTS = 6;
 const STARTING_MATERIALS = 30;
+const INFINITE_RESERVE_AMMO = -1;
 
 interface InventoryItem {
   name: string;
@@ -54,10 +53,6 @@ export interface DamageFeedback {
   pelletIndex?: number;
   pelletCount?: number;
   weaponName?: string;
-}
-
-interface PlayerPersistedData extends Record<string, unknown> {
-  totalExp: number
 }
 
 export default class GamePlayerEntity extends DefaultPlayerEntity {
@@ -80,15 +75,11 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   /** Multiplier for step-cadence-vs-speed matching; tune live with /stride. */
   private static _strideTune = 1;
   private _gaitRate = 1;
-  private _lastExpSave: number = 0;
   private _maxHealth: number = MAX_HEALTH;
   private _maxShield: number = MAX_SHIELD;
   private _materials: number = STARTING_MATERIALS;
-  private _rankIndex: number = 0;
-  private _rankSceneUI: SceneUI;
   private _respawnTimer: NodeJS.Timeout | undefined;
   private _shield: number = BASE_SHIELD;
-  private _totalExp: number = 0;
 
   // Player entities always assign a PlayerController to the entity
   public get playerController(): DefaultPlayerEntityController {
@@ -135,15 +126,6 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this.setupPlayerUI();
     this._setupPlayerCamera();
     this._setupPlayerHeadshotCollider();
-    
-    this._rankSceneUI = new SceneUI({
-      attachedToEntity: this,
-      templateId: 'player-rank',
-      state: { iconUri: 'icons/ranks/unranked.png' },
-      viewDistance: 8,
-      offset: { x: 0, y: 1.15, z: 0 },
-    });
-
     this._damageAudio = new Audio({
       attachedToEntity: this,
       uri: 'audio/sfx/player-hurt.mp3',
@@ -166,19 +148,6 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this._outOfWorldTicker();
     this._updatePlayerUIHealth();
     this._updatePlayerUIMaterials();
-
-    this._rankSceneUI.load(world);
-  }
-
-  public addExp(exp: number): void {
-    this._totalExp += exp;
-    this._updatePlayerUIExp();
-
-    // Save the player's data to persisted storage every so often.
-    if (this._totalExp - this._lastExpSave >= RANK_SAVE_INTERVAL_EXP) {
-      this.savePersistedData();
-      this._lastExpSave = this._totalExp;
-    }
   }
 
   public addItemToInventory(item: ItemEntity): void {
@@ -209,7 +178,6 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
 
       if (attacker) {
         GameManager.instance.addKill(attacker.player.username);
-        attacker.addExp(RANK_KILL_EXP);
         this.focusCameraOnPlayer(this); // death cam orbits your own body, not the killer
       }
 
@@ -331,22 +299,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     return this._inventory[this._inventoryActiveSlotIndex] === item;
   }
 
-  public async loadPersistedData(): Promise<void> {
-    if (!this.isSpawned) {
-      return ErrorHandler.error('PlayerEntity not spawned');
-    }
-
-    const data = await this.player.getPersistedData();
-
-    if (data) {
-      const persistedData = data as unknown as PlayerPersistedData;
-
-      this._lastExpSave = persistedData.totalExp;
-      this._totalExp = persistedData.totalExp;
-    }
-
-    this._updatePlayerUIExp();
-  }
+  public async loadPersistedData(): Promise<void> {}
 
   public resetAnimations(): void {
     this.playerController.idleLoopedAnimations = ['idle_lower', 'idle_upper'];
@@ -381,13 +334,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     void this._equipLoadout();
   }
 
-  public savePersistedData(): void {
-    let data: PlayerPersistedData = {
-      totalExp: this._totalExp,
-    };
-
-    this.player.setPersistedData(data);
-  }
+  public savePersistedData(): void {}
 
   public setActiveInventorySlotIndex(index: number): void {
     if (index !== this._inventoryActiveSlotIndex) {
@@ -546,7 +493,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
         if (!this.isSpawned || !this.world) break;
         const item = await ItemFactory.createItem(gunId);
         if (item instanceof GunEntity) {
-          item.setReserveAmmo(9999); // before pickup so the HUD shows it
+          item.setReserveAmmo(INFINITE_RESERVE_AMMO); // before pickup so the HUD shows it
         }
         item.spawn(this.world, this.position);
         item.pickup(this);
@@ -583,12 +530,6 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   public setupPlayerUI(): void {
     this.nametagSceneUI.setViewDistance(8); // lessen view distance so you only see player names when close
     this.player.ui.load('ui/index.html');
-
-    // Load rank data
-    this.player.ui.sendData({
-      type: 'ranks',
-      ranks: RANKS,
-    });
 
     // Handle inventory selection from mobile UI
     this.player.ui.on(PlayerUIEvent.DATA, (payload) => {
@@ -794,11 +735,19 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
 
   private _handleMouseRightClick(): void {
     this.player.input.mr = false;
-    
+
     if (!this.world) return;
 
+    // Scoped guns ADS on right-click (the old two-finger-click scope zoom);
+    // everything else keeps right-click for block building.
+    const activeItem = this._inventory[this._inventoryActiveSlotIndex];
+    if (activeItem instanceof GunEntity && activeItem.hasScope()) {
+      activeItem.zoomScope();
+      return;
+    }
+
     if (this._materials < BLOCK_MATERIAL_COST) {
-      this.world?.chatManager?.sendPlayerMessage(this.player, `You need at least ${BLOCK_MATERIAL_COST} materials to build! Break blocks with your pickaxe to gather materials.`, 'FF0000');
+      this.world?.chatManager?.sendPlayerMessage(this.player, `You need at least ${BLOCK_MATERIAL_COST} materials to build.`, 'FF0000');
       return;
     }
 
@@ -931,24 +880,6 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     });
   }
 
-  private _updatePlayerUIExp(): void {
-    const rankIndex = this._totalExpToRankIndex(this._totalExp);
-
-    if (rankIndex !== this._rankIndex) {
-      this._rankIndex = rankIndex;
-
-      this._rankSceneUI.setState({
-        iconUri: RANKS[this._rankIndex].iconUri,
-      });
-    }
-
-    this.player.ui.sendData({
-      type: 'exp-update',
-      totalExp: this._totalExp,
-      rankIndex,
-    });
-  }
-
   private _playDamageAudio(): void {
     this._damageAudio.setDetune(-200 + Math.random() * 800);
     this._damageAudio.play(this.world!, true);
@@ -982,22 +913,5 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
 
       this._outOfWorldTicker();
     }, 3000);
-  }
-
-  private _totalExpToRankIndex(totalExp: number): number {
-    // Get the rank index for the player's total exp
-    for (let i = 0; i < RANKS.length - 1; i++) {
-      if (totalExp >= RANKS[i].totalExp && totalExp < RANKS[i + 1].totalExp) {
-        return i;
-      }
-    }
-    
-    // If we've reached the highest rank
-    if (totalExp >= RANKS[RANKS.length - 1].totalExp) {
-      return RANKS.length - 1;
-    }
-    
-    // Default to unranked (index 0) if below first rank
-    return 0;
   }
 }

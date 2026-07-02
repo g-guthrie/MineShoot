@@ -17,13 +17,14 @@ import type { ItemEntityOptions } from './ItemEntity';
 export type GunHand = 'left' | 'right' | 'both';
 
 const TRACER_VISIBLE_START_OFFSET = 1;
+const INFINITE_RESERVE_AMMO = -1;
 
 export type GunEntityOptions = {
   ammo: number;              // The amount of ammo in the clip.
   damage: number;            // The damage of the gun.
   fireRate: number;          // Bullets shot per second.
   maxAmmo: number;           // The amount of ammo the clip can hold.
-  totalAmmo: number;         // The amount of ammo remaining for this gun.
+  totalAmmo: number;         // The amount of ammo remaining for this gun. -1 means infinite reserve.
   range: number;             // The max range bullets travel for raycast hits
   reloadAudioUri: string;    // The audio played when reloading
   reloadTimeMs: number;      // Seconds to reload.
@@ -120,13 +121,13 @@ export default abstract class GunEntity extends ItemEntity {
     return this.totalAmmo;
   }
 
-  /** Loadout guns aren't resupplied by pickups, so they carry a deep reserve. */
+  /** Loadout guns aren't resupplied by pickups, so they carry an infinite reserve. */
   public setReserveAmmo(amount: number): void {
     this.totalAmmo = amount;
   }
 
   public reload(): void {
-    if (!this.parent?.world || this._reloading || !this.totalAmmo) return;
+    if (!this.parent?.world || this._reloading || !this._hasReserveAmmo()) return;
     this._startReload();
     this._reloadAudio.play(this.parent.world, true);
 
@@ -167,7 +168,7 @@ export default abstract class GunEntity extends ItemEntity {
   }
 
   protected processShoot(): boolean {
-    if (this.totalAmmo <= 0 || this._reloading) return false;
+    if (!this._hasReserveAmmo() || this._reloading) return false;
 
     const now = performance.now();
     if (this._lastFireTime && now - this._lastFireTime < 1000 / this.fireRate) return false;
@@ -178,7 +179,9 @@ export default abstract class GunEntity extends ItemEntity {
     }
 
     this.ammo--;
-    this.totalAmmo--;
+    if (!this._hasInfiniteReserveAmmo()) {
+      this.totalAmmo--;
+    }
     this._lastFireTime = now;
 
     return true;
@@ -339,11 +342,16 @@ export default abstract class GunEntity extends ItemEntity {
 
   /** Whether the gun has ammo available in the clip or reserves. */
   public hasUsableAmmo(): boolean {
-    return this.ammo > 0 || this.totalAmmo > 0;
+    return this.ammo > 0 || this._hasReserveAmmo();
   }
 
   public getReloadTimeMs(): number {
     return this.reloadTimeMs;
+  }
+
+  /** Whether this gun has a scope (right-click toggles scoped zoom). */
+  public hasScope(): boolean {
+    return this.scopeZoom > 1;
   }
 
   /** Spread cone radius in tangent units (bloom reticle sizing). */
@@ -392,8 +400,16 @@ export default abstract class GunEntity extends ItemEntity {
     // prevent reloads if they swapped active item mid reload.
     if (!this.parent || !(this.parent as GamePlayerEntity).isItemActiveInInventory(this)) return;
 
-    this.ammo = Math.min(this.maxAmmo, this.totalAmmo);
+    this.ammo = this._hasInfiniteReserveAmmo() ? this.maxAmmo : Math.min(this.maxAmmo, this.totalAmmo);
     this.updateAmmoIndicatorUI();
+  }
+
+  private _hasInfiniteReserveAmmo(): boolean {
+    return this.totalAmmo === INFINITE_RESERVE_AMMO;
+  }
+
+  private _hasReserveAmmo(): boolean {
+    return this._hasInfiniteReserveAmmo() || this.totalAmmo > 0;
   }
 
   private _performShootEffects(player: GamePlayerEntity): void {

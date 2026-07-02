@@ -15,7 +15,6 @@ import {
   GAME_DURATION_MS,
   PLAYER_STAND_HEIGHT,
   SPAWN_POINTS,
-  RANK_WIN_EXP,
 } from '../gameConfig';
 
 import GamePlayerEntity from './GamePlayerEntity';
@@ -277,11 +276,6 @@ export default class GameManager {
 
     if (!winningPlayerEntity) return;
 
-    // Give winning player XP for winning
-    if (winningPlayerEntity instanceof GamePlayerEntity) {
-      winningPlayerEntity.addExp(RANK_WIN_EXP);
-    }
-
     this.world.entityManager.getAllPlayerEntities().forEach(playerEntity => {
       if (playerEntity instanceof GamePlayerEntity) {
         if (playerEntity.player.username !== winningPlayer) { // don't change camera for the winner
@@ -317,8 +311,6 @@ export default class GameManager {
     
     this.world.chatManager.sendPlayerMessage(player, 'Game started - most kills wins!', '00FF00');
     this.world.chatManager.sendPlayerMessage(player, '- You spawn with your full loadout: press LOADOUT (top left) to change guns');
-    this.world.chatManager.sendPlayerMessage(player, '- Break blocks with your pickaxe to gain materials');
-    this.world.chatManager.sendPlayerMessage(player, '- Right click to spend 3 materials to place a block');
     this.world.chatManager.sendPlayerMessage(player, '- Some weapons zoom with "Z"');
   }
 

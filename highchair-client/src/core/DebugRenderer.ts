@@ -5,12 +5,13 @@ import { NetworkManagerEventType } from '../network/NetworkManager';
 import type { NetworkManagerEventPayload } from '../network/NetworkManager';
 
 const PLAYER_MODEL_URI = 'models/players/soldier-player.gltf';
-const PLAYER_BODY_HALF_X = 0.55;
-const PLAYER_BODY_HALF_Z = 0.45;
-const PLAYER_BODY_HALF_HEIGHT = 0.8;
-const PLAYER_HEAD_HALF_XZ = 0.36;
-const PLAYER_HEAD_HALF_HEIGHT = 0.33;
-const PLAYER_HEAD_CENTER_OFFSET_Y = 0.8;
+// The head/body split mirrors the server's headshot rule
+// (GunEntity._isHeadshot: head = top 25% of entity height), so what debug
+// mode draws is exactly what the server scores. Boxes are derived from the
+// rendered model bounds — they scale with the character automatically and
+// can never overlap (the body's top IS the head's bottom).
+const PLAYER_HEAD_HEIGHT_FRACTION = 0.25;
+const PLAYER_HEAD_XZ_INSET = 0.28;
 const BODY_BOX_COLOR = new Color(0x58d68d);
 const HEAD_BOX_COLOR = new Color(0xffd34d);
 const ENTITY_BOX_COLOR = new Color(0x6ec6ff);
@@ -122,45 +123,31 @@ export default class DebugRenderer {
     const colors: number[] = [];
     const tempBox = new Box3();
 
+    // Your own hitbox wraps the camera and just obscures the view.
+    const localEntity = this._game.camera.gameCameraAttachedEntity;
+
     for (const entity of this._game.entityManager.getAllEntities()) {
       if (!entity.visible || entity.attached || entity.isEnvironmental) continue;
+      if (entity === localEntity) continue;
 
       if (entity.modelUri?.includes(PLAYER_MODEL_URI)) {
-        const position = entity.getWorldPosition(new Vector3());
-        this._appendBox(
-          positions,
-          colors,
-          tempBox.set(
-            new Vector3(
-              position.x - PLAYER_BODY_HALF_X,
-              position.y - PLAYER_BODY_HALF_HEIGHT,
-              position.z - PLAYER_BODY_HALF_Z
-            ),
-            new Vector3(
-              position.x + PLAYER_BODY_HALF_X,
-              position.y + PLAYER_BODY_HALF_HEIGHT,
-              position.z + PLAYER_BODY_HALF_Z
-            )
-          ),
-          BODY_BOX_COLOR
+        tempBox.setFromObject(entity.entityRoot, true);
+        if (tempBox.isEmpty()) continue;
+
+        const splitY = tempBox.max.y - (tempBox.max.y - tempBox.min.y) * PLAYER_HEAD_HEIGHT_FRACTION;
+        const bodyBox = new Box3(
+          tempBox.min.clone(),
+          new Vector3(tempBox.max.x, splitY, tempBox.max.z)
         );
-        this._appendBox(
-          positions,
-          colors,
-          tempBox.set(
-            new Vector3(
-              position.x - PLAYER_HEAD_HALF_XZ,
-              position.y + PLAYER_HEAD_CENTER_OFFSET_Y - PLAYER_HEAD_HALF_HEIGHT,
-              position.z - PLAYER_HEAD_HALF_XZ
-            ),
-            new Vector3(
-              position.x + PLAYER_HEAD_HALF_XZ,
-              position.y + PLAYER_HEAD_CENTER_OFFSET_Y + PLAYER_HEAD_HALF_HEIGHT,
-              position.z + PLAYER_HEAD_HALF_XZ
-            )
-          ),
-          HEAD_BOX_COLOR
+        this._appendBox(positions, colors, bodyBox, BODY_BOX_COLOR);
+
+        const insetX = (tempBox.max.x - tempBox.min.x) * PLAYER_HEAD_XZ_INSET;
+        const insetZ = (tempBox.max.z - tempBox.min.z) * PLAYER_HEAD_XZ_INSET;
+        const headBox = new Box3(
+          new Vector3(tempBox.min.x + insetX, splitY, tempBox.min.z + insetZ),
+          new Vector3(tempBox.max.x - insetX, tempBox.max.y, tempBox.max.z - insetZ)
         );
+        this._appendBox(positions, colors, headBox, HEAD_BOX_COLOR);
         continue;
       }
 

@@ -51,6 +51,9 @@ const BLEND_MODE_ADDITIVE = 0;
 
 const MAX_UPDATE_SKIP_FRAMES = 4;
 const NEAR_DISTANCE_SQUARED = 16 * 16; // 1 Chunk = 16 Blocks
+const BOXMAN_WORLD_MODEL_URI = 'models/environment/boxman-world.glb';
+const BOXMAN_ENVIRONMENT_SATURATION_MULTIPLIER = 1.18;
+const UNIFORM_BOXMAN_WATER_TIME = 'boxmanWaterTime';
 
 // Working variables
 const vec2 = new Vector2();
@@ -1614,6 +1617,103 @@ export default class Entity {
     });
   }
 
+  private _isBoxmanWorldModel(): boolean {
+    return this._modelUri?.includes(BOXMAN_WORLD_MODEL_URI) === true;
+  }
+
+  private _createBoxmanWorldMaterialProcessor(): (params: WebGLProgramParametersWithUniforms) => void {
+    return (params) => {
+      params.uniforms[UNIFORM_BOXMAN_WATER_TIME] = {
+        get value(): number { return performance.now() * 0.001; },
+      };
+
+      params.vertexShader = params.vertexShader
+        .replace(
+          'void main() {',
+          `
+            varying vec3 vBoxmanWaterWorldPos;
+
+            void main() {
+              vBoxmanWaterWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+          `,
+        );
+
+      params.fragmentShader = params.fragmentShader
+        .replace(
+          'void main() {',
+          `
+            uniform float ${UNIFORM_BOXMAN_WATER_TIME};
+            varying vec3 vBoxmanWaterWorldPos;
+
+            vec3 boxmanSaturate(vec3 rgb, float amount) {
+              float luma = dot(rgb, vec3(0.299, 0.587, 0.114));
+              return clamp(mix(vec3(luma), rgb, amount), 0.0, 1.0);
+            }
+
+            void main() {
+          `,
+        )
+        .replace(
+          '#include <map_fragment>',
+          `
+            #include <map_fragment>
+
+            float boxmanColorMax = max(max(diffuseColor.r, diffuseColor.g), diffuseColor.b);
+            float boxmanColorMin = min(min(diffuseColor.r, diffuseColor.g), diffuseColor.b);
+            float boxmanHasSaturation = step(0.035, boxmanColorMax - boxmanColorMin);
+            float boxmanBrightNeutral = step(0.93, boxmanColorMax) * step(0.72, boxmanColorMin);
+            float boxmanSaturationMask = boxmanHasSaturation * (1.0 - boxmanBrightNeutral);
+            diffuseColor.rgb = mix(
+              diffuseColor.rgb,
+              boxmanSaturate(diffuseColor.rgb, ${BOXMAN_ENVIRONMENT_SATURATION_MULTIPLIER.toFixed(2)}),
+              boxmanSaturationMask
+            );
+
+            bool boxmanJungleWaterfall =
+              abs(vBoxmanWaterWorldPos.x + 75.7) < 0.75 &&
+              vBoxmanWaterWorldPos.z > -13.0 &&
+              vBoxmanWaterWorldPos.z < -4.0 &&
+              vBoxmanWaterWorldPos.y > -1.25 &&
+              vBoxmanWaterWorldPos.y < 24.0;
+            bool boxmanRiverWaterfall =
+              abs(vBoxmanWaterWorldPos.z - 75.8) < 0.75 &&
+              vBoxmanWaterWorldPos.x > -2.75 &&
+              vBoxmanWaterWorldPos.x < 2.75 &&
+              vBoxmanWaterWorldPos.y > 1.5 &&
+              vBoxmanWaterWorldPos.y < 11.0;
+            bool boxmanCoveWaterfall =
+              abs(vBoxmanWaterWorldPos.z + 55.9) < 0.75 &&
+              vBoxmanWaterWorldPos.x > -50.0 &&
+              vBoxmanWaterWorldPos.x < -43.0 &&
+              vBoxmanWaterWorldPos.y > 1.0 &&
+              vBoxmanWaterWorldPos.y < 13.5;
+
+            if (boxmanJungleWaterfall || boxmanRiverWaterfall || boxmanCoveWaterfall) {
+              float boxmanWaterStep = floor(${UNIFORM_BOXMAN_WATER_TIME} / 0.72);
+              float boxmanWaterRow = floor((24.0 - vBoxmanWaterWorldPos.y) / 0.78);
+              float boxmanWaterColumn = floor((vBoxmanWaterWorldPos.x + vBoxmanWaterWorldPos.z) * 1.22);
+              float boxmanWaterOn = 1.0 - step(2.0, mod(boxmanWaterStep - boxmanWaterRow + (boxmanWaterColumn * 2.0), 4.0));
+
+              float boxmanPulse = 0.0;
+              float boxmanPulseCycle = mod(${UNIFORM_BOXMAN_WATER_TIME}, 4.8);
+              if (boxmanPulseCycle < 1.9765625) {
+                float boxmanPulseRow = (boxmanPulseCycle / 1.9765625) * 33.0 - 1.25;
+                float boxmanPulseDist = abs(boxmanWaterRow - boxmanPulseRow + (boxmanWaterColumn * 0.38));
+                boxmanPulse = smoothstep(1.25, 0.0, boxmanPulseDist);
+              }
+
+              vec3 boxmanWaterDark = vec3(0.1529, 0.6157, 1.0);
+              vec3 boxmanWaterLight = vec3(0.5882, 0.9647, 1.0);
+              vec3 boxmanWaterPulse = vec3(0.7843, 1.0, 1.0);
+              vec3 boxmanWaterColor = mix(boxmanWaterDark, boxmanWaterLight, boxmanWaterOn);
+              diffuseColor.rgb = mix(boxmanWaterColor, boxmanWaterPulse, boxmanPulse);
+              diffuseColor.a = clamp(max(diffuseColor.a, 0.50 + (boxmanWaterOn * 0.24) + (boxmanPulse * 0.16)), 0.0, 0.9);
+            }
+          `,
+        );
+    };
+  }
+
   private _hasEmissiveSettings(): boolean {
     return this._emissiveColor !== null ||
            this._emissiveIntensity !== null ||
@@ -2181,7 +2281,7 @@ export default class Entity {
     // If the entity is already invisible due to view distance or not ready for
     // frustum culling, return early.
     // As for child entities, computing their world position is costly, so for now we are avoiding processing them.
-    if (!this.visible || this.attached || this._localBoundingBox === null || this._worldBoundingBox === null) {
+    if (!this.visible || this.attached || this._model === null || this._localBoundingBox === null || this._worldBoundingBox === null) {
       return this.visible;
     }
 
@@ -2705,6 +2805,10 @@ export default class Entity {
         // For performance reasons, two-pass rendering is disabled for DoubleSide materials.
         // It might be worth allowing this to be enabled via a quality-performance tradeoff setting.
         material.forceSinglePass = true;
+
+        if (this._isBoxmanWorldModel()) {
+          material.addShaderProcessor(this._createBoxmanWorldMaterialProcessor());
+        }
 
         this._storeOriginalMaterialData(material);
         material.addShaderProcessor(this._createLightingProcessor());

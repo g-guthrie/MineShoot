@@ -258,6 +258,7 @@ export default class Renderer {
   }
 
   public toggleDebug(): void {
+    (globalThis as Record<string, unknown>).__debugVisible = !this._debugVisible;
     this._debugVisible = !this._debugVisible;
     this._debugPanel.setVisibility(this._debugVisible);
     this._game.debugRenderer?.setVisibility(this._debugVisible);

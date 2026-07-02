@@ -42,13 +42,6 @@
 <!-- Winner Announcement -->
 <div class="winner-announcement"></div>
 
-<!-- Rank Up Announcement -->
-<div class="rank-up-announcement">
-  <div class="rank-up-title">Rank Up!</div>
-  <img src="" alt="Rank Icon" class="rank-up-icon">
-  <div class="rank-up-name"></div>
-</div>
-
 <!-- Leaderboard -->
 <div class="leaderboard">
   <div class="leaderboard-title">Deathmatch</div>
@@ -103,12 +96,6 @@
       <span class="total-ammo">30</span>
     </div>
 
-    <div class="exp-bar">
-      <div class="exp-bar-fill"></div>
-      <img src="{{CDN_ASSETS_URL}}/icons/ranks/unranked.png" alt="Exp Rank Icon" class="exp-icon">
-      <div class="exp-text">Unranked</div>
-    </div>
-
     <div class="health-shield-row">
       <div class="health-bar">
         <div class="health-bar-fill"></div>
@@ -141,11 +128,6 @@
   <div id="mobile-place-block-button" class="mobile-button">
     <img src="{{CDN_ASSETS_URL}}/icons/mobile-place-block.png" />
   </div>
-</div>
-
-<div class="materials-counter">
-  <img src="{{CDN_ASSETS_URL}}/icons/block.png" alt="Materials Icon" class="materials-icon">
-  <span class="materials-amount">0</span>
 </div>
 
 <div class="inventory-hud">
@@ -193,10 +175,6 @@
 </div>
 
 <!-- Scene UI Templates -->
-<template id="player-rank-template">
-  <img src="" alt="Rank Icon" class="player-rank-icon">
-</template>
-
 <template id="item-label-template">
   <div class="item-label">
     <div class="label-quantity"></div>
@@ -209,13 +187,9 @@
 <!-- UI Scripts-->
 <script>
   const CDN_ASSETS_URL = '{{CDN_ASSETS_URL}}';
-  let ranks = [];
-  let lastExp = 0;
-  let lastRank;
   let leaderboardKillCounts = {};
   let gameEndTime = 0;
   let timerInterval;
-  let isLoadExpUpdate = true; // Flag to track the first EXP update
   let localPlayerUsername = '';
   const summaryTopNameEl = document.querySelector('.summary-top-name');
   const summaryTopKillsEl = document.querySelector('.summary-top-kills');
@@ -224,6 +198,13 @@
   const summarySelfNameEl = document.querySelector('.summary-self-name');
   const summarySelfKillsEl = document.querySelector('.summary-self-kills');
 
+  function formatAmmoReserve(totalAmmo) {
+    if (totalAmmo === -1 || totalAmmo === Infinity || totalAmmo >= 9999) {
+      return '∞';
+    }
+    return totalAmmo;
+  }
+
   // Canonical aim anchoring: the server sends the active gun's true angular
   // offset (camera-space tangents measured from the model skeleton by
   // tools/measure-aim-offsets.mjs). The reticle position is re-projected
@@ -231,7 +212,14 @@
   // zoom can never drift the reticle away from where bullets actually go.
   let aimTangentX = 0, aimTangentY = 0;
 
+  let lastDebugVisible = false;
+
   function positionReticles() {
+    const debugNow = Boolean(globalThis.__debugVisible);
+    if (debugNow !== lastDebugVisible) {
+      lastDebugVisible = debugNow;
+      updateReticleSize();
+    }
     const cam = globalThis.__camera?.();
     if (cam?.projectionMatrix) {
       const e = cam.projectionMatrix.elements;
@@ -455,38 +443,6 @@
     }, 5000);
   }
 
-  function showRankUpAnnouncement(rank) {
-    const announcement = document.querySelector('.rank-up-announcement');
-    const rankIcon = announcement.querySelector('.rank-up-icon');
-    const rankName = announcement.querySelector('.rank-up-name');
-
-    rankIcon.src = `${CDN_ASSETS_URL}/${rank.iconUri}`;
-    rankName.textContent = rank.name;
-
-    announcement.classList.add('active');
-
-    // Remove the active class after animation completes (e.g., 5 seconds)
-    setTimeout(() => {
-      announcement.classList.remove('active');
-    }, 5000);
-  }
-
-  function showExpGainIndicator(amount) {
-    const expBar = document.querySelector('.exp-bar');
-    if (!expBar) return;
-
-    const indicator = document.createElement('div');
-    indicator.className = 'exp-gain-indicator';
-    indicator.textContent = `+${amount} Exp`;
-
-    expBar.appendChild(indicator);
-
-    // Remove after animation completes
-    setTimeout(() => {
-      indicator.remove();
-    }, 1500); // Match animation duration
-  }
-
   // ---- reticle (old MineShoot bloom system) ----
   let reticleSpread = 0, reticlePellets = 1;
 
@@ -496,11 +452,16 @@
     const ring = document.getElementById('shotgun-reticle');
     if (!cross || !bloom || !ring) return;
     const shotgun = reticlePellets >= 6;
-    // radius px = spread x (viewport height / 2) -> diameter = spread x height
+    // Canonical bloom: the same spread value the server scatters shots with
+    // sizes this circle (diameter = spread x viewport height), so tuning a
+    // gun's spread updates the debug circle automatically. The circle is the
+    // guaranteed-hit cone, shown in debug mode (H); the shotgun ring is that
+    // gun's reticle and always shows.
+    const debug = Boolean(globalThis.__debugVisible);
     const bloomPx = Math.round(reticleSpread * window.innerHeight);
     cross.style.display = shotgun ? 'none' : 'block';
     ring.style.display = shotgun ? 'block' : 'none';
-    bloom.style.display = !shotgun && bloomPx > 3 ? 'block' : 'none';
+    bloom.style.display = debug && !shotgun && bloomPx > 3 ? 'block' : 'none';
     if (shotgun) {
       ring.style.width = ring.style.height = bloomPx + 'px';
     } else {
@@ -599,20 +560,6 @@
     return clone;
   });
 
-  highchair.registerSceneUITemplate('player-rank', (id, onState) => {
-    const template = document.getElementById('player-rank-template');
-    const clone = template.content.cloneNode(true);
-    const playerRankIcon = clone.querySelector('.player-rank-icon');
-
-    onState(state => {
-      if (state.iconUri) {
-        playerRankIcon.src = `${CDN_ASSETS_URL}/${state.iconUri}`;
-      }
-    });
-
-    return clone;
-  });
-
   highchair.onData(data => {
     const { type } = data;
 
@@ -656,7 +603,7 @@
 
       if (totalAmmo !== undefined) {
         const totalAmmoElement = document.querySelector('.total-ammo');
-        totalAmmoElement.textContent = totalAmmo;
+        totalAmmoElement.textContent = formatAmmoReserve(totalAmmo);
       }
     }
 
@@ -696,37 +643,7 @@
     }
 
     if (type === 'exp-update') {
-      const { totalExp, rankIndex } = data;
-      const currentRank = ranks[rankIndex];
-      const nextRank = ranks[rankIndex + 1];
-      let gainedExp = 0;
-
-      // Calculate gained exp only after the first update, which is for loading existing exp
-      if (!isLoadExpUpdate) {
-        gainedExp = totalExp - lastExp;
-      } else {
-        isLoadExpUpdate = false; // Mark load update as done
-      }
-
-      if (lastRank && lastRank.name !== currentRank.name && totalExp > 0) {
-        showRankUpAnnouncement(currentRank);
-      }
-
-      // Show the gained exp number if positive
-      if (gainedExp > 0) {
-        showExpGainIndicator(gainedExp);
-      }
-
-      const expBarFill = document.querySelector('.exp-bar-fill');
-      const expBarText = document.querySelector('.exp-text');
-      const expRankIcon = document.querySelector('.exp-icon');
-
-      expBarFill.style.width = `${((totalExp - currentRank.totalExp) / (nextRank.totalExp - currentRank.totalExp)) * 100}%`;
-      expBarText.textContent = currentRank.name;
-      expRankIcon.src = `${CDN_ASSETS_URL}/${currentRank.iconUri}`;
-
-      lastExp = totalExp;
-      lastRank = currentRank;
+      return;
     }
 
     if (type === 'tracer') {
@@ -770,7 +687,7 @@
 
         icon.style.display = item ? 'block' : 'none';
         name.style.display = item ? 'block' : 'none';
-        quantity.style.display = item ? 'block' : 'none';
+        quantity.style.display = 'none';
 
         if (!item) {
           return;
@@ -778,7 +695,7 @@
 
         icon.src = `${CDN_ASSETS_URL}/${item.iconImageUri}`;
         name.textContent = item.name;
-        quantity.textContent = item.quantity !== -1 ? item.quantity : '∞';
+        quantity.textContent = '';
       });
     }
 
@@ -798,12 +715,13 @@
     }
 
     if (type === 'inventory-quantity-update') {
-      const { index, quantity } = data;
+      const { index } = data;
 
       const slot = document.querySelector(`.inventory-slot[data-slot="${index}"]`);
       const quantityElement = slot.querySelector('.slot-quantity');
 
-      quantityElement.textContent = quantity;
+      quantityElement.textContent = '';
+      quantityElement.style.display = 'none';
     }
 
     if (type === 'leaderboard-sync') {
@@ -833,29 +751,11 @@
     }
 
     if (type === 'materials') {
-      const { materials } = data;
-      const materialsAmount = document.querySelector('.materials-amount');
-      const currentMaterials = parseInt(materialsAmount.textContent);
-      const difference = materials - currentMaterials;
-
-      if (difference !== 0) {
-        const materialsCounter = document.querySelector('.materials-counter');
-        const floatingNumber = document.createElement('div');
-        floatingNumber.className = 'floating-number';
-        floatingNumber.textContent = difference > 0 ? `+${difference}` : difference;
-        materialsCounter.appendChild(floatingNumber);
-
-        // Remove the element after animation completes
-        setTimeout(() => {
-          floatingNumber.remove();
-        }, 1000);
-      }
-
-      materialsAmount.textContent = materials;
+      return;
     }
 
     if (type === 'ranks') {
-      ranks = data.ranks;
+      return;
     }
 
     if (type === 'shield') {
@@ -1092,53 +992,6 @@
     animation: winnerFade 5s ease-in-out forwards;
   }
 
-  #ui-container .rank-up-announcement {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    opacity: 0;
-    pointer-events: none;
-    z-index: 1001;
-    font-family: 'Inter', sans-serif;
-    color: white;
-    text-align: center;
-    text-shadow: 0 0 10px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5);
-  }
-
-  .rank-up-announcement.active {
-    animation: rankUpFade 5s ease-in-out forwards;
-  }
-
-  .rank-up-title {
-    font-size: 60px;
-    font-weight: bold;
-    color: #4CAF50; /* Green color for rank up */
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    margin-bottom: 20px;
-  }
-
-  .rank-up-icon {
-    width: 150px;
-    height: 150px;
-    margin-bottom: 20px;
-    filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.5));
-  }
-
-  .rank-up-name {
-    font-size: 40px;
-    font-weight: bold;
-    color: #FFEB3B; /* Yellow color for rank name */
-    text-transform: uppercase;
-    letter-spacing: 1px;
-  }
-
   @keyframes announcementFade {
     0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
     20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
@@ -1153,13 +1006,6 @@
     60% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
     80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
     100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-  }
-
-  @keyframes rankUpFade {
-    0% { opacity: 0; transform: scale(0.7); }
-    20% { opacity: 1; transform: scale(1.1); }
-    80% { opacity: 1; transform: scale(1); }
-    100% { opacity: 0; transform: scale(0.9); }
   }
 
   #ui-container .hit-damage-container {
@@ -1259,21 +1105,8 @@
     }
   }
 
-  .materials-counter {
-    position: fixed;
-    bottom: 120px;
-    right: 20px;
-    background: rgba(0, 0, 0, 0.5);
-    padding: 8px 15px;
-    border-radius: 5px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-family: 'Inter', sans-serif;
-    color: #ffffff;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  .slot-quantity {
+    display: none !important;
   }
 
   #ui-container .floating-number {
@@ -1295,17 +1128,6 @@
       opacity: 0;
       transform: translateY(-50px);
     }
-  }
-
-  .materials-icon {
-    width: 20px;
-    height: 20px;
-    object-fit: contain;
-  }
-
-  .materials-amount {
-    font-size: 16px;
-    font-weight: bold;
   }
 
   .hud {
@@ -1508,75 +1330,6 @@
     z-index: 1;
   }
 
-  .exp-bar {
-    width: 250px;
-    height: 20px;
-    background: rgba(0, 0, 0, 0.5);
-    border-radius: 3px;
-    box-shadow: 0 0 10px rgba(230, 190, 40, 0.3);
-    position: relative; /* Needed for absolute positioning of children */
-    text-align: center;
-  }
-
-  .exp-bar-fill {
-    width: 0%;
-    height: 100%;
-    border-radius: 3px;
-    background: linear-gradient(to right, #e6be28, #f0cc40);
-    transition: width 0.3s ease;
-  }
-
-  .exp-icon {
-    position: absolute;
-    left: -5px;
-    top: 80%;
-    transform: translateY(-80%);
-    height: 60px;
-    width: 60px;
-    z-index: 1;
-  }
-
-  .exp-text {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 0.8em;
-    font-weight: bold;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
-    z-index: 1;
-  }
-
-  #ui-container .exp-gain-indicator {
-    position: absolute;
-    z-index: 9999;
-    bottom: 100%; /* Start just above the bar */
-    left: 50%;
-    transform: translateX(-50%);
-    color: #e6be28; /* Match EXP bar color */
-    font-family: 'Inter', sans-serif;
-    font-size: 14px;
-    font-weight: bold;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
-    pointer-events: none;
-    white-space: nowrap;
-    animation: expGainFadeUp 1.5s ease-out forwards;
-  }
-
-  @keyframes expGainFadeUp {
-    0% {
-      opacity: 0;
-      transform: translate(-50%, 10px); /* Start slightly lower and faded out */
-    }
-    20% {
-      opacity: 1;
-    }
-    100% {
-      opacity: 0;
-      transform: translate(-50%, -30px); /* Move up and fade out */
-    }
-  }
-
   .item-label {
     background-color: rgba(0, 0, 0, 0.6);
     padding: 12px 20px;
@@ -1631,11 +1384,6 @@
     border-top: 8px solid rgba(0, 0, 0, 0.6);
   }
 
-  .player-rank-icon {
-    width: 48px;
-    height: 48px;
-  }
-
   #ui-container .scope-overlay {
     position: fixed;
     top: 0;
@@ -1646,7 +1394,7 @@
     z-index: 99;
     object-fit: cover;
     opacity: 0;
-    transition: opacity 0.3s ease;
+    transition: opacity 0.2s ease;
   }
 
   .scope-overlay.active {
@@ -1920,16 +1668,6 @@
     font-size: 10px;
   }
 
-  body.mobile .exp-bar {
-    width: 160px;
-    height: 16px;
-    margin-bottom: 8px;
-  }
-
-  body.mobile .exp-text {
-    font-size: 0.7em;
-  }
-
   body.mobile .shield-bar,
   body.mobile .health-bar {
     width: 120px;
@@ -2003,24 +1741,8 @@
     font-size: 10px;
   }
 
-  body.mobile .materials-amount {
-    font-size: 14px;
-  }
-
-  body.mobile .materials-counter {
-    left: 24px;
-    bottom: 90px;
-    top: auto;
-    right: auto;
-    font-size: 10px;
-  }
-
   body.mobile .floating-number {
     font-size: 14px;
-  }
-
-  body.mobile .exp-gain-indicator {
-    font-size: 12px;
   }
 
   body.mobile div > canvas { /* hide three debugger panels */
@@ -2119,19 +1841,6 @@
     height: 58px;
     bottom: 80px;
     right: 95px;
-  }
-
-  body.mobile .rank-up-title {
-    font-size: 40px;
-  }
-
-  body.mobile .rank-up-icon {
-    width: 100px;
-    height: 100px;
-  }
-
-  body.mobile .rank-up-name {
-    font-size: 30px;
   }
 
   /* ---- loadout menu ---- */
