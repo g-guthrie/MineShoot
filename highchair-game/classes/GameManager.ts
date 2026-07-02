@@ -9,11 +9,9 @@ import {
   RigidBodyType,
 } from 'highchair';
 
-import worldMap from '../assets/maps/boxman-shell.json' with { type: 'json' };
 import worldColliders from '../assets/maps/boxman-world.colliders.json' with { type: 'json' };
 
 import {
-  BEDROCK_BLOCK_ID,
   GAME_DURATION_MS,
   SPAWN_POINTS,
   RANK_WIN_EXP,
@@ -22,9 +20,6 @@ import {
 import GamePlayerEntity from './GamePlayerEntity';
 import ItemFactory from './ItemFactory';
 import BotPlayerEntity from './BotPlayerEntity';
-
-// Mesh-world vertical offset above the bedrock shell floor.
-const WORLD_MESH_LIFT = 2;
 
 export default class GameManager {
   public static readonly instance = new GameManager();
@@ -50,7 +45,6 @@ export default class GameManager {
    */
   public setupGame(world: World) {
     this.world = world;
-    this._spawnBedrock(world);
     this._waitForPlayersToStart();
     BotPlayerEntity.setWorldActive(world, false);
   }
@@ -202,9 +196,7 @@ export default class GameManager {
     if (!this.world) return;
 
     // Reset map to initial state
-    this.world.loadMap(worldMap);
     this._spawnWorldMesh(this.world);
-    this._spawnBedrock(this.world);
 
     // Reset player state
     this.world.entityManager.getAllPlayerEntities().forEach(playerEntity => {
@@ -361,7 +353,7 @@ export default class GameManager {
       return {
         shape: ColliderShape.BLOCK,
         halfExtents: { x: c.hx, y: c.hy, z: c.hz },
-        relativePosition: { x: c.x, y: c.y - WORLD_MESH_LIFT, z: c.z },
+        relativePosition: { x: c.x, y: c.y, z: c.z },
         relativeRotation: { x: sx * cy, y: cx * sy, z: -sx * sy, w: cx * cy },
       };
     });
@@ -374,18 +366,16 @@ export default class GameManager {
         colliders,
       },
     });
-    // The lift raises the mesh's ground slabs above the bedrock shell floor
-    // so recessed features (lagoon, quarry pit, river) stay visible instead
-    // of being swallowed by the voxel safety floor at y=0.
-    this._worldMesh.spawn(world, { x: 0, y: WORLD_MESH_LIFT, z: 0 });
-  }
-
-  private _spawnBedrock(world: World) {
-    // Bounds cover the imported boxman arena (tools/import-boxman.mjs).
-    for (let x = -84; x <= 84; x++) {
-      for (let z = -84; z <= 84; z++) {
-        world.chunkLattice.setBlock({ x, y: -1, z }, BEDROCK_BLOCK_ID);
-      }
+    // The world is authored around y=0: ground-slab tops are the zero
+    // plane, recessed features (lagoon, quarry pit, river) dip below it.
+    this._worldMesh.spawn(world, { x: 0, y: 0, z: 0 });
+    if (process.env.WORLD_PROBE) {
+      setTimeout(() => {
+        for (const [px, pz] of [[0, 0], [-40, -40], [30, 30], [22, 22]]) {
+          const hit = world.simulation.raycast({ x: px, y: 30, z: pz }, { x: 0, y: -1, z: 0 }, 60);
+          console.info('[ray]', px, pz, '->', hit ? `hit y=${hit.hitPoint?.y ?? '?'} entity=${hit.hitEntity?.name ?? 'none'}` : 'NO HIT');
+        }
+      }, 8000);
     }
   }
 

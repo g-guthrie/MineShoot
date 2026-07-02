@@ -234,7 +234,7 @@ fs.writeFileSync(OUT, out);
 
 // Solid cuboids as physics colliders, in final world coordinates (the mesh
 // entity spawns at y+2 over the bedrock shell; see GameManager).
-const WORLD_MESH_LIFT = 2;
+const WORLD_MESH_LIFT = 0; // world sits at zero: ground-slab tops are the y=0 plane
 const colliders = entries
   .filter(e => e.solid && e.opacity >= 0.5)
   .map(e => ({
