@@ -381,9 +381,15 @@ export default class GameManager {
         this._syncBots();
         let n = 0;
         const timer = setInterval(() => {
-          const who = world.entityManager.getAllPlayerEntities()[0];
-          const p = who?.isSpawned ? who.position : null;
-          console.info('[player-probe]', p ? `y=${p.y.toFixed(3)} vel=${who.linearVelocity.y.toFixed(2)} grounded=${who instanceof GamePlayerEntity ? who.playerController.isGrounded : '?'}` : 'no player');
+          const who = world.entityManager
+            .getAllPlayerEntities()
+            .find(entity => entity instanceof GamePlayerEntity) as GamePlayerEntity | undefined;
+          if (who?.isSpawned) {
+            const p = who.position;
+            console.info('[player-probe]', `y=${p.y.toFixed(3)} vel=${who.linearVelocity.y.toFixed(2)} grounded=${who.playerController.isGrounded}`);
+          } else {
+            console.info('[player-probe]', 'no player');
+          }
           if (++n >= 8) clearInterval(timer);
         }, 2000);
       }, 8000);

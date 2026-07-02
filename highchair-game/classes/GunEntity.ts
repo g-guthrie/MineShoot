@@ -8,6 +8,7 @@ import {
 } from 'highchair';
 
 import GamePlayerEntity from './GamePlayerEntity';
+import type { DamageFeedback } from './GamePlayerEntity';
 import ItemEntity from './ItemEntity';
 import TerrainDamageManager from './TerrainDamageManager';
 import type { ItemEntityOptions } from './ItemEntity';
@@ -136,7 +137,7 @@ export default abstract class GunEntity extends ItemEntity {
     
     this._performShootEffects(player);
     for (let i = 0; i < this.pellets; i++) {
-      this.shootRaycast(origin, this._spreadDirection(direction), this.range);
+      this.shootRaycast(origin, this._spreadDirection(direction), this.range, i, this.pellets);
     }
     this._updateUI(player);
   }
@@ -220,7 +221,7 @@ export default abstract class GunEntity extends ItemEntity {
     return 1 - (1 - minScalar) * ((distance - start) / (end - start));
   }
 
-  protected shootRaycast(origin: Vector3Like, direction: Vector3Like, length: number): void {
+  protected shootRaycast(origin: Vector3Like, direction: Vector3Like, length: number, pelletIndex: number = 0, pelletCount: number = 1): void {
     if (!this.parent?.world) return;
 
     const { world } = this.parent;
@@ -240,7 +241,11 @@ export default abstract class GunEntity extends ItemEntity {
     }
 
     if (raycastHit.hitEntity) {
-      this._handleHitEntity(raycastHit.hitEntity, direction, damage);
+      this._handleHitEntity(raycastHit.hitEntity, direction, damage, raycastHit.hitPoint, {
+        pelletIndex,
+        pelletCount,
+        weaponName: this.name,
+      });
     }
   }
 
@@ -325,13 +330,31 @@ export default abstract class GunEntity extends ItemEntity {
     this.updateAmmoIndicatorUI();
   }
 
-  protected _handleHitEntity(hitEntity: Entity, hitDirection: Vector3Like, damage: number = this.damage): void {
+  protected _handleHitEntity(
+    hitEntity: Entity,
+    hitDirection: Vector3Like,
+    damage: number = this.damage,
+    hitPoint?: Vector3Like,
+    feedback: DamageFeedback = {},
+  ): void {
     if (!(hitEntity instanceof GamePlayerEntity) || hitEntity.isDead) return;
 
     const attacker = this.parent as GamePlayerEntity;
+    const headshot = this._isHeadshot(hitEntity, hitPoint);
 
-    attacker.dealtDamage(damage);
+    attacker.dealtDamage(damage, {
+      ...feedback,
+      headshot,
+    });
     hitEntity.takeDamage(damage, hitDirection, attacker);
+  }
+
+  private _isHeadshot(hitEntity: GamePlayerEntity, hitPoint?: Vector3Like): boolean {
+    if (!hitPoint) return false;
+
+    const relativeY = hitPoint.y - hitEntity.position.y;
+    const headBaseY = hitEntity.height * 0.25;
+    return relativeY >= headBaseY;
   }
 
   public updateAmmoIndicatorUI(reloading: boolean = false): void {

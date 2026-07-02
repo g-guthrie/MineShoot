@@ -25,6 +25,12 @@
 </div>
 
 <div class="hit-damage-container"></div>
+<div class="hitmarker" aria-hidden="true">
+  <span></span>
+  <span></span>
+  <span></span>
+  <span></span>
+</div>
 
 <img src="{{CDN_ASSETS_URL}}/ui/images/scope.png" class="scope-overlay">
 
@@ -459,6 +465,58 @@
     }, 1500); // Match animation duration
   }
 
+  let hitmarkerTimer;
+
+  function showHitmarker(headshot) {
+    const hitmarker = document.querySelector('.hitmarker');
+    if (!hitmarker) return;
+
+    hitmarker.classList.remove('active', 'headshot');
+    hitmarker.offsetHeight;
+    if (headshot) hitmarker.classList.add('headshot');
+    hitmarker.classList.add('active');
+
+    clearTimeout(hitmarkerTimer);
+    hitmarkerTimer = setTimeout(() => {
+      hitmarker.classList.remove('active', 'headshot');
+    }, 130);
+  }
+
+  function showDamageNumber(data) {
+    const container = document.querySelector('.hit-damage-container');
+    if (!container) return;
+
+    const damage = Math.max(0, Number(data.damage) || 0);
+    const pelletCount = Math.max(1, Number(data.pelletCount) || 1);
+    const pelletIndex = Math.max(0, Number(data.pelletIndex) || 0);
+    const headshot = Boolean(data.headshot);
+    const isPelletCloud = pelletCount > 1;
+    const angle = isPelletCloud
+      ? (pelletIndex / pelletCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.45
+      : Math.random() * Math.PI * 2;
+    const radius = isPelletCloud
+      ? 34 + Math.random() * 78
+      : 12 + Math.random() * 58;
+    const startX = Math.cos(angle) * radius;
+    const startY = Math.sin(angle) * radius * 0.62 - (isPelletCloud ? 8 : 20);
+    const driftX = startX + (Math.random() - 0.5) * (isPelletCloud ? 34 : 60);
+    const driftY = startY - (52 + Math.random() * 36);
+
+    const damageNumber = document.createElement('div');
+    damageNumber.className = `hit-damage-number${headshot ? ' headshot' : ''}${isPelletCloud ? ' pellet' : ''}`;
+    damageNumber.textContent = damage;
+    damageNumber.style.setProperty('--start-x', `${startX.toFixed(1)}px`);
+    damageNumber.style.setProperty('--start-y', `${startY.toFixed(1)}px`);
+    damageNumber.style.setProperty('--drift-x', `${driftX.toFixed(1)}px`);
+    damageNumber.style.setProperty('--drift-y', `${driftY.toFixed(1)}px`);
+
+    container.appendChild(damageNumber);
+
+    setTimeout(() => {
+      damageNumber.remove();
+    }, 760);
+  }
+
   highchair.registerSceneUITemplate('item-label', (id, onState) => {
     const template = document.getElementById('item-label-template');
     const clone = template.content.cloneNode(true);
@@ -614,27 +672,8 @@
     }
 
     if (type === 'show-damage') {
-      const { damage } = data;
-
-      // Create a new damage number element
-      const damageNumber = document.createElement('div');
-      damageNumber.className = 'hit-damage-number';
-      damageNumber.textContent = damage;
-
-      // Add some randomness to position
-      const randomX = Math.random() * 60 - 30; // -30 to 30px
-      const randomY = Math.random() * 40 - 20; // -20 to 20px
-
-      damageNumber.style.transform = `translate(${randomX}px, ${randomY}px)`;
-
-      // Add to container
-      const container = document.querySelector('.hit-damage-container');
-      container.appendChild(damageNumber);
-
-      // Remove after animation completes
-      setTimeout(() => {
-        damageNumber.remove();
-      }, 500);
+      showHitmarker(Boolean(data.headshot));
+      showDamageNumber(data);
     }
 
     if (type === 'health') {
@@ -995,36 +1034,105 @@
     left: 50%;
     transform: translate(-50%, -50%);
     pointer-events: none;
-    z-index: 100;
-    width: 100px;
-    height: 100px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    z-index: 1002;
+    width: 1px;
+    height: 1px;
+    overflow: visible;
+  }
+
+  #ui-container .hitmarker {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 48px;
+    height: 48px;
+    transform: translate(-50%, -50%) scale(0.82);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 1003;
+  }
+
+  .hitmarker span {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 14px;
+    height: 3px;
+    border-radius: 2px;
+    background: #ffffff;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.85);
+    transform-origin: center;
+  }
+
+  .hitmarker span:nth-child(1) { transform: translate(-23px, -11px) rotate(45deg); }
+  .hitmarker span:nth-child(2) { transform: translate(9px, -11px) rotate(-45deg); }
+  .hitmarker span:nth-child(3) { transform: translate(-23px, 9px) rotate(-45deg); }
+  .hitmarker span:nth-child(4) { transform: translate(9px, 9px) rotate(45deg); }
+
+  .hitmarker.active {
+    animation: hitmarkerFlash 130ms ease-out forwards;
+  }
+
+  .hitmarker.headshot span {
+    animation: headshotGold 130ms ease-out forwards;
+    box-shadow: 0 0 7px rgba(255, 211, 77, 0.85), 0 0 5px rgba(0, 0, 0, 0.9);
   }
 
   .hit-damage-number {
-    color: white;
+    --start-x: 0px;
+    --start-y: 0px;
+    --drift-x: 0px;
+    --drift-y: -70px;
+    color: #ffffff;
     font-family: 'Inter', sans-serif;
-    font-size: 18px;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
-    animation: damagePopup 0.5s ease-out forwards;
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1;
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.9), 0 0 6px rgba(0, 0, 0, 0.75);
+    animation: damagePopup 760ms cubic-bezier(0.12, 0.72, 0.18, 1) forwards;
     position: absolute;
+    left: 50%;
+    top: 50%;
+    min-width: 24px;
+    text-align: center;
+    will-change: transform, opacity;
+  }
+
+  .hit-damage-number.headshot {
+    color: #ffd34d;
+    font-size: 26px;
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.95), 0 0 10px rgba(255, 211, 77, 0.75);
+  }
+
+  .hit-damage-number.pellet {
+    font-size: 18px;
   }
 
   @keyframes damagePopup {
     0% {
       opacity: 0;
-      transform: scale(0.5) translateY(0);
+      transform: translate(-50%, -50%) translate(var(--start-x), var(--start-y)) scale(0.64);
     }
-    20% {
+    18% {
       opacity: 1;
-      transform: scale(1.2) translateY(0);
+      transform: translate(-50%, -50%) translate(var(--start-x), var(--start-y)) scale(1.18);
     }
     100% {
       opacity: 0;
-      transform: scale(1) translateY(-50px);
+      transform: translate(-50%, -50%) translate(var(--drift-x), var(--drift-y)) scale(1);
     }
+  }
+
+  @keyframes hitmarkerFlash {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.76); }
+    30% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
+  }
+
+  @keyframes headshotGold {
+    0% { background: #ffffff; }
+    35% { background: #ffffff; }
+    100% { background: #ffd34d; }
   }
 
   .materials-counter {

@@ -208,6 +208,7 @@ export default class Renderer {
   }
 
   public get ambientLight(): AmbientLightData { return this._ambientLight; }
+  public get isDebugVisible(): boolean { return this._debugVisible; }
   public get viewDistance(): number { return Math.min(this._game.settingsManager.qualityPerfTradeoff.viewDistance.distance, this._fogFar); }
   public get webGLRenderer(): WebGLRenderer { return this._renderer; }
 
@@ -252,6 +253,7 @@ export default class Renderer {
   public toggleDebug(): void {
     this._debugVisible = !this._debugVisible;
     this._debugPanel.setVisibility(this._debugVisible);
+    this._game.debugRenderer?.setVisibility(this._debugVisible);
   }
 
   private _animate = (): void => {
@@ -325,6 +327,7 @@ export default class Renderer {
     }
     this._renderScreenOverlays();
 
+    this._game.debugRenderer?.update();
     this._debugPanel.update();
   }
 
@@ -490,7 +493,7 @@ export default class Renderer {
   }
 
   private _onKeyDown = (event: KeyboardEvent): void => {
-    if (event.key === '`' || event.key === 'F3') {
+    if (event.key === '`' || event.key === 'F3' || event.key.toLowerCase() === 'h') {
       this.toggleDebug();
     }
   }

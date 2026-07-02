@@ -287,4 +287,7 @@ export const RANKS = [
 // Measured: a player capsule rests with its center 0.757 above the floor.
 export const PLAYER_STAND_HEIGHT = 0.8;
 
-export const SPAWN_POINTS = arenaMeta.spawnPoints;
+export const SPAWN_POINTS = arenaMeta.spawnPoints.map(point => ({
+  ...point,
+  y: point.y + PLAYER_STAND_HEIGHT,
+}));

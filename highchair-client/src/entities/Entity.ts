@@ -2047,6 +2047,10 @@ export default class Entity {
     if (this._attached) {
       // Reset root position to 0,0,0 so that when attached to parent, the pivot point is correct.
       model.position.set(0, 0, 0);
+    } else if (this._modelUri?.includes('models/environment/boxman-world.glb')) {
+      // The Boxman world GLB is baked in world coordinates and has matching
+      // server colliders. Centering it would visually detach terrain from physics.
+      model.position.set(0, 0, 0);
     } else {
       // TODO: Allow static type checking
       const modelCenter = model.userData.modelCenter as Vector3;

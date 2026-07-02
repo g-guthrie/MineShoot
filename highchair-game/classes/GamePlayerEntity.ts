@@ -39,6 +39,13 @@ interface InventoryItem {
   quantity: number;
 }
 
+export interface DamageFeedback {
+  headshot?: boolean;
+  pelletIndex?: number;
+  pelletCount?: number;
+  weaponName?: string;
+}
+
 interface PlayerPersistedData extends Record<string, unknown> {
   totalExp: number
 }
@@ -220,10 +227,14 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this.player.camera.setViewModelHiddenNodes([]);
   }
 
-  public dealtDamage(damage: number): void {
+  public dealtDamage(damage: number, feedback: DamageFeedback = {}): void {
     this.player.ui.sendData({
       type: 'show-damage',
       damage,
+      headshot: Boolean(feedback.headshot),
+      pelletIndex: feedback.pelletIndex ?? 0,
+      pelletCount: feedback.pelletCount ?? 1,
+      weaponName: feedback.weaponName ?? '',
     });
   }
   

@@ -68,6 +68,10 @@ export default class EntityManager {
     return this._entities.get(id);
   }
 
+  public getAllEntities(): ReadonlyArray<Entity | StaticEntity> {
+    return [...this._entities.values()];
+  }
+
   // TODO: O(1) operation
   public findEntityByName(name: string): Entity | StaticEntity | undefined {
     for (const entity of this._entities.values()) {
