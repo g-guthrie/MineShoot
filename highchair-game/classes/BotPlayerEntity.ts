@@ -202,8 +202,8 @@ class BotStubPlayer extends EventRouter {
 export default class BotPlayerEntity extends GamePlayerEntity {
   private static readonly _botsByWorld: Map<number, Set<BotPlayerEntity>> = new Map();
   private static readonly _activeWorlds: Set<number> = new Set();
-  private static readonly _maxBots = 3;
-  private static readonly _humanPlayersBeforeBotRemoval = 5;
+  private static readonly _defaultMaxBots = 3;
+  private static readonly _defaultHumanPlayersBeforeBotRemoval = 5;
 
   public static ensureForWorld(world: World): void {
     const bots = this._botsByWorld.get(world.id) ?? new Set<BotPlayerEntity>();
@@ -217,8 +217,13 @@ export default class BotPlayerEntity extends GamePlayerEntity {
       .filter(entity => !(entity instanceof BotPlayerEntity))
       .length;
 
-    const playersAboveThreshold = Math.max(0, humanPlayers - this._humanPlayersBeforeBotRemoval);
-    const desiredBots = Math.max(0, Math.min(this._maxBots, this._maxBots - playersAboveThreshold));
+    const maxBots = this._envInt('PVP_BOT_COUNT', this._defaultMaxBots);
+    const humanPlayersBeforeBotRemoval = this._envInt(
+      'PVP_HUMANS_BEFORE_BOT_REMOVAL',
+      this._defaultHumanPlayersBeforeBotRemoval,
+    );
+    const playersAboveThreshold = Math.max(0, humanPlayers - humanPlayersBeforeBotRemoval);
+    const desiredBots = Math.max(0, Math.min(maxBots, maxBots - playersAboveThreshold));
 
     while (bots.size < desiredBots) {
       const botName = this._generateRandomBotName();
@@ -238,6 +243,20 @@ export default class BotPlayerEntity extends GamePlayerEntity {
       bot.despawn();
       bots.delete(bot);
     }
+  }
+
+  private static _envInt(name: string, fallback: number): number {
+    const raw = process.env[name];
+    if (raw === undefined || raw.trim() === '') {
+      return fallback;
+    }
+
+    const value = Number(raw);
+    if (!Number.isFinite(value)) {
+      return fallback;
+    }
+
+    return Math.max(0, Math.floor(value));
   }
 
   public static despawnAll(world: World | undefined): void {

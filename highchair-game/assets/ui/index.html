@@ -55,7 +55,7 @@
 </div>
 
 <!-- Game Start Announcement -->
-<div class="game-start-announcement">DEATHMATCH!</div>
+<div class="game-start-announcement" aria-hidden="true"></div>
 
 <!-- Winner Announcement -->
 <div class="winner-announcement"></div>
@@ -517,13 +517,6 @@
   }
 
   function showGameStartAnnouncement() {
-    const announcement = document.querySelector('.game-start-announcement');
-    announcement.classList.add('active');
-
-    // Remove the active class after animation completes
-    setTimeout(() => {
-      announcement.classList.remove('active');
-    }, 3000);
   }
 
   function showWinnerAnnouncement(username) {
