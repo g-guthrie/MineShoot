@@ -183,6 +183,10 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
 
   public override despawn(): void {
     this._stopRadarTicker();
+    if (this._respawnTimer) {
+      clearTimeout(this._respawnTimer);
+      this._respawnTimer = undefined;
+    }
     super.despawn();
   }
 
@@ -438,6 +442,10 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   public respawn(): void {
     if (!this.world) return;
 
+    if (this._respawnTimer) {
+      clearTimeout(this._respawnTimer);
+      this._respawnTimer = undefined;
+    }
     this._dead = false;
     this._autoFireRaycastCooldown = 0;
     this._autoFireHasTarget = false;
@@ -449,7 +457,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this._setupPlayerCamera();
     this.player.ui.sendData({ type: 'scope-zoom', zoom: 1, style: 'none', sniper: false });
     this.setActiveInventorySlotIndex(0);
-    this.setPosition(GameManager.instance.getRandomSpawnPosition());
+    this.setPosition(GameManager.instance.getRandomSpawnPosition({ excludeEntity: this }));
     void this._equipLoadout();
   }
 
@@ -1152,7 +1160,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
           } else {
             // No round running: takeDamage would no-op and the fall would
             // never end. Just put them back on the map.
-            this.setPosition(GameManager.instance.getRandomSpawnPosition());
+            this.setPosition(GameManager.instance.getRandomSpawnPosition({ excludeEntity: this }));
             this.health = this._maxHealth;
           }
         }

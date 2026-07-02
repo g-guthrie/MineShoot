@@ -12,12 +12,23 @@ import worldColliders from '../assets/maps/boxman-world.colliders.json' with { t
 
 import {
   GAME_DURATION_MS,
+  PLAYER_STAND_HEIGHT,
   SPAWN_POINTS,
 } from '../gameConfig';
 
 import GamePlayerEntity from './GamePlayerEntity';
 import BotPlayerEntity from './BotPlayerEntity';
 import TerrainDamageManager from './TerrainDamageManager';
+
+type SpawnPositionOptions = {
+  excludeEntity?: GamePlayerEntity;
+  reservedSpawnIndices?: Set<number>;
+};
+
+const SPAWN_MIN_HORIZONTAL_SEPARATION = 8;
+const SPAWN_MIN_HORIZONTAL_SEPARATION_SQ = SPAWN_MIN_HORIZONTAL_SEPARATION * SPAWN_MIN_HORIZONTAL_SEPARATION;
+const SPAWN_VERTICAL_OVERLAP = PLAYER_STAND_HEIGHT * 2.5;
+const RECENT_SPAWN_MEMORY = 4;
 
 export default class GameManager {
   public static readonly instance = new GameManager();
@@ -29,6 +40,7 @@ export default class GameManager {
   private _restartTimer: NodeJS.Timeout | undefined;
   private _killCounter: Map<string, number> = new Map();
   private _gameActive: boolean = false;
+  private _recentSpawnPointIndices: number[] = [];
 
   public get isGameActive(): boolean { return this._gameActive; }
 
@@ -61,9 +73,13 @@ export default class GameManager {
     BotPlayerEntity.setWorldActive(this.world, true);
     this._gameStartAt = Date.now();
     
-    // Move all players to random spawn positions
+    // Move all players to reserved spawn positions for this round.
+    const reservedSpawnIndices = new Set<number>();
     this.world.entityManager.getAllPlayerEntities().forEach(playerEntity => {
-      playerEntity.setPosition(this.getRandomSpawnPosition());
+      playerEntity.setPosition(this.getRandomSpawnPosition({
+        excludeEntity: playerEntity instanceof GamePlayerEntity ? playerEntity : undefined,
+        reservedSpawnIndices,
+      }));
       playerEntity.player.ui.sendData({ type: 'game-start' });
       this._sendGameStartAnnouncements(playerEntity.player);
     });
@@ -103,6 +119,14 @@ export default class GameManager {
   public spawnPlayerEntity(player: Player) {
     if (!this.world) return;
 
+    // JOINED_WORLD can race with reconnect/refresh cleanup. The SDK allows
+    // multiple spawned PlayerEntity instances for one Player, but this game is
+    // a one-body-per-connection shooter, so collapse stale bodies before
+    // creating the fresh controller/camera target.
+    this.world.entityManager
+      .getPlayerEntitiesByPlayer(player)
+      .forEach(entity => entity.despawn());
+
     const playerEntity = new GamePlayerEntity(player);
     
     playerEntity.spawn(this.world, this.getRandomSpawnPosition());
@@ -135,13 +159,92 @@ export default class GameManager {
   }
 
   /**
-   * Gets a random spawn position within the defined spawn region
+   * Gets a spawn position that avoids live players and in-flight reservations.
    */
-  public getRandomSpawnPosition(): Vector3Like {
+  public getRandomSpawnPosition(options: SpawnPositionOptions = {}): Vector3Like {
+    const index = this._selectSpawnPointIndex(options);
+    options.reservedSpawnIndices?.add(index);
+    this._rememberSpawnPointIndex(index);
+
     // SPAWN_POINTS already include the capsule standing clearance
     // (gameConfig adds PLAYER_STAND_HEIGHT exactly once).
-    const p = SPAWN_POINTS[Math.floor(Math.random() * SPAWN_POINTS.length)];
+    const p = SPAWN_POINTS[index];
     return { x: p.x, y: p.y, z: p.z };
+  }
+
+  private _selectSpawnPointIndex(options: SpawnPositionOptions): number {
+    if (!SPAWN_POINTS.length) {
+      return 0;
+    }
+
+    const occupants = this._spawnOccupants(options.excludeEntity);
+    const candidates = SPAWN_POINTS.map((point, index) => {
+      let nearestHorizontalDistanceSq = Number.POSITIVE_INFINITY;
+      let physicallyOverlapped = false;
+
+      for (const occupant of occupants) {
+        let position: Vector3Like;
+        try {
+          position = occupant.position;
+        } catch {
+          continue;
+        }
+
+        const dx = position.x - point.x;
+        const dz = position.z - point.z;
+        const horizontalDistanceSq = dx * dx + dz * dz;
+        nearestHorizontalDistanceSq = Math.min(nearestHorizontalDistanceSq, horizontalDistanceSq);
+
+        if (
+          horizontalDistanceSq < SPAWN_MIN_HORIZONTAL_SEPARATION_SQ
+          && Math.abs(position.y - point.y) < SPAWN_VERTICAL_OVERLAP
+        ) {
+          physicallyOverlapped = true;
+        }
+      }
+
+      return {
+        index,
+        nearestHorizontalDistanceSq,
+        physicallyOverlapped,
+        reserved: options.reservedSpawnIndices?.has(index) ?? false,
+        recent: this._recentSpawnPointIndices.includes(index),
+      };
+    });
+
+    let pool = candidates.filter(candidate => !candidate.reserved);
+    if (!pool.length) pool = candidates;
+
+    const clearPool = pool.filter(candidate => !candidate.physicallyOverlapped);
+    if (clearPool.length) pool = clearPool;
+
+    const notRecentPool = pool.filter(candidate => !candidate.recent);
+    if (notRecentPool.length) pool = notRecentPool;
+
+    const farthestDistance = Math.max(...pool.map(candidate => candidate.nearestHorizontalDistanceSq));
+    const farthestPool = pool.filter(candidate => candidate.nearestHorizontalDistanceSq === farthestDistance);
+    const selected = farthestPool.length ? farthestPool : pool;
+
+    return selected[Math.floor(Math.random() * selected.length)]?.index ?? 0;
+  }
+
+  private _spawnOccupants(excludeEntity: GamePlayerEntity | undefined): GamePlayerEntity[] {
+    if (!this.world) return [];
+
+    return this.world.entityManager
+      .getAllPlayerEntities()
+      .filter((entity): entity is GamePlayerEntity => (
+        entity instanceof GamePlayerEntity
+        && entity !== excludeEntity
+        && entity.isSpawned
+      ));
+  }
+
+  private _rememberSpawnPointIndex(index: number): void {
+    this._recentSpawnPointIndices.push(index);
+    if (this._recentSpawnPointIndices.length > RECENT_SPAWN_MEMORY) {
+      this._recentSpawnPointIndices.splice(0, this._recentSpawnPointIndices.length - RECENT_SPAWN_MEMORY);
+    }
   }
 
   /**
@@ -255,7 +358,7 @@ export default class GameManager {
   private _syncBots(): void {
     if (!this.world) return;
 
-    BotPlayerEntity.ensureForWorld(this.world);
+    BotPlayerEntity.ensureForWorld(this.world, () => this.getRandomSpawnPosition());
   }
 
   public _identifyWinningPlayer() {

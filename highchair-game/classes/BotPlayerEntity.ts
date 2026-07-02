@@ -205,7 +205,7 @@ export default class BotPlayerEntity extends GamePlayerEntity {
   private static readonly _defaultMaxBots = 3;
   private static readonly _defaultHumanPlayersBeforeBotRemoval = 5;
 
-  public static ensureForWorld(world: World): void {
+  public static ensureForWorld(world: World, spawnPositionFactory: () => Vector3Like = BotPlayerEntity._randomSpawnPosition): void {
     const bots = this._botsByWorld.get(world.id) ?? new Set<BotPlayerEntity>();
 
     if (!this._botsByWorld.has(world.id)) {
@@ -229,7 +229,7 @@ export default class BotPlayerEntity extends GamePlayerEntity {
       const botName = this._generateRandomBotName();
       const driver = new BotStubPlayer(botName);
       const bot = new BotPlayerEntity(driver);
-      bot.spawn(world, BotPlayerEntity._randomSpawnPosition());
+      bot.spawn(world, spawnPositionFactory());
       bots.add(bot);
     }
 
