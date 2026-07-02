@@ -20,17 +20,13 @@ const originalListen = (net.Server.prototype as any).listen;
 };
 
 import { startServer, PlayerEvent } from 'highchair';
-import worldMap from './assets/maps/terrain.json' with { type: 'json' } ;
 
 import GameManager from './classes/GameManager';
 
 startServer(world => {
-  // Load map.
-  world.loadMap(worldMap);
-
-  // Setup lighting. The original example uses near-zero light for horror
-  // mood (relying on in-map lamps); raised here so the world is readable.
-  // Tune back down once lamp placement is verified.
+  // The boxman mesh world (spawned in GameManager.setupGame) replaces the
+  // old mansion voxel map. Dusk-toned light keeps the horror mood readable
+  // on an outdoor map.
   world.setAmbientLightIntensity(0.85);
   world.setAmbientLightColor({ r: 255, g: 214, b: 214 });
   world.setDirectionalLightIntensity(2.5);

@@ -1,4 +1,5 @@
-import { Audio, Collider, ColliderShape, CollisionGroup, GameServer } from 'highchair';
+import { Audio, Collider, ColliderShape, CollisionGroup, Entity, GameServer, RigidBodyType } from 'highchair';
+import worldColliders from '../assets/maps/boxman-world.colliders.json' with { type: 'json' };
 import GamePlayerEntity from './GamePlayerEntity';
 import PurchaseBarrierEntity from './PurchaseBarrierEntity';
 import { INVISIBLE_WALLS, INVISIBLE_WALL_COLLISION_GROUP, PURCHASE_BARRIERS, ENEMY_SPAWN_POINTS, WEAPON_CRATES } from '../gameConfig';
@@ -79,6 +80,8 @@ export default class GameManager {
 
   public setupGame(world: World) {
     this.world = world;
+
+    this._spawnWorldMesh(world);
 
     // Setup invisible walls that only enemies can pass through
     INVISIBLE_WALLS.forEach(wall => {
@@ -204,10 +207,35 @@ export default class GameManager {
     if (this.world.entityManager.getPlayerEntitiesByPlayer(player).length) return;
 
     const playerEntity = new GamePlayerEntity(player);
-    playerEntity.spawn(this.world, { x: 2, y: 10, z: 19 });
+    playerEntity.spawn(this.world, { x: 2, y: 3, z: 4 });
     player.camera.setAttachedToEntity(playerEntity);
 
     this._activePlayerIds.add(player.id);
+  }
+
+  /**
+   * The boxman mesh world with one BLOCK collider per solid cuboid, attached
+   * to the entity's FIXED rigid body — the only SDK collider path that both
+   * blocks movement and resolves gun raycasts (trimesh and bare simulation
+   * colliders provably don't). Same pattern as highchair-game.
+   */
+  private _spawnWorldMesh(world: World) {
+    const colliders = worldColliders.map(c => {
+      const cy = Math.cos(c.rotY / 2), sy = Math.sin(c.rotY / 2);
+      const cx = Math.cos(c.tiltX / 2), sx = Math.sin(c.tiltX / 2);
+      return {
+        shape: ColliderShape.BLOCK,
+        halfExtents: { x: c.hx, y: c.hy, z: c.hz },
+        relativePosition: { x: c.x, y: c.y, z: c.z },
+        relativeRotation: { x: sx * cy, y: cx * sy, z: -sx * sy, w: cx * cy },
+      };
+    });
+
+    new Entity({
+      name: 'BoxmanWorld',
+      modelUri: 'models/environment/boxman-world.glb',
+      rigidBodyOptions: { type: RigidBodyType.FIXED, colliders },
+    }).spawn(world, { x: 0, y: 0, z: 0 });
   }
 
   public spawnPurchaseBarriers() {

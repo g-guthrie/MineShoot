@@ -25,6 +25,9 @@ export type GunEntityOptions = {
   reloadTimeMs: number;      // Seconds to reload.
   shootAudioUri: string;     // The audio played when shooting
   scopeZoom?: number;         // The zoom level when scoped in.
+  pellets?: number;          // Rays per trigger pull (shotguns > 1). Each pellet rolls its own spread, damage and hitmarker.
+  spread?: number;           // Max spread cone radius, as tangent units (0.185 ~ 10.5 degrees).
+  falloff?: { start: number; end: number; minScalar: number }; // Damage scalar lerps 1 -> minScalar between start and end distance.
 } & ItemEntityOptions;
 
 export default abstract class GunEntity extends ItemEntity {
@@ -34,6 +37,9 @@ export default abstract class GunEntity extends ItemEntity {
   protected readonly range: number;
   protected readonly reloadTimeMs: number;
   protected readonly scopeZoom: number = 1;
+  protected readonly pellets: number;
+  protected readonly spread: number;
+  protected readonly falloff?: { start: number; end: number; minScalar: number };
 
   protected ammo: number;
   protected totalAmmo: number;
@@ -52,6 +58,9 @@ export default abstract class GunEntity extends ItemEntity {
 
     this.ammo = options.ammo;
     this.damage = options.damage;
+    this.pellets = options.pellets ?? 1;
+    this.spread = options.spread ?? 0;
+    this.falloff = options.falloff;
     this.fireRate = options.fireRate;
     this.maxAmmo = options.maxAmmo;
     this.totalAmmo = options.totalAmmo;
@@ -126,7 +135,9 @@ export default abstract class GunEntity extends ItemEntity {
     const { origin, direction } = this.getShootOriginDirection();
     
     this._performShootEffects(player);
-    this.shootRaycast(origin, direction, this.range);
+    for (let i = 0; i < this.pellets; i++) {
+      this.shootRaycast(origin, this._spreadDirection(direction), this.range);
+    }
     this._updateUI(player);
   }
 
@@ -173,20 +184,63 @@ export default abstract class GunEntity extends ItemEntity {
     return true;
   }
 
+  /** Jitters a direction uniformly within the gun's spread cone. */
+  protected _spreadDirection(direction: Vector3Like): Vector3Like {
+    if (this.spread <= 0) return direction;
+
+    // Orthonormal basis perpendicular to the aim direction.
+    const up = Math.abs(direction.y) < 0.99 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
+    let rx = direction.y * up.z - direction.z * up.y;
+    let ry = direction.z * up.x - direction.x * up.z;
+    let rz = direction.x * up.y - direction.y * up.x;
+    const rl = Math.hypot(rx, ry, rz);
+    rx /= rl; ry /= rl; rz /= rl;
+    const ux = ry * direction.z - rz * direction.y;
+    const uy = rz * direction.x - rx * direction.z;
+    const uz = rx * direction.y - ry * direction.x;
+
+    // Uniform sample on a disc of radius `spread` (tangent units).
+    const r = this.spread * Math.sqrt(Math.random());
+    const t = Math.random() * Math.PI * 2;
+    const ox = r * Math.cos(t), oy = r * Math.sin(t);
+
+    const dx = direction.x + rx * ox + ux * oy;
+    const dy = direction.y + ry * ox + uy * oy;
+    const dz = direction.z + rz * ox + uz * oy;
+    const dl = Math.hypot(dx, dy, dz);
+    return { x: dx / dl, y: dy / dl, z: dz / dl };
+  }
+
+  /** Damage scalar at a given hit distance, per the gun's falloff curve. */
+  protected _falloffScalar(distance: number): number {
+    if (!this.falloff) return 1;
+    const { start, end, minScalar } = this.falloff;
+    if (distance <= start) return 1;
+    if (distance >= end) return minScalar;
+    return 1 - (1 - minScalar) * ((distance - start) / (end - start));
+  }
+
   protected shootRaycast(origin: Vector3Like, direction: Vector3Like, length: number): void {
     if (!this.parent?.world) return;
-   
+
     const { world } = this.parent;
     const raycastHit = this.parent.world.simulation.raycast(origin, direction, length, {
       filterExcludeRigidBody: this.parent.rawRigidBody,
     });
+    if (!raycastHit) return;
 
-    if (raycastHit?.hitBlock) {
-      TerrainDamageManager.instance.damageBlock(world, raycastHit.hitBlock, this.damage);
+    const hp = raycastHit.hitPoint;
+    const distance = hp
+      ? Math.hypot(hp.x - origin.x, hp.y - origin.y, hp.z - origin.z)
+      : length;
+    const damage = Math.max(1, Math.round(this.damage * this._falloffScalar(distance)));
+
+    if (raycastHit.hitBlock) {
+      TerrainDamageManager.instance.damageBlock(world, raycastHit.hitBlock, damage);
     }
 
-    if (raycastHit?.hitEntity) {
-      this._handleHitEntity(raycastHit.hitEntity, direction);
+    if (raycastHit.hitEntity) {
+      this._handleHitEntity(raycastHit.hitEntity, direction, damage);
     }
   }
 
@@ -271,13 +325,13 @@ export default abstract class GunEntity extends ItemEntity {
     this.updateAmmoIndicatorUI();
   }
 
-  protected _handleHitEntity(hitEntity: Entity, hitDirection: Vector3Like): void {
+  protected _handleHitEntity(hitEntity: Entity, hitDirection: Vector3Like, damage: number = this.damage): void {
     if (!(hitEntity instanceof GamePlayerEntity) || hitEntity.isDead) return;
 
     const attacker = this.parent as GamePlayerEntity;
 
-    attacker.dealtDamage(this.damage);
-    hitEntity.takeDamage(this.damage, hitDirection, attacker);
+    attacker.dealtDamage(damage);
+    hitEntity.takeDamage(damage, hitDirection, attacker);
   }
 
   public updateAmmoIndicatorUI(reloading: boolean = false): void {

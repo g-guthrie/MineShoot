@@ -3,227 +3,149 @@ import type { Vector3Like } from 'highchair';
 
 export const INVISIBLE_WALL_COLLISION_GROUP = CollisionGroup.GROUP_1;
 
+// ---------------------------------------------------------------------------
+// Boxman world layout: a 3x3 grid of 54-unit biomes centered on the origin.
+// Players hold the center biome; each purchase barrier opens one compass
+// direction, adding that side's enemy spawns (and access to better crates).
+// All heights are snapped to the world collider surfaces (ground = y 0).
+// ---------------------------------------------------------------------------
+
 export const INVISIBLE_WALLS = [
-  { // Main entrance (south door)
-    position: { x: 2.5, y: 1, z: 25},
-    halfExtents: { x: 1, y: 5, z: 0.5 },
+  { // North perimeter
+    position: { x: 0, y: 12, z: -84 },
+    halfExtents: { x: 85, y: 14, z: 0.5 },
   },
-  { // Main entrance (south window)
-    position: { x: -4, y: 1, z: 25},
-    halfExtents: { x: 1, y: 5, z: 0.5 },
+  { // South perimeter
+    position: { x: 0, y: 12, z: 84 },
+    halfExtents: { x: 85, y: 14, z: 0.5 },
   },
-  { // Main entrance (east window)
-    position: { x: 13, y: 1, z: 22 },
-    halfExtents: { x: 0.5, y: 5, z: 1 },
+  { // East perimeter
+    position: { x: 84, y: 12, z: 0 },
+    halfExtents: { x: 0.5, y: 14, z: 85 },
   },
-  { // Main entrance (north window)
-    position: { x: 8, y: 1, z: 15 },
-    halfExtents: { x: 1, y: 5, z: 0.5 },
+  { // West perimeter
+    position: { x: -84, y: 12, z: 0 },
+    halfExtents: { x: 0.5, y: 14, z: 85 },
   },
-  { // Theater (south window)
-    position: { x: -8, y: 1, z: 12},
-    halfExtents: { x: 1, y: 5, z: 0.5 },
-  },
-  { // Parlor (south window)
-    position: { x: -22, y: 1, z: 16},
-    halfExtents: { x: 1, y: 5, z: 0.5 },
-  },
-  { // Parlor (north window)
-    position: { x: -26, y: 1, z: -2},
-    halfExtents: { x: 1, y: 5, z: 0.5 },
-  },
-  { // Dining Hall (south window)
-    position: { x: 31, y: 1, z: 15},
-    halfExtents: { x: 1, y: 5, z: 0.5 },
-  },
-  { // Dining Hall (north window)
-    position: { x: 31, y: 1, z: -2},
-    halfExtents: { x: 1.5, y: 5, z: 0.5 },
-  },
-  { // Art Gallery (north window)
-    position: { x: 26, y: 1, z: -26},
-    halfExtents: { x: 2.5, y: 5, z: 0.5 },
-  },
-  { // Kitchen (west window 1)
-    position: { x: -29, y: 1, z: -18 },
-    halfExtents: { x: 0.5, y: 5, z: 1.5 },
-  },
-  { // Kitchen (west window 2)
-    position: { x: -29, y: 1, z: -23 },
-    halfExtents: { x: 0.5, y: 5, z: 1.5 },
-  }
 ]
 
 export const PURCHASE_BARRIERS = [
   {
-    name: 'Theater Room (South)',
+    name: 'North Gate',
+    removalPrice: 75,
+    position: { x: 0, y: 1.5, z: -27 },
+    rotation: Quaternion.fromEuler(0, 0, 0),
+    width: 8,
+    unlockIds: [ 'north' ],
+  },
+  {
+    name: 'East Gate',
+    removalPrice: 150,
+    position: { x: 27, y: 1.5, z: 0 },
+    rotation: Quaternion.fromEuler(0, 90, 0),
+    width: 8,
+    unlockIds: [ 'east' ],
+  },
+  {
+    name: 'West Gate',
+    removalPrice: 150,
+    position: { x: -27, y: 1.5, z: 0 },
+    rotation: Quaternion.fromEuler(0, 90, 0),
+    width: 8,
+    unlockIds: [ 'west' ],
+  },
+  {
+    name: 'South Gate',
     removalPrice: 300,
-    position: { x: 2.5, y: 1.5, z: 15 },
+    position: { x: 0, y: 1.5, z: 27 },
     rotation: Quaternion.fromEuler(0, 0, 0),
-    width: 5,
-    unlockIds: [ 'theater' ],
-  },
-  {
-    name: 'Parlor (South)',
-    removalPrice: 75,
-    position: { x: -8, y: 1.5, z: 18.5 },
-    rotation: Quaternion.fromEuler(0, 90, 0),
-    width: 3,
-    unlockIds: [ 'parlor' ],
-  },
-  {
-    name: 'Dining Hall (South)',
-    removalPrice: 75,
-    position: { x: 13, y: 1.5, z: 18.5 },
-    rotation: Quaternion.fromEuler(0, 90, 0),
-    width: 3,
-    unlockIds: [ 'dining' ],
-  },
-  {
-    name: 'Theater Room (West)',
-    removalPrice: 250,
-    position: { x: -15, y: 1.5, z: 3 },
-    rotation: Quaternion.fromEuler(0, 90, 0),
-    width: 5,
-    unlockIds: [ 'theater', 'parlor' ],
-  },
-  {
-    name: 'Theater Room (East)',
-    removalPrice: 250,
-    position: { x: 19, y: 1.5, z: 3 },
-    rotation: Quaternion.fromEuler(0, 90, 0),
-    width: 5,
-    unlockIds: [ 'theater', 'dining' ],
-  },
-  {
-    name: 'Art Gallery (South)',
-    removalPrice: 500,
-    position: { x: 26.5, y: 1.5, z: -2 },
-    rotation: Quaternion.fromEuler(0, 0, 0),
-    width: 5,
-    unlockIds: [ 'gallery', 'dining' ],
-  },
-  {
-    name: 'Kitchen (South)',
-    removalPrice: 500,
-    position: { x: -22, y: 1.5, z: -2 },
-    rotation: Quaternion.fromEuler(0, 0, 0),
-    width: 5,
-    unlockIds: [ 'kitchen', 'parlor' ],
-  },
-  {
-    name: 'Vault',
-    removalPrice: 1000,
-    position: { x: 0.5, y: 1.5, z: -26 },
-    rotation: Quaternion.fromEuler(0, 0, 0),
-    width: 3,
-    unlockIds: [ 'vault' ],
-  },
-  {
-    name: 'Treasure Room (West)',
-    removalPrice: 75,
-    position: { x: -15, y: 1.5, z: -19 },
-    rotation: Quaternion.fromEuler(0, 90, 0),
-    width: 5,
-    unlockIds: [ 'treasure', 'kitchen' ],
-  },
-  {
-    name: 'Treasure Room (East)',
-    removalPrice: 75,
-    position: { x: 20, y: 1.5, z: -19 },
-    rotation: Quaternion.fromEuler(0, 90, 0),
-    width: 5,
-    unlockIds: [ 'treasure', 'gallery' ],
+    width: 8,
+    unlockIds: [ 'south' ],
   },
 ]
 
 export const WEAPON_CRATES = [
   {
     name: 'Rusty Weapon Crate',
-    position: { x: -3, y: 1.5, z: 16.5 },
+    position: { x: -2, y: 1.5, z: 6 },
     rotation: Quaternion.fromEuler(0, 0, 0),
     price: 100,
     rollableWeaponIds: [ 'pistol', 'shotgun', 'ar15' ],
   },
   {
     name: 'Rusty Weapon Crate',
-    position: { x: 10.5, y: 1.5, z: 16.5 },
+    position: { x: 8, y: 1.5, z: 6 },
     rotation: Quaternion.fromEuler(0, 0, 0),
     price: 100,
     rollableWeaponIds: [ 'pistol', 'shotgun', 'ar15' ],
   },
   {
     name: 'Weapon Crate',
-    position: { x: -27.5, y: 1.5, z: 2.5 },
+    position: { x: 0, y: 1.5, z: -40 },
+    rotation: Quaternion.fromEuler(0, 0, 0),
+    price: 200,
+    rollableWeaponIds: [ 'shotgun', 'ar15', 'auto-pistol' ],
+  },
+  {
+    name: 'Weapon Crate',
+    position: { x: 0, y: 1.5, z: 38 },
+    rotation: Quaternion.fromEuler(0, 0, 0),
+    price: 200,
+    rollableWeaponIds: [ 'shotgun', 'ar15', 'auto-pistol' ],
+  },
+  {
+    name: 'Weapon Crate',
+    position: { x: -40, y: 1.5, z: 0 },
     rotation: Quaternion.fromEuler(0, 90, 0),
     price: 200,
-    rollableWeaponIds: [ 'shotgun', 'ar15', 'auto-pistol', ],
+    rollableWeaponIds: [ 'shotgun', 'ar15', 'auto-pistol' ],
   },
   {
     name: 'Weapon Crate',
-    position: { x: 22, y: 1.5, z: 7 },
-    rotation: Quaternion.fromEuler(0, -45, 0),
+    position: { x: 40, y: 1.5, z: 0 },
+    rotation: Quaternion.fromEuler(0, 90, 0),
     price: 200,
-    rollableWeaponIds: [ 'shotgun', 'ar15', 'auto-pistol', ],
-  },
-  {
-    name: 'Weapon Crate',
-    position: { x: -23.5, y: 1.5, z: -24.5 },
-    rotation: Quaternion.fromEuler(0, 0, 0),
-    price: 200,
-    rollableWeaponIds: [ 'shotgun', 'ar15', 'auto-pistol', ],
+    rollableWeaponIds: [ 'shotgun', 'ar15', 'auto-pistol' ],
   },
   {
     name: 'Elite Weapon Crate',
-    position: { x: 31, y: 1.5, z: -14.5 },
-    rotation: Quaternion.fromEuler(0, 45, 0),
+    position: { x: 48, y: 1.5, z: 38 },
+    rotation: Quaternion.fromEuler(0, 0, 0),
     price: 300,
-    rollableWeaponIds: [ 'ak47', 'ar15', 'auto-pistol', 'auto-shotgun', ],
+    rollableWeaponIds: [ 'ak47', 'ar15', 'auto-pistol', 'auto-shotgun' ],
   },
   {
     name: 'Elite Weapon Crate',
-    position: { x: 2.5, y: 2.5, z: -4.5 },
+    position: { x: -44, y: 1.5, z: -44 },
     rotation: Quaternion.fromEuler(0, 0, 0),
     price: 300,
-    rollableWeaponIds: [ 'ak47', 'ar15', 'auto-pistol', 'auto-shotgun', ],
-  },
-  {
-    name: 'Elite Weapon Crate',
-    position: { x: 0.5, y: 1.5, z: -29.5 },
-    rotation: Quaternion.fromEuler(0, 0, 0),
-    price: 300,
-    rollableWeaponIds: [ 'ak47', 'ar15', 'auto-pistol', 'auto-shotgun', ],
+    rollableWeaponIds: [ 'ak47', 'ar15', 'auto-pistol', 'auto-shotgun' ],
   },
 ]
 
 export const ENEMY_SPAWN_POINTS: Record<string, Vector3Like[]> = {
   start: [
-    { x: -20, y: 3, z: 34 },
-    { x: 12, y: 3, z: 36 },
-    { x: 26, y: 3, z: 20 },
-    { x: 17, y: 3, z: 13.5 },
+    { x: 20, y: 1, z: 0 },
+    { x: -20, y: 1, z: 0 },
+    { x: 0, y: 1, z: 20 },
+    { x: 0, y: 1, z: -20 },
   ],
-  theater: [
-    { x: -13.5, y: 3, z: 10 },
+  north: [
+    { x: -54, y: 1, z: -44 },
+    { x: 0, y: 1, z: -54 },
+    { x: 54, y: 1, z: -54 },
   ],
-  parlor: [
-    { x: -36, y: 3, z: 23 },
-    { x: -35, y: 3, z: -5 },
+  south: [
+    { x: -50, y: 2, z: 54 },
+    { x: 0, y: 1, z: 50 },
+    { x: 54, y: 1, z: 64 },
   ],
-  dining: [
-    { x: 46, y: 3, z: 16 },
-    { x: 41, y: 3, z: -5 },
+  east: [
+    { x: 54, y: 1, z: -10 },
+    { x: 54, y: 1, z: 10 },
   ],
-  gallery: [
-    { x: 35, y: 3, z: -39 },
-    { x: 12, y: 3, z: -40 },
-  ],
-  kitchen: [
-    { x: -28, y: 3, z: -32 },
-    { x: -40, y: 3, z: -5 },
-  ],
-  treasure: [
-    { x: -13, y: 3, z: -27 },
-    { x: 0, y: 3, z: -37 },
+  west: [
+    { x: -54, y: 1, z: -10 },
+    { x: -54, y: 1, z: 10 },
   ],
 };

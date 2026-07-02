@@ -2,22 +2,27 @@ import { Quaternion, Vector3Like, QuaternionLike } from 'highchair';
 import GunEntity from '../GunEntity';
 import type { GunEntityOptions } from '../GunEntity';
 
+// Faster, wider, weaker sibling of the pump shotgun — same pellet system
+// (see ShotgunEntity for the tuning provenance).
 const DEFAULT_AUTO_SHOTGUN_OPTIONS: GunEntityOptions = {
-  ammo: 6,
-  damage: 11,
-  fireRate: 1.5,
+  ammo: 8,
+  damage: 8,
+  fireRate: 2.2,
+  pellets: 8,
+  spread: 0.22,
+  falloff: { start: 6, end: 11, minScalar: 0.35 },
   heldHand: 'both',
   iconImageUri: 'icons/auto-shotgun.png',
   idleAnimation: 'idle_gun_both',
   mlAnimation: 'shoot_gun_both',
   name: 'Auto Shotgun',
-  maxAmmo: 6,
-  totalAmmo: 30,
+  maxAmmo: 8,
+  totalAmmo: 40,
   modelUri: 'models/items/auto-shotgun.glb',
   modelScale: 1.2,
-  range: 10,
+  range: 20,
   reloadAudioUri: 'audio/sfx/shotgun-reload.mp3',
-  reloadTimeMs: 3500,
+  reloadTimeMs: 3000,
   shootAudioUri: 'audio/sfx/shotgun-shoot.mp3',
 };
 
@@ -38,43 +43,4 @@ export default class AutoShotgunEntity extends GunEntity {
       rotation: Quaternion.fromEuler(0, 90, 0),
     };
   }
-
-  public override shootRaycast(origin: Vector3Like, direction: Vector3Like, length: number) {
-    // Create spread pattern for auto-shotgun pellets using angles relative to direction
-    const spreadAngles = [
-      { x: 0, y: 0 },      // Center
-      { x: 0.05, y: 0.05 },  // Upper right
-      { x: -0.05, y: 0.05 }, // Upper left
-      { x: 0.07, y: 0 },   // Right
-      { x: -0.07, y: 0 },  // Left
-      { x: 0.05, y: -0.05 }, // Lower right
-      { x: -0.05, y: -0.05 } // Lower left
-    ];
-
-    // Fire each pellet with spread applied to original direction
-    for (const angle of spreadAngles) {
-      // Calculate spread direction relative to original direction
-      const spreadDirection = {
-        x: direction.x + (direction.z * angle.x), // Add horizontal spread
-        y: direction.y + angle.y,                 // Add vertical spread
-        z: direction.z - (direction.x * angle.x)  // Maintain direction magnitude
-      };
-
-      // Normalize the spread direction to maintain consistent range
-      const magnitude = Math.sqrt(
-        spreadDirection.x * spreadDirection.x + 
-        spreadDirection.y * spreadDirection.y + 
-        spreadDirection.z * spreadDirection.z
-      );
-
-      const normalizedDirection = {
-        x: spreadDirection.x / magnitude,
-        y: spreadDirection.y / magnitude,
-        z: spreadDirection.z / magnitude
-      };
-
-      super.shootRaycast(origin, normalizedDirection, length);
-    }
-  }
 }
-

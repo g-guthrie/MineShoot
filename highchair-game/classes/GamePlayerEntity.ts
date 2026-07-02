@@ -133,6 +133,12 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
 
   public override spawn(world: World, position: Vector3Like, rotation?: QuaternionLike): void {
     super.spawn(world, position, rotation);
+    // Movement profile from the original MineShoot tuning (jog 7, run 11,
+    // jump 8.8 at gravity 18). The world's crates and ledges are authored
+    // around that 2.15-unit jump height; SDK defaults can't clear them.
+    this.playerController.walkVelocity = 7;
+    this.playerController.runVelocity = 11;
+    this.playerController.jumpVelocity = 8.8;
     this._setupPlayerInventory();
     this._autoHealTicker();
     this._outOfWorldTicker();

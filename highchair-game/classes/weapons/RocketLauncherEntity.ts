@@ -3,11 +3,11 @@ import GunEntity from '../GunEntity';
 import type { GunEntityOptions } from '../GunEntity';
 import type GamePlayerEntity from '../GamePlayerEntity';
 
-const ROCKET_DESTRUCTION_RADIUS = 4;
+const ROCKET_DESTRUCTION_RADIUS = 3;
 
 const DEFAULT_ROCKET_LAUNCHER_OPTIONS: GunEntityOptions = {
   ammo: 1,
-  damage: 80,
+  damage: 70,
   fireRate: 0.8,
   heldHand: 'right',
   iconImageUri: 'icons/rocket-launcher.png',
@@ -73,9 +73,9 @@ export default class RocketLauncherEntity extends GunEntity {
           },
         ],
         linearVelocity: { 
-          x: direction.x * 30,
-          y: direction.y * 30,
-          z: direction.z * 30,
+          x: direction.x * 34,
+          y: direction.y * 34,
+          z: direction.z * 34,
         },
       }
     });

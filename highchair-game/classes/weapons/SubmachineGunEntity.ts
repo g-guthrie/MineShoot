@@ -3,15 +3,17 @@ import GunEntity from '../GunEntity';
 import type { GunEntityOptions } from '../GunEntity';
 
 const DEFAULT_SUBMACHINE_GUN_OPTIONS: GunEntityOptions = {
-  ammo: 60,
-  damage: 6,
-  fireRate: 12,
+  ammo: 30,
+  damage: 7,
+  fireRate: 11,
+  spread: 0.05,
+  falloff: { start: 10, end: 22, minScalar: 0.55 },
   heldHand: 'right',
   iconImageUri: 'icons/submachine-gun.png',
   idleAnimation: 'idle_gun_right',
   mlAnimation: 'shoot_gun_right',
   name: 'Submachine Gun',
-  maxAmmo: 60,
+  maxAmmo: 30,
   totalAmmo: 240,
   scopeZoom: 1.35,
   modelUri: 'models/items/submachine-gun.glb',

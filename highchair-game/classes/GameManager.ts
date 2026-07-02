@@ -375,6 +375,15 @@ export default class GameManager {
           const hit = world.simulation.raycast({ x: px, y: 30, z: pz }, { x: 0, y: -1, z: 0 }, 60);
           console.info('[ray]', px, pz, '->', hit ? `hit y=${hit.hitPoint?.y ?? '?'} entity=${hit.hitEntity?.name ?? 'none'}` : 'NO HIT');
         }
+        // Drop a probe entity and watch where physics lets it rest.
+        this._syncBots();
+        let n = 0;
+        const timer = setInterval(() => {
+          const who = world.entityManager.getAllPlayerEntities()[0];
+          const p = who?.isSpawned ? who.position : null;
+          console.info('[player-probe]', p ? `y=${p.y.toFixed(3)} vel=${who.linearVelocity.y.toFixed(2)} grounded=${who.playerController.isGrounded}` : 'no player');
+          if (++n >= 8) clearInterval(timer);
+        }, 2000);
       }, 8000);
     }
   }

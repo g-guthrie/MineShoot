@@ -33,6 +33,10 @@ startServer(world => {
   // voxel map. The chunk lattice starts empty (players can still build).
   GameManager.instance._spawnWorldMesh(world);
 
+  // Original MineShoot gravity — the movement profile in GamePlayerEntity
+  // (jump 8.8 = 2.15-unit jump height) only works at this value.
+  world.simulation.setGravity({ x: 0, y: -18, z: 0 });
+
   // Set lighting: soft sun so terrain steps don't read as black checkering.
   world.setAmbientLightIntensity(1.1);
   world.setDirectionalLightIntensity(2.6);

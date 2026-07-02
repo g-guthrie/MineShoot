@@ -256,20 +256,41 @@
     }
   }
 
-  document.querySelector('.loadout-toggle').addEventListener('click', () => {
-    loadoutPanel.classList.toggle('open');
-    if (loadoutPanel.classList.contains('open') && !loadoutCatalog.length) {
-      highchair.sendData({ type: 'request-loadout' });
+  function openMenu() {
+    if (loadoutPanel.classList.contains('open')) return;
+    loadoutPanel.classList.add('open');
+    if (!loadoutCatalog.length) highchair.sendData({ type: 'request-loadout' });
+    // Freeze pointer lock so clicking menu buttons doesn't re-lock the
+    // camera and slam the menu shut mid-click.
+    highchair.freezePointerLock(true);
+  }
+
+  function closeMenu() {
+    if (!loadoutPanel.classList.contains('open')) return;
+    loadoutPanel.classList.remove('open');
+    highchair.freezePointerLock(false);
+    highchair.lockPointer(true);
+  }
+
+  // Esc exits pointer lock (browser-reserved); treat that as "open the menu".
+  // Re-locking (clicking back into the game) closes it.
+  document.addEventListener('pointerlockchange', () => {
+    if (document.pointerLockElement) {
+      loadoutPanel.classList.remove('open');
+    } else {
+      openMenu();
     }
   });
-  document.querySelector('.loadout-cancel').addEventListener('click', () => {
-    loadoutPanel.classList.remove('open');
+
+  document.querySelector('.loadout-toggle').addEventListener('click', () => {
+    loadoutPanel.classList.contains('open') ? closeMenu() : openMenu();
   });
+  document.querySelector('.loadout-cancel').addEventListener('click', closeMenu);
   document.querySelector('.loadout-apply').addEventListener('click', () => {
     if (loadoutSelected.length) {
       highchair.sendData({ type: 'set-loadout', guns: loadoutSelected });
     }
-    loadoutPanel.classList.remove('open');
+    closeMenu();
   });
 
   function updateLeaderboard() {
