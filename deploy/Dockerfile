@@ -16,6 +16,7 @@ RUN npm run build
 FROM node:22-slim
 WORKDIR /app
 COPY highchair-game/package.json highchair-game/package-lock.json ./highchair-game/
+COPY highchair-game/dev/patch-webtransport.mjs ./highchair-game/dev/patch-webtransport.mjs
 RUN cd highchair-game && npm ci
 
 COPY highchair-game ./highchair-game
@@ -31,4 +32,4 @@ ENV NODE_ENV=production \
 EXPOSE 8083
 
 WORKDIR /app/highchair-game
-CMD ["/bin/sh", "-c", "PATH=/app/scripts:$PATH ./node_modules/.bin/tsx index.ts & node /app/scripts/local-highchair-proxy.mjs & wait -n"]
+CMD ["/bin/sh", "-c", "PATH=/app/scripts:$PATH ./node_modules/.bin/tsx index.ts & game_pid=$!; node /app/scripts/local-highchair-proxy.mjs & proxy_pid=$!; while kill -0 \"$game_pid\" 2>/dev/null && kill -0 \"$proxy_pid\" 2>/dev/null; do sleep 1; done; kill \"$game_pid\" \"$proxy_pid\" 2>/dev/null; wait"]

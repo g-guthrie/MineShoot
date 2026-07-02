@@ -1,0 +1,11 @@
+.git
+.codex-artifact-screens
+node_modules
+*/node_modules
+dist
+*/dist
+build
+*/build
+.DS_Store
+*.log
+highchair-game/dev/persistence

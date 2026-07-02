@@ -26,6 +26,9 @@ function tryServeStatic(clientReq, clientRes) {
   if (!CLIENT_DIST || (clientReq.method !== 'GET' && clientReq.method !== 'HEAD')) return false;
   const urlPath = decodeURIComponent(new URL(clientReq.url, 'http://x').pathname);
   const rel = urlPath === '/' ? 'index.html' : urlPath.slice(1);
+  if (rel === 'index.html' && !String(clientReq.headers.accept || '').includes('text/html')) {
+    return false;
+  }
   const file = path.join(CLIENT_DIST, rel);
   if (!file.startsWith(path.resolve(CLIENT_DIST))) return false; // no traversal
   if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return false;
