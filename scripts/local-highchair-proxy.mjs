@@ -5,7 +5,7 @@
 import http from 'node:http';
 import https from 'node:https';
 
-const LISTEN_HOST = '127.0.0.1';
+const LISTEN_HOST = process.env.PROXY_LISTEN_HOST || '127.0.0.1'; // 0.0.0.0 in the Fly container
 const TARGET_HOST = '127.0.0.1';
 
 const ROUTES = [

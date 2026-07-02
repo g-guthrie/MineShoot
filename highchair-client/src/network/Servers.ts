@@ -9,8 +9,12 @@ const MINIMUM_SUPPORTED_SERVER_VERSION = '0.10.0';
 const DEV_LOCAL_HOSTNAME = '127.0.0.1:8081';
 const SERVER_HEALTH_CHECK_TIMEOUT_MS = 8000;
 
-// Game modes selectable from the landing prompt when no ?join= is present.
-// Hostnames are the local dev proxies; swap for real endpoints on deploy.
+// Production PvP endpoint: baked at build time (VITE_PVP_HOST=pvp.fly.dev
+// npm run build); local dev proxy otherwise. When no ?join= is present the
+// client joins this instantly — no landing prompt.
+const DEFAULT_PVP_HOSTNAME = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_PVP_HOST || '127.0.0.1:8083';
+
+// Game modes selectable from the landing prompt (?menu=1 only).
 const GAME_MODES = [
   {
     label: 'Zombies',
@@ -20,7 +24,7 @@ const GAME_MODES = [
   {
     label: 'PvP Arena',
     description: 'Free-for-all deathmatch — loot chests, frag your friends.',
-    value: '127.0.0.1:8083',
+    value: DEFAULT_PVP_HOSTNAME,
   },
   {
     label: 'Custom server...',
@@ -65,7 +69,12 @@ export default class Servers {
       hostname = urlParams.get('join') || '';
       lobbyId = urlParams.get('lobbyId') || '';
 
-      // Pick a game mode if no join query parameter is present
+      // Instant join: no ?join= goes straight into PvP. The mode picker
+      // (zombies / custom server) stays reachable via ?menu=1.
+      if (!hostname && !urlParams.has('menu')) {
+        hostname = DEFAULT_PVP_HOSTNAME;
+      }
+
       if (!hostname) {
         const mode = await modalSelect('Choose a game mode', GAME_MODES);
 
