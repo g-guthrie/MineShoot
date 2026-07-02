@@ -50,11 +50,11 @@ const basePlace = recorder.place;
 const place = {
   ...basePlace,
   addBlock(x, y, z, w, h, d, material, isSolid) {
-    entries.push({ x, y, z, w, h, d, rotY: 0, tiltX: 0, ...matOf(material) });
+    entries.push({ x, y, z, w, h, d, rotY: 0, tiltX: 0, solid: isSolid !== false, ...matOf(material) });
     return basePlace.addBlock(x, y, z, w, h, d, material, isSolid);
   },
   addRamp(x, y, z, w, h, d, material, rotY, tiltX, isSolid) {
-    entries.push({ x, y, z, w, h, d, rotY: rotY || 0, tiltX: tiltX || 0, ...matOf(material) });
+    entries.push({ x, y, z, w, h, d, rotY: rotY || 0, tiltX: tiltX || 0, solid: isSolid !== false, ...matOf(material) });
     return basePlace.addRamp(x, y, z, w, h, d, material, rotY, tiltX, isSolid);
   },
 };
@@ -83,7 +83,7 @@ for (const cell of biomeCells) {
   entries.push({
     x: (b.minX + b.maxX) / 2, y: -0.5, z: (b.minZ + b.maxZ) / 2,
     w: w + 0.01, h: 1, d: d + 0.01,
-    rotY: 0, tiltX: 0,
+    rotY: 0, tiltX: 0, solid: true,
     color: GROUND_COLORS[cell.biome] ?? 0x6a7a5a, opacity: 1, emissive: 0,
   });
 }
@@ -231,4 +231,17 @@ out.writeUInt32LE(0x004e4942, o + 4); // 'BIN'
 binChunk.copy(out, o + 8);
 
 fs.writeFileSync(OUT, out);
+
+// Solid cuboids as physics colliders, in final world coordinates (the mesh
+// entity spawns at y+2 over the bedrock shell; see GameManager).
+const WORLD_MESH_LIFT = 2;
+const colliders = entries
+  .filter(e => e.solid && e.opacity >= 0.5)
+  .map(e => ({
+    x: +(e.x + OFFSET).toFixed(3), y: +(e.y + WORLD_MESH_LIFT).toFixed(3), z: +(e.z + OFFSET).toFixed(3),
+    hx: +(e.w / 2).toFixed(3), hy: +(e.h / 2).toFixed(3), hz: +(e.d / 2).toFixed(3),
+    rotY: +e.rotY.toFixed(4), tiltX: +e.tiltX.toFixed(4),
+  }));
+fs.writeFileSync(path.join(here, '..', 'assets', 'maps', 'boxman-world.colliders.json'), JSON.stringify(colliders));
+console.log(`colliders: ${colliders.length} solid cuboids`);
 console.log(`wrote ${OUT}: ${(total / 1024).toFixed(0)} KB, ${cuboids} cuboids baked, ${materials.length} materials/meshes`);

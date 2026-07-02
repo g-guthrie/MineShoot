@@ -4,13 +4,13 @@ import {
   Quaternion,
   Vector3Like,
   World,
-  Collider,
   ColliderShape,
   Entity,
   RigidBodyType,
 } from 'highchair';
 
 import worldMap from '../assets/maps/boxman-shell.json' with { type: 'json' };
+import worldColliders from '../assets/maps/boxman-world.colliders.json' with { type: 'json' };
 
 import {
   BEDROCK_BLOCK_ID,
@@ -22,6 +22,9 @@ import {
 import GamePlayerEntity from './GamePlayerEntity';
 import ItemFactory from './ItemFactory';
 import BotPlayerEntity from './BotPlayerEntity';
+
+// Mesh-world vertical offset above the bedrock shell floor.
+const WORLD_MESH_LIFT = 2;
 
 export default class GameManager {
   public static readonly instance = new GameManager();
@@ -343,20 +346,38 @@ export default class GameManager {
     // original MineShoot quadrant builders: real rotated cuboids at original
     // scale, already centered on the arena origin (same -84 offset as the
     // voxel import, so boxman-arena.meta.json spawn points line up).
+    // One box collider per solid cuboid of the boxman world
+    // (assets/maps/boxman-world.colliders.json, world coordinates), attached
+    // to this entity's FIXED rigid body. They must live on the entity:
+    // TRIMESH colliders from optionsFromModelUri never register with the
+    // simulation, and standalone colliders added via addToSimulation are
+    // invisible to world.simulation.raycast — the SDK can only resolve hits
+    // to an entity or a block, so bullets would pass through the world
+    // (all three dead ends verified by raycast probes).
+    const colliders = worldColliders.map(c => {
+      // rotation: yaw about Y then tilt about X (matches the mesh bake)
+      const cy = Math.cos(c.rotY / 2), sy = Math.sin(c.rotY / 2);
+      const cx = Math.cos(c.tiltX / 2), sx = Math.sin(c.tiltX / 2);
+      return {
+        shape: ColliderShape.BLOCK,
+        halfExtents: { x: c.hx, y: c.hy, z: c.hz },
+        relativePosition: { x: c.x, y: c.y - WORLD_MESH_LIFT, z: c.z },
+        relativeRotation: { x: sx * cy, y: cx * sy, z: -sx * sy, w: cx * cy },
+      };
+    });
+
     this._worldMesh = new Entity({
       name: 'BoxmanWorld',
       modelUri: 'models/environment/boxman-world.glb',
       rigidBodyOptions: {
         type: RigidBodyType.FIXED,
-        colliders: [
-          Collider.optionsFromModelUri('models/environment/boxman-world.glb', 1, ColliderShape.TRIMESH),
-        ],
+        colliders,
       },
     });
-    // y+2 lifts the mesh's ground slabs above the bedrock shell floor so
-    // recessed features (lagoon, quarry pit, river) stay visible instead of
-    // being swallowed by the voxel safety floor at y=0.
-    this._worldMesh.spawn(world, { x: 0, y: 2, z: 0 });
+    // The lift raises the mesh's ground slabs above the bedrock shell floor
+    // so recessed features (lagoon, quarry pit, river) stay visible instead
+    // of being swallowed by the voxel safety floor at y=0.
+    this._worldMesh.spawn(world, { x: 0, y: WORLD_MESH_LIFT, z: 0 });
   }
 
   private _spawnBedrock(world: World) {
