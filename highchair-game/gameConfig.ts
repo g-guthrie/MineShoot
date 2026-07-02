@@ -281,6 +281,10 @@ export const RANKS = [
   },
 ]
 
-// Spawn heights are computed from the world collider surfaces
-// (tools/export-boxman-glb.mjs) so players always drop onto real floor.
+// Spawn heights are the world collider floor surfaces
+// (tools/export-boxman-glb.mjs). Entity positions are the CAPSULE CENTER,
+// not the feet, so every spawn adds this standing clearance on top.
+// Measured: a player capsule rests with its center 0.757 above the floor.
+export const PLAYER_STAND_HEIGHT = 0.8;
+
 export const SPAWN_POINTS = arenaMeta.spawnPoints;

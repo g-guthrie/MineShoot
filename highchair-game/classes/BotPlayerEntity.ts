@@ -14,7 +14,7 @@ import {
 import GamePlayerEntity from './GamePlayerEntity';
 import GunEntity from './GunEntity';
 import ItemEntity from './ItemEntity';
-import { SPAWN_POINTS } from '../gameConfig';
+import { PLAYER_STAND_HEIGHT, SPAWN_POINTS } from '../gameConfig';
 
 const AIM_JITTER_RADIANS = 0.055;
 const AIM_JITTER_RANDOM_MIN_SCALE = 0.6;
@@ -263,7 +263,8 @@ export default class BotPlayerEntity extends GamePlayerEntity {
   }
 
   private static _randomSpawnPosition(): Vector3Like {
-    return SPAWN_POINTS[Math.floor(Math.random() * SPAWN_POINTS.length)];
+    const p = SPAWN_POINTS[Math.floor(Math.random() * SPAWN_POINTS.length)];
+    return { x: p.x, y: p.y + PLAYER_STAND_HEIGHT, z: p.z };
   }
 
   private static _generateRandomBotName(): string {

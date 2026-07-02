@@ -13,6 +13,7 @@ import worldColliders from '../assets/maps/boxman-world.colliders.json' with { t
 
 import {
   GAME_DURATION_MS,
+  PLAYER_STAND_HEIGHT,
   SPAWN_POINTS,
   RANK_WIN_EXP,
 } from '../gameConfig';
@@ -140,7 +141,8 @@ export default class GameManager {
    * Gets a random spawn position within the defined spawn region
    */
   public getRandomSpawnPosition(): Vector3Like {
-    return SPAWN_POINTS[Math.floor(Math.random() * SPAWN_POINTS.length)];
+    const p = SPAWN_POINTS[Math.floor(Math.random() * SPAWN_POINTS.length)];
+    return { x: p.x, y: p.y + PLAYER_STAND_HEIGHT, z: p.z };
   }
 
   /**
@@ -381,7 +383,7 @@ export default class GameManager {
         const timer = setInterval(() => {
           const who = world.entityManager.getAllPlayerEntities()[0];
           const p = who?.isSpawned ? who.position : null;
-          console.info('[player-probe]', p ? `y=${p.y.toFixed(3)} vel=${who.linearVelocity.y.toFixed(2)} grounded=${who.playerController.isGrounded}` : 'no player');
+          console.info('[player-probe]', p ? `y=${p.y.toFixed(3)} vel=${who.linearVelocity.y.toFixed(2)} grounded=${who instanceof GamePlayerEntity ? who.playerController.isGrounded : '?'}` : 'no player');
           if (++n >= 8) clearInterval(timer);
         }, 2000);
       }, 8000);
