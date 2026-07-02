@@ -7,15 +7,35 @@
 <div id="crosshair"></div>
 <div id="spread-reticle"></div>
 <div id="shotgun-reticle"></div>
+<div id="sniper-scope" aria-hidden="true">
+  <div id="sniper-scope-vignette"></div>
+  <div id="sniper-scope-ring"></div>
+  <div id="sniper-scope-cross-v"></div>
+  <div id="sniper-scope-cross-h"></div>
+</div>
 
-<div class="loadout-toggle">LOADOUT</div>
-<div class="loadout-panel">
-  <div class="loadout-title">Choose your guns</div>
-  <div class="loadout-hint">Pick up to <span class="loadout-max">5</span>. Applied immediately and on every respawn.</div>
-  <div class="loadout-grid"></div>
-  <div class="loadout-actions">
-    <button class="loadout-apply">APPLY</button>
-    <button class="loadout-cancel">CLOSE</button>
+<div id="combat-radar" aria-hidden="true">
+  <div id="combat-radar-slices"></div>
+  <div id="combat-radar-core"></div>
+  <div id="combat-radar-cross"></div>
+</div>
+<div id="combat-beacons" aria-hidden="true"></div>
+
+<div class="loadout-panel menu-root">
+  <div class="menu-shell">
+    <div class="menu-kicker">INSTANT BROWSER PVP</div>
+    <h1 class="menu-title">PVP BY GREER</h1>
+    <div class="menu-controls">
+      <span class="menu-pill">WASD move</span><span class="menu-pill">SHIFT run</span><span class="menu-pill">SPACE jump</span><span class="menu-pill">CLICK shoot</span><span class="menu-pill">R-CLICK scope / build</span><span class="menu-pill">R reload</span><span class="menu-pill">ESC menu</span>
+    </div>
+    <div class="menu-card">
+      <div class="loadout-title">Choose your guns</div>
+      <div class="loadout-hint">Pick up to <span class="loadout-max">5</span>. Applied immediately and on every respawn.</div>
+      <div class="loadout-grid"></div>
+    </div>
+    <div class="loadout-actions">
+      <button class="loadout-apply">ENTER MATCH</button>
+    </div>
   </div>
 </div>
 
@@ -33,8 +53,6 @@
   <span></span>
   <span></span>
 </div>
-
-<img src="{{CDN_ASSETS_URL}}/ui/images/scope.png" class="scope-overlay">
 
 <!-- Game Start Announcement -->
 <div class="game-start-announcement">DEATHMATCH!</div>
@@ -197,6 +215,21 @@
   const summarySecondKillsEl = document.querySelector('.summary-second-kills');
   const summarySelfNameEl = document.querySelector('.summary-self-name');
   const summarySelfKillsEl = document.querySelector('.summary-self-kills');
+  const combatRadarEl = document.getElementById('combat-radar');
+  const combatRadarSlicesEl = document.getElementById('combat-radar-slices');
+  const combatRadarCoreEl = document.getElementById('combat-radar-core');
+  const combatBeaconsEl = document.getElementById('combat-beacons');
+  const combatBeaconEls = [];
+  const sniperScopeEl = document.getElementById('sniper-scope');
+
+  if (combatBeaconsEl) {
+    for (let i = 0; i < 4; i++) {
+      const beacon = document.createElement('div');
+      beacon.className = 'combat-beacon-dot';
+      combatBeaconsEl.appendChild(beacon);
+      combatBeaconEls.push(beacon);
+    }
+  }
 
   function formatAmmoReserve(totalAmmo) {
     if (totalAmmo === -1 || totalAmmo === Infinity || totalAmmo >= 9999) {
@@ -298,16 +331,77 @@
     }
   });
 
-  document.querySelector('.loadout-toggle').addEventListener('click', () => {
-    loadoutPanel.classList.contains('open') ? closeMenu() : openMenu();
-  });
-  document.querySelector('.loadout-cancel').addEventListener('click', closeMenu);
   document.querySelector('.loadout-apply').addEventListener('click', () => {
     if (loadoutSelected.length) {
       highchair.sendData({ type: 'set-loadout', guns: loadoutSelected });
     }
     closeMenu();
   });
+
+  // The menu is the start screen: open until the player enters the match.
+  openMenu();
+
+  function updateCombatRadar(state) {
+    if (!combatRadarEl || !combatRadarSlicesEl || !combatRadarCoreEl) return;
+    if (!state || state.enabled === false || !Array.isArray(state.segments)) {
+      combatRadarEl.style.display = 'none';
+      updateCombatBeacons([]);
+      return;
+    }
+
+    combatRadarEl.style.display = 'block';
+    const segs = state.segments;
+    const count = Math.max(1, segs.length);
+    const step = 360 / count;
+    const parts = [];
+
+    for (let i = 0; i < count; i++) {
+      const intensity = Math.max(0, Math.min(1, Number(segs[i] || 0)));
+      const alpha = (intensity > 0 ? (0.14 + intensity * 0.64) : 0.04).toFixed(3);
+      const start = (i * step - step * 0.5);
+      const end = start + step;
+      parts.push(`rgba(86, 193, 255, ${alpha}) ${start.toFixed(2)}deg ${end.toFixed(2)}deg`);
+    }
+
+    combatRadarSlicesEl.style.background = `conic-gradient(${parts.join(', ')})`;
+
+    const core = Math.max(0, Math.min(1, Number(state.coreIntensity || 0)));
+    const coreAlpha = (core * 0.82).toFixed(3);
+    combatRadarCoreEl.style.background = `rgba(255, 96, 96, ${coreAlpha})`;
+    combatRadarCoreEl.style.boxShadow = `0 0 ${(4 + core * 10).toFixed(1)}px rgba(255, 90, 90, ${(core * 0.7).toFixed(3)})`;
+    updateCombatBeacons(state.beacons || []);
+  }
+
+  function updateCombatBeacons(beacons) {
+    if (!combatRadarEl || combatBeaconEls.length === 0) return;
+    const rect = combatRadarEl.getBoundingClientRect();
+    const cx = rect.left + rect.width * 0.5;
+    const cy = rect.top + rect.height * 0.5;
+    const radius = Math.max(40, rect.width * 0.78);
+
+    for (let i = 0; i < combatBeaconEls.length; i++) {
+      const el = combatBeaconEls[i];
+      const beacon = beacons && i < beacons.length ? beacons[i] : null;
+      if (!beacon || typeof beacon.angleRad !== 'number') {
+        el.style.display = 'none';
+        continue;
+      }
+
+      const intensity = Math.max(0.25, Math.min(1, Number(beacon.intensity || 0.5)));
+      const x = cx + Math.sin(beacon.angleRad) * radius;
+      const y = cy - Math.cos(beacon.angleRad) * radius;
+      el.style.left = Math.round(x) + 'px';
+      el.style.top = Math.round(y) + 'px';
+      el.style.opacity = intensity.toFixed(3);
+      el.style.display = 'block';
+    }
+  }
+
+  function updateSniperScope(active) {
+    if (!sniperScopeEl) return;
+    sniperScopeEl.classList.toggle('active', active);
+    document.body.classList.toggle('sniper-scope-active', active);
+  }
 
   function updateLeaderboard() {
     const leaderboardPlayers = document.querySelector('.leaderboard-players');
@@ -578,6 +672,10 @@
       renderLoadoutGrid();
     }
 
+    if (type === 'radar') {
+      updateCombatRadar(data);
+    }
+
     if (type === 'announce-winner') {
       const { username } = data;
       showWinnerAnnouncement(username);
@@ -769,13 +867,7 @@
 
     if (type === 'scope-zoom') {
       const { zoom } = data;
-      const scopeOverlay = document.querySelector('.scope-overlay');
-
-      if (zoom === 1) {
-        scopeOverlay.classList.remove('active');
-      } else {
-        scopeOverlay.classList.add('active');
-      }
+      updateSniperScope(zoom !== 1 && Boolean(data.sniper));
     }
 
     if (type === 'timer-sync') {
@@ -873,6 +965,7 @@
     z-index: 10;
     pointer-events: none;
     user-select: none;
+    transition: top 120ms ease-out, left 120ms ease-out, opacity 120ms ease-out;
   }
 
   #crosshair::before,
@@ -919,6 +1012,7 @@
     z-index: 10;
     pointer-events: none;
     display: none;
+    transition: top 120ms ease-out, left 120ms ease-out, opacity 120ms ease-out;
   }
 
   #spread-reticle.reticle-target-in-range {
@@ -939,6 +1033,71 @@
     z-index: 10;
     pointer-events: none;
     display: none;
+    transition: top 120ms ease-out, left 120ms ease-out, opacity 120ms ease-out;
+  }
+
+  body.sniper-scope-active #crosshair,
+  body.sniper-scope-active #spread-reticle,
+  body.sniper-scope-active #shotgun-reticle {
+    opacity: 0;
+  }
+
+  #sniper-scope {
+    position: fixed;
+    inset: 0;
+    z-index: 1001;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 120ms ease-out, visibility 0s linear 120ms;
+  }
+
+  #sniper-scope.active {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 120ms ease-out;
+  }
+
+  #sniper-scope-vignette {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at center,
+        transparent 0 21.5vmin,
+        rgba(0, 0, 0, 0.08) 22vmin,
+        rgba(0, 0, 0, 0.92) 26vmin,
+        rgba(0, 0, 0, 0.98) 100%);
+  }
+
+  #sniper-scope-ring {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 44vmin;
+    height: 44vmin;
+    transform: translate(-50%, -50%);
+    border: 1px solid rgba(240, 248, 255, 0.72);
+    border-radius: 50%;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.08);
+  }
+
+  #sniper-scope-cross-v,
+  #sniper-scope-cross-h {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    background: rgba(245, 250, 255, 0.86);
+    transform: translate(-50%, -50%);
+  }
+
+  #sniper-scope-cross-v {
+    width: 1px;
+    height: 44vmin;
+  }
+
+  #sniper-scope-cross-h {
+    width: 44vmin;
+    height: 1px;
   }
 
   #shotgun-reticle.reticle-target-in-range {
@@ -1384,23 +1543,6 @@
     border-top: 8px solid rgba(0, 0, 0, 0.6);
   }
 
-  #ui-container .scope-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    pointer-events: none;
-    width: 100%;
-    height: 100%;
-    z-index: 99;
-    object-fit: cover;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-  }
-
-  .scope-overlay.active {
-    opacity: 1;
-  }
-
   #chat-window {
     width: 25% !important;
   }
@@ -1843,88 +1985,234 @@
     right: 95px;
   }
 
-  /* ---- loadout menu ---- */
-  .loadout-toggle {
+  /* ---- combat radar ---- */
+  #combat-radar {
     position: fixed;
-    top: 12px;
-    left: 12px;
-    padding: 8px 14px;
-    background: rgba(0, 0, 0, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    border-radius: 6px;
-    color: #fff;
-    font-family: Arial, sans-serif;
-    font-size: 13px;
-    font-weight: bold;
-    letter-spacing: 1px;
-    cursor: pointer;
-    pointer-events: auto;
-    user-select: none;
-    z-index: 60;
+    top: 20px;
+    left: 20px;
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    border: 1px solid rgba(164, 218, 255, 0.6);
+    background: rgba(6, 14, 20, 0.5);
+    overflow: hidden;
+    z-index: 100;
+    pointer-events: none;
+    box-shadow: 0 0 7px rgba(90, 180, 255, 0.25);
   }
-  .loadout-toggle:hover { background: rgba(30, 30, 30, 0.8); }
 
+  #combat-radar-slices {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(rgba(90, 195, 255, 0) 0deg, rgba(90, 195, 255, 0) 360deg);
+  }
+
+  #combat-radar-core {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 26px;
+    height: 26px;
+    margin-left: -13px;
+    margin-top: -13px;
+    border-radius: 50%;
+    background: rgba(255, 95, 95, 0);
+    border: 1px solid rgba(175, 210, 240, 0.4);
+    box-shadow: 0 0 8px rgba(255, 90, 90, 0);
+  }
+
+  #combat-radar-cross {
+    position: absolute;
+    inset: 0;
+  }
+
+  #combat-radar-cross::before,
+  #combat-radar-cross::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    background: rgba(148, 193, 220, 0.45);
+  }
+
+  #combat-radar-cross::before {
+    width: 1px;
+    height: 92%;
+    margin-left: -0.5px;
+    margin-top: -46%;
+  }
+
+  #combat-radar-cross::after {
+    width: 92%;
+    height: 1px;
+    margin-left: -46%;
+    margin-top: -0.5px;
+  }
+
+  #combat-beacons {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  .combat-beacon-dot {
+    position: fixed;
+    width: 10px;
+    height: 10px;
+    margin-left: -5px;
+    margin-top: -5px;
+    border-radius: 50%;
+    background: rgba(255, 118, 118, 0.78);
+    border: 1px solid rgba(255, 210, 210, 0.85);
+    box-shadow: 0 0 6px rgba(255, 90, 90, 0.6);
+    display: none;
+  }
+
+  /* ---- loadout menu ---- */
+
+  /* Frosted-glass menu, ported from the original PvP by Greer
+     menu-shell-v4 design system. */
   .loadout-panel {
     display: none;
     position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 560px;
-    max-width: 92vw;
-    background: rgba(10, 10, 14, 0.92);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-    padding: 18px 20px;
-    color: #fff;
-    font-family: Arial, sans-serif;
+    inset: 0;
     pointer-events: auto;
     z-index: 70;
+    background: rgba(16, 22, 35, 0.34);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
   }
-  .loadout-panel.open { display: block; }
-  .loadout-title { font-size: 20px; font-weight: bold; letter-spacing: 1px; margin-bottom: 4px; }
-  .loadout-hint { font-size: 12px; opacity: 0.7; margin-bottom: 14px; }
+  .loadout-panel.open { display: flex; align-items: center; justify-content: center; }
+
+  .menu-shell {
+    width: 640px;
+    max-width: 94vw;
+    max-height: 92vh;
+    overflow-y: auto;
+    padding: 22px 24px 20px;
+    border-radius: 28px;
+    color: #172033;
+    font-family: Rajdhani, Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06)),
+      rgba(247, 250, 255, 0.42);
+    box-shadow:
+      0 24px 70px rgba(9, 18, 32, 0.24),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.46),
+      inset 0 1px 0 rgba(255, 255, 255, 0.78);
+    backdrop-filter: blur(28px) saturate(185%);
+    -webkit-backdrop-filter: blur(28px) saturate(185%);
+    text-align: center;
+  }
+
+  .menu-kicker {
+    display: inline-flex;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(244, 248, 252, 0.68));
+    box-shadow: inset 0 0 0 1px rgba(185, 199, 220, 0.92);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2.2px;
+    color: #657286;
+  }
+
+  .menu-title {
+    margin: 10px 0 12px;
+    font-family: Orbitron, Rajdhani, Inter, system-ui, sans-serif;
+    font-size: 34px;
+    font-weight: 800;
+    letter-spacing: 4px;
+    color: #07111f;
+  }
+
+  .menu-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    margin-bottom: 14px;
+  }
+
+  .menu-pill {
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.55);
+    box-shadow: inset 0 0 0 1px rgba(121, 139, 164, 0.18);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    color: #657286;
+  }
+
+  .menu-card {
+    padding: 14px 16px 12px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.34);
+    box-shadow: 0 10px 28px rgba(17, 28, 45, 0.10), inset 0 0 0 1px rgba(255, 255, 255, 0.46);
+    margin-bottom: 14px;
+  }
+  .loadout-title {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 1.4px;
+    margin-bottom: 2px;
+    color: #172033;
+    text-transform: uppercase;
+  }
+  .loadout-hint { font-size: 12px; color: #657286; margin-bottom: 12px; }
   .loadout-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    margin-bottom: 16px;
+    gap: 8px;
   }
   .loadout-gun {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
-    padding: 10px 6px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 2px solid transparent;
-    border-radius: 8px;
+    gap: 5px;
+    padding: 10px 6px 8px;
+    background: rgba(255, 255, 255, 0.55);
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 1px rgba(121, 139, 164, 0.18);
     cursor: pointer;
     user-select: none;
+    transition: background 0.1s ease, box-shadow 0.1s ease;
   }
-  .loadout-gun:hover { background: rgba(255, 255, 255, 0.12); }
+  .loadout-gun:hover {
+    background: rgba(255, 255, 255, 0.82);
+  }
   .loadout-gun.selected {
-    border-color: #ffd24a;
-    background: rgba(255, 210, 74, 0.12);
+    background: rgba(47, 109, 255, 0.14);
+    box-shadow: inset 0 0 0 2px #2f6dff;
   }
   .loadout-gun img { width: 56px; height: 36px; object-fit: contain; }
-  .loadout-gun .gun-name { font-size: 11px; text-align: center; opacity: 0.9; }
+  .loadout-gun .gun-name { font-size: 11px; font-weight: 600; text-align: center; color: #172033; }
   .loadout-gun .gun-slot {
     font-size: 10px;
-    color: #ffd24a;
+    color: #1e55dc;
     min-height: 12px;
-    font-weight: bold;
+    font-weight: 700;
+    letter-spacing: 0.8px;
   }
-  .loadout-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .loadout-actions { display: flex; justify-content: center; }
   .loadout-actions button {
-    padding: 8px 22px;
+    padding: 12px 46px;
     border: 0;
-    border-radius: 6px;
-    font-weight: bold;
-    letter-spacing: 1px;
+    border-radius: 999px;
+    font-family: Rajdhani, Inter, system-ui, sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 2px;
     cursor: pointer;
     pointer-events: auto;
   }
-  .loadout-apply { background: #ffd24a; color: #1a1a1a; }
-  .loadout-cancel { background: rgba(255, 255, 255, 0.15); color: #fff; }
+  .loadout-apply {
+    background: linear-gradient(180deg, rgba(64, 124, 255, 0.96), rgba(34, 91, 222, 0.96));
+    color: #f8fbff;
+    box-shadow: inset 0 0 0 1px rgba(185, 199, 220, 0.92), 0 12px 26px rgba(34, 91, 222, 0.25);
+  }
+  .loadout-apply:hover { filter: brightness(1.06); }
 </style>

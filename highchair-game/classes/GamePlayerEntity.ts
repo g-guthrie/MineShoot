@@ -1,4 +1,5 @@
 import { 
+  CollisionGroup,
   Audio,
   BaseEntityControllerEvent,
   DefaultPlayerEntity,
@@ -41,6 +42,23 @@ const MAX_SHIELD = 100;
 const TOTAL_INVENTORY_SLOTS = 6;
 const STARTING_MATERIALS = 30;
 const INFINITE_RESERVE_AMMO = -1;
+const RADAR_SEGMENTS = 8;
+const RADAR_RANGE = 56;
+const RADAR_CORE_RANGE = 10;
+const RADAR_UPDATE_INTERVAL_MS = 100;
+const RADAR_SECTOR_STEP = (Math.PI * 2) / RADAR_SEGMENTS;
+
+function normalizeRadarSegmentIndex(index: number): number {
+  return ((index % RADAR_SEGMENTS) + RADAR_SEGMENTS) % RADAR_SEGMENTS;
+}
+
+function radarQuadrantIndexFromAngle(angle: number): number {
+  if (angle >= 0) {
+    return angle < Math.PI * 0.5 ? 0 : 1;
+  }
+
+  return angle >= -Math.PI * 0.5 ? 3 : 2;
+}
 
 interface InventoryItem {
   name: string;
@@ -64,6 +82,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   private _aimTangentY: number = TWO_HANDED_AIM_TANGENT_Y;
   private _reticleProbeAtMs: number = 0;
   private _reticleTargetActive: boolean = false;
+  private _scopedReticleCentered: boolean = false;
   private _autoFireHasTarget: boolean = false;
   private _autoFireEngaged: boolean = false;
   private _dead: boolean = false;
@@ -78,6 +97,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   private _maxHealth: number = MAX_HEALTH;
   private _maxShield: number = MAX_SHIELD;
   private _materials: number = STARTING_MATERIALS;
+  private _radarTimer: NodeJS.Timeout | undefined;
   private _respawnTimer: NodeJS.Timeout | undefined;
   private _shield: number = BASE_SHIELD;
 
@@ -143,11 +163,25 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this.playerController.walkVelocity = 10.5;
     this.playerController.runVelocity = 16.5;
     this.playerController.jumpVelocity = 13.2;
+
+    // Players never physically shove each other — capsule-vs-capsule
+    // contacts let one player catapult another (solver depenetration).
+    // Bullets are raycasts and still hit the PLAYER group fine.
+    this.setCollisionGroupsForSolidColliders({
+      belongsTo: [CollisionGroup.PLAYER],
+      collidesWith: [CollisionGroup.BLOCK, CollisionGroup.ENTITY, CollisionGroup.ENTITY_SENSOR, CollisionGroup.ENVIRONMENT_ENTITY],
+    });
     this._setupPlayerInventory();
     this._autoHealTicker();
     this._outOfWorldTicker();
+    this._startRadarTicker();
     this._updatePlayerUIHealth();
     this._updatePlayerUIMaterials();
+  }
+
+  public override despawn(): void {
+    this._stopRadarTicker();
+    super.despawn();
   }
 
   public addItemToInventory(item: ItemEntity): void {
@@ -295,6 +329,33 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     };
   }
 
+  public centerCameraOnReticleAim(): void {
+    const { origin, direction } = this.getReticleAimRay();
+    const target = {
+      x: origin.x + direction.x * 1000,
+      y: origin.y + direction.y * 1000,
+      z: origin.z + direction.z * 1000,
+    };
+
+    // The SDK exposes facePosition publicly but its typed surface does not
+    // expose orientation setters. The runtime has them; updating both sides
+    // keeps immediate server-side shots aligned with the client camera swing.
+    const camera = this.player.camera as typeof this.player.camera & {
+      setOrientationPitch?: (pitch: number) => void;
+      setOrientationYaw?: (yaw: number) => void;
+    };
+    camera.setOrientationYaw?.(Math.atan2(-direction.x, -direction.z));
+    camera.setOrientationPitch?.(Math.asin(Math.max(-1, Math.min(1, direction.y))));
+    this.player.camera.facePosition(target);
+  }
+
+  public setScopedReticleCentered(active: boolean): void {
+    if (this._scopedReticleCentered === active) return;
+
+    this._scopedReticleCentered = active;
+    this._sendReticleUI();
+  }
+
   public isItemActiveInInventory(item: ItemEntity): boolean {
     return this._inventory[this._inventoryActiveSlotIndex] === item;
   }
@@ -309,8 +370,11 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   }
 
   public resetCamera(): void {
+    this._scopedReticleCentered = false;
     this._setupPlayerCamera();
     this.player.camera.setAttachedToEntity(this);
+    this._sendReticleUI();
+    this.player.ui.sendData({ type: 'scope-zoom', zoom: 1, sniper: true });
   }
 
   public resetMaterials(): void {
@@ -324,6 +388,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this._dead = false;
     this._autoFireRaycastCooldown = 0;
     this._autoFireHasTarget = false;
+    this._scopedReticleCentered = false;
     this.health = this._maxHealth;
     this.shield = 0;
     this.resetAnimations();
@@ -362,8 +427,8 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     const gun = item instanceof GunEntity ? item : undefined;
     const twoHanded = gun?.heldHand === 'both';
 
-    this._aimTangentX = twoHanded ? TWO_HANDED_AIM_TANGENT_X : ONE_HANDED_AIM_TANGENT_X;
-    this._aimTangentY = twoHanded ? TWO_HANDED_AIM_TANGENT_Y : ONE_HANDED_AIM_TANGENT_Y;
+    this._aimTangentX = this._scopedReticleCentered ? 0 : (twoHanded ? TWO_HANDED_AIM_TANGENT_X : ONE_HANDED_AIM_TANGENT_X);
+    this._aimTangentY = this._scopedReticleCentered ? 0 : (twoHanded ? TWO_HANDED_AIM_TANGENT_Y : ONE_HANDED_AIM_TANGENT_Y);
 
     this.player.ui.sendData({
       type: 'reticle',
@@ -468,6 +533,10 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
 
   /** Despawn every gun (slots 1..N); the pickaxe in slot 0 stays. */
   private _despawnGuns(): void {
+    this.setScopedReticleCentered(false);
+    this.player.camera.setZoom(1);
+    this.player.ui.sendData({ type: 'scope-zoom', zoom: 1, sniper: true });
+
     for (let i = 1; i < this._inventory.length; i++) {
       const item = this._inventory[i];
       if (!item) continue;
@@ -556,6 +625,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
 
   private _setupPlayerCamera(): void {
     this.player.camera.setMode(PlayerCameraMode.FIRST_PERSON);
+    this.player.camera.setZoom(1);
     this.player.camera.setViewModelHiddenNodes([ 'head', 'neck', 'torso', 'leg_right', 'leg_left' ]);
     this.player.camera.setOffset({ x: 0, y: 0.75, z: 0 }); // eye height scales with the 1.5x character
     this.player.camera.setViewModelPitchesWithCamera(true);
@@ -636,7 +706,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     if (input.q) {
       // Weapons are loadout-bound now; dropping them would only litter and
       // desync the loadout. Point players at the menu instead.
-      this.world?.chatManager?.sendPlayerMessage(this.player, 'Your weapons are part of your loadout - change them via the LOADOUT menu.', 'FFAA00');
+      this.world?.chatManager?.sendPlayerMessage(this.player, 'Your weapons are part of your loadout - press Esc to change them.', 'FFAA00');
       input.q = false;
     }
 
@@ -865,6 +935,89 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     });
   }
 
+  private _updatePlayerUIRadar(): void {
+    if (!this.world || !this.isSpawned || this._dead) {
+      this.player.ui.sendData({ type: 'radar', enabled: false });
+      return;
+    }
+
+    let selfPosition: Vector3Like;
+    try {
+      selfPosition = this.position;
+    } catch {
+      this.player.ui.sendData({ type: 'radar', enabled: false });
+      return;
+    }
+
+    const segments = new Array(RADAR_SEGMENTS).fill(0);
+    let coreIntensity = 0;
+    const offRadarQuadrants = [
+      { angleRad: Math.PI * 0.25, count: 0 },
+      { angleRad: Math.PI * 0.75, count: 0 },
+      { angleRad: -Math.PI * 0.75, count: 0 },
+      { angleRad: -Math.PI * 0.25, count: 0 },
+    ];
+
+    const yaw = this.player.camera.orientation?.yaw ?? 0;
+    const forwardX = -Math.sin(yaw);
+    const forwardZ = -Math.cos(yaw);
+    const rightX = Math.cos(yaw);
+    const rightZ = -Math.sin(yaw);
+
+    for (const target of this.world.entityManager.getAllPlayerEntities()) {
+      if (!(target instanceof GamePlayerEntity) || target === this || !target.isSpawned || target.isDead) {
+        continue;
+      }
+
+      let targetPosition: Vector3Like;
+      try {
+        targetPosition = target.position;
+      } catch {
+        continue;
+      }
+
+      const dx = targetPosition.x - selfPosition.x;
+      const dz = targetPosition.z - selfPosition.z;
+      const dist = Math.hypot(dx, dz);
+      if (!Number.isFinite(dist) || dist <= 0.001) continue;
+
+      const nx = dx / dist;
+      const nz = dz / dist;
+      const frontDot = nx * forwardX + nz * forwardZ;
+      const rightDot = nx * rightX + nz * rightZ;
+      const angle = Math.atan2(rightDot, frontDot);
+      const sector = normalizeRadarSegmentIndex(Math.round(angle / RADAR_SECTOR_STEP));
+
+      if (dist > RADAR_RANGE) {
+        offRadarQuadrants[radarQuadrantIndexFromAngle(angle)].count++;
+        continue;
+      }
+
+      const nearIntensity = Math.max(0, 1 - (dist / RADAR_RANGE));
+      segments[sector] = Math.max(segments[sector], nearIntensity);
+
+      if (dist <= RADAR_CORE_RANGE) {
+        coreIntensity = Math.max(coreIntensity, Math.max(0, 1 - (dist / RADAR_CORE_RANGE)));
+      }
+    }
+
+    const beacons = offRadarQuadrants
+      .filter(quadrant => quadrant.count > 0)
+      .map(quadrant => ({
+        angleRad: quadrant.angleRad,
+        intensity: Math.max(0.35, Math.min(1, quadrant.count >= 4 ? 1 : (0.28 + quadrant.count * 0.18))),
+        count: quadrant.count,
+      }));
+
+    this.player.ui.sendData({
+      type: 'radar',
+      enabled: true,
+      segments,
+      coreIntensity,
+      beacons,
+    });
+  }
+
   private _updatePlayerUIMaterials(): void {
     this.player.ui.sendData({
       type: 'materials',
@@ -883,6 +1036,28 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   private _playDamageAudio(): void {
     this._damageAudio.setDetune(-200 + Math.random() * 800);
     this._damageAudio.play(this.world!, true);
+  }
+
+  private _startRadarTicker(): void {
+    if (this._radarTimer) return;
+
+    const tick = () => {
+      if (!this.isSpawned) {
+        this._radarTimer = undefined;
+        return;
+      }
+
+      this._updatePlayerUIRadar();
+      this._radarTimer = setTimeout(tick, RADAR_UPDATE_INTERVAL_MS);
+    };
+
+    tick();
+  }
+
+  private _stopRadarTicker(): void {
+    if (!this._radarTimer) return;
+    clearTimeout(this._radarTimer);
+    this._radarTimer = undefined;
   }
 
   private _autoHealTicker(): void {

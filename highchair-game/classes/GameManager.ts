@@ -310,7 +310,7 @@ export default class GameManager {
     if (!this.world) return;
     
     this.world.chatManager.sendPlayerMessage(player, 'Game started - most kills wins!', '00FF00');
-    this.world.chatManager.sendPlayerMessage(player, '- You spawn with your full loadout: press LOADOUT (top left) to change guns');
+    this.world.chatManager.sendPlayerMessage(player, '- You spawn with your full loadout: press Esc to change guns');
     this.world.chatManager.sendPlayerMessage(player, '- Some weapons zoom with "Z"');
   }
 

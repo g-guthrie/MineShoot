@@ -2,44 +2,41 @@ import { Quaternion, Vector3Like, QuaternionLike } from 'highchair';
 import GunEntity from '../GunEntity';
 import type { GunEntityOptions } from '../GunEntity';
 
-const DEFAULT_BOLT_ACTION_SNIPER_OPTIONS: GunEntityOptions = {
-  ammo: 4,
-  damage: 90,
-  fireRate: 0.55,
-  tracer: { seg: 3.2, speed: 420, life: 0.14 },
+const DEFAULT_SCOUT_RIFLE_OPTIONS: GunEntityOptions = {
+  ammo: 8,
+  damage: 40,
+  fireRate: 1.8,
+  tracer: { seg: 2.4, speed: 360 },
   heldHand: 'both',
-  iconImageUri: 'icons/bolt-action-sniper.png',
+  iconImageUri: 'icons/scout-rifle.png',
   idleAnimation: 'idle_gun_both',
   mlAnimation: 'shoot_gun_both',
-  name: 'Bolt Action Sniper',
-  maxAmmo: 4,
-  totalAmmo: 24,
+  name: 'Scout Rifle',
+  maxAmmo: 8,
+  totalAmmo: 40,
   scopeZoom: 5,
-  modelUri: 'models/items/bolt-action-sniper.glb',
+  modelUri: 'models/items/scout-rifle.glb',
   modelScale: 1.3,
-  range: 170,
+  range: 120,
   reloadAudioUri: 'audio/sfx/sniper-reload.mp3',
   reloadTimeMs: 2200,
   shootAudioUri: 'audio/sfx/sniper-shoot.mp3',
 };
 
-export default class BoltActionSniperEntity extends GunEntity {
+export default class ScoutRifleEntity extends GunEntity {
   public constructor(options: Partial<GunEntityOptions> = {}) {
-    super({ ...DEFAULT_BOLT_ACTION_SNIPER_OPTIONS, ...options });
+    super({ ...DEFAULT_SCOUT_RIFLE_OPTIONS, ...options });
   }
 
   public override shoot(): void {
     if (!this.parent || !this.processShoot()) return;
 
     super.shoot();
-
-    // It's bolt action, auto reload it 300ms after a shot.
-    setTimeout(() => { this.reload() }, 300);
   }
 
   public override getMuzzleFlashPositionRotation(): { position: Vector3Like, rotation: QuaternionLike } {
     return {
-      position: { x: 0, y: 0.15, z: -2.23 },
+      position: { x: 0, y: 0.01, z: -2.7 },
       rotation: Quaternion.fromEuler(0, 90, 0),
     };
   }

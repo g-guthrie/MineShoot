@@ -2,43 +2,46 @@ import { Quaternion, Vector3Like, QuaternionLike } from 'highchair';
 import GunEntity from '../GunEntity';
 import type { GunEntityOptions } from '../GunEntity';
 
-const DEFAULT_AUTO_SNIPER_OPTIONS: GunEntityOptions = {
-  ammo: 8,
-  damage: 40,
-  fireRate: 1.8,
-  tracer: { seg: 2.4, speed: 360 },
+const DEFAULT_SNIPER_OPTIONS: GunEntityOptions = {
+  ammo: 4,
+  damage: 90,
+  fireRate: 0.55,
+  tracer: { seg: 3.2, speed: 420, life: 0.14 },
   heldHand: 'both',
-  iconImageUri: 'icons/auto-sniper.png',
+  iconImageUri: 'icons/sniper.png',
   idleAnimation: 'idle_gun_both',
   mlAnimation: 'shoot_gun_both',
-  name: 'Auto Sniper',
-  maxAmmo: 8,
-  totalAmmo: 40,
+  name: 'Sniper',
+  maxAmmo: 4,
+  totalAmmo: 24,
   scopeZoom: 5,
-  modelUri: 'models/items/auto-sniper.glb',
+  centersCameraOnScope: true,
+  modelUri: 'models/items/sniper.glb',
   modelScale: 1.3,
-  range: 120,
+  range: 170,
   reloadAudioUri: 'audio/sfx/sniper-reload.mp3',
   reloadTimeMs: 2200,
   shootAudioUri: 'audio/sfx/sniper-shoot.mp3',
 };
 
-export default class AutoSniperEntity extends GunEntity {
+export default class SniperEntity extends GunEntity {
   public constructor(options: Partial<GunEntityOptions> = {}) {
-    super({ ...DEFAULT_AUTO_SNIPER_OPTIONS, ...options });
+    super({ ...DEFAULT_SNIPER_OPTIONS, ...options });
   }
 
   public override shoot(): void {
     if (!this.parent || !this.processShoot()) return;
 
     super.shoot();
+
+    // The sniper auto-reloads shortly after each shot.
+    setTimeout(() => { this.reload() }, 300);
   }
 
   public override getMuzzleFlashPositionRotation(): { position: Vector3Like, rotation: QuaternionLike } {
     return {
-      position: { x: 0, y: 0.01, z: -2.7 },
+      position: { x: 0, y: 0.15, z: -2.23 },
       rotation: Quaternion.fromEuler(0, 90, 0),
     };
   }
 }
-
