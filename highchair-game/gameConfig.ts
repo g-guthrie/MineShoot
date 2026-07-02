@@ -1,91 +1,16 @@
 import { Quaternion } from 'highchair';
 import arenaMeta from './assets/maps/boxman-arena.meta.json' with { type: 'json' };
 
-export const BEDROCK_BLOCK_ID = 2;
-
+// The world is a collider mesh with an empty chunk lattice; the only
+// voxel blocks that can exist are ones players build (BUILD_BLOCK_ID).
 export const BLOCK_ID_BREAK_DAMAGE: Record<string | number, number> = {
-  1: 50, // bricks
-  4: 50, // cobblestone
-  6: 70, // diamond block
-  7: 70, // diamond ore
-  8: 10, // dirt
-  14: 10, // glass
-  15: 70, // gold ore
-  16: 10, // grass
-  17: 10, // gravel
-  19: 100, // infected shadowrock core
-  20: 100, // infected shadowrock
-  24: 50, // mossy cobblestone
-  27: 10, // oak leaves
-  30: 10, // sand
-  36: 100, // stone bricks
-  37: 40, // stone (also build block)
-  // biome-arena additions
-  9: 100, // dragon block
-  10: 70, // dragons-stone
-  11: 70, // emerald block
-  18: 20, // ice
-  23: 30, // log
-  25: 10, // nuit leaves
-  28: 30, // oak planks
-  29: 10, // sand light
-  31: 40, // sandstone light
-  32: 40, // sandstone
-  33: 15, // shadow pebble
-  34: 70, // shadowrock
-  38: 100, // swirl rune
-  44: 10, 45: 10, 46: 10, 47: 10, // snow variants
-  48: 30, // ice block
-  49: 70, 50: 70, // shale cliffs
-  51: 50, // shale rock
-  52: 15, 53: 15, // lava dirt
-  54: 30, // lava rocky
-  56: 50, 57: 50, 58: 40, // jungle blocks
-  59: 10, 60: 10, 61: 10, // jungle dirt
-  62: 50, 63: 50, // dark cobblestone
-  64: 30, 65: 30, 66: 30, // dark oak / slats
-  67: 10, // cracked sand
-  68: 10, // glass window
-  default: 30, // default for all other blocks
-}
+  37: 40, // stone (build block)
+  default: 30,
+};
 
 export const BLOCK_ID_MATERIALS: Record<string | number, number> = {
-  1: 4, // bricks
-  2: 0, // bedrock
-  6: 10, // diamond block
-  7: 10, // diamond ore,
-  8: 0, // dirt
-  14: 0, // glass
-  15: 8, // gold ore,
-  16: 0, // grass
-  19: 8, // infected shadowrock core
-  20: 8, // infected shadowrock
-  22: 0, // lava
-  23: 2, // log
-  28: 2, // oak planks
-  36: 5, // stone bricks
-  42: 0, // water flow
-  43: 0, // water still
-  // biome-arena additions
-  9: 10, // dragon block
-  11: 10, // emerald block
-  18: 1, // ice
-  25: 0, // nuit leaves
-  27: 0, // oak leaves
-  31: 3, 32: 3, // sandstone
-  33: 1, // shadow pebble
-  34: 5, // shadowrock
-  38: 8, // swirl rune
-  44: 0, 45: 0, 46: 0, 47: 0, // snow
-  48: 2, // ice block
-  49: 5, 50: 5, 51: 4, // shale
-  52: 0, 53: 0, 54: 2, // lava ground
-  56: 4, 57: 4, 58: 3, // jungle blocks
-  59: 0, 60: 0, 61: 0, // jungle dirt
-  64: 2, 65: 2, 66: 2, // dark oak / slats
-  67: 0, // cracked sand
-  68: 0, // glass window
-  default: 1, // default for all other blocks
+  37: 5, // stone (build block)
+  default: 0,
 };
 
 export const BUILD_BLOCK_ID = 37; // stone
@@ -356,6 +281,6 @@ export const RANKS = [
   },
 ]
 
-// Spawn points are generated alongside the map (tools/build-map.mjs) so they
-// always sit on real walkable floor.
+// Spawn heights are computed from the world collider surfaces
+// (tools/export-boxman-glb.mjs) so players always drop onto real floor.
 export const SPAWN_POINTS = arenaMeta.spawnPoints;

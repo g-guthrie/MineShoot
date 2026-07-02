@@ -1,6 +1,5 @@
 import { Block, Vector3Like, World } from 'highchair';
 import {
-  BEDROCK_BLOCK_ID,
   BLOCK_ID_BREAK_DAMAGE,
   BLOCK_ID_MATERIALS,
  } from '../gameConfig';
@@ -28,7 +27,7 @@ export default class TerrainDamageManager {
     if (!blockDamage) {
       const blockId = block.blockType.id;
 
-      if (block.blockType.isLiquid || blockId === BEDROCK_BLOCK_ID) {
+      if (block.blockType.isLiquid) {
         return false;
       }
 

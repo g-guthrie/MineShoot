@@ -1,6 +1,5 @@
 import { Audio, CollisionGroup, Entity, Quaternion, Vector3Like, QuaternionLike, RigidBodyType, EntityEvent, Vector3, Collider } from 'highchair';
 import GunEntity from '../GunEntity';
-import { BEDROCK_BLOCK_ID } from '../../gameConfig';
 import type { GunEntityOptions } from '../GunEntity';
 import type GamePlayerEntity from '../GamePlayerEntity';
 
@@ -143,10 +142,7 @@ export default class RocketLauncherEntity extends GunEntity {
               z: contactCoordinate.z + dz
             }
 
-            // do not destroy bedrock!
-            if (world.chunkLattice.getBlockId(coordinate) !== BEDROCK_BLOCK_ID) {
-              world.chunkLattice.setBlock(coordinate, 0);
-            }
+            world.chunkLattice.setBlock(coordinate, 0);
           }
         }
       }

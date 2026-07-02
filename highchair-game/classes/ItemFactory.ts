@@ -50,7 +50,7 @@ export default class ItemFactory {
         itemModule = await import('./items/ShieldPotionEntity');
         break;
       default:
-        throw new Error(`Unknown chest item id: ${itemId}`);
+        throw new Error(`Unknown item id: ${itemId}`);
     }
 
     const itemClass = itemModule.default;
