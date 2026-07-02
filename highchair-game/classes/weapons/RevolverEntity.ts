@@ -30,14 +30,6 @@ export default class RevolverEntity extends GunEntity {
     super({ ...DEFAULT_REVOLVER_OPTIONS, ...options });
   }
 
-  public override shoot(): void {
-    if (!this.parent || !this.processShoot()) return;
-
-    super.shoot();
-    
-    // Cancel input since pistol requires click-to-shoot
-    // (this.parent as GamePlayerEntity).player.input.ml = false;
-  }
 
   public override getMuzzleFlashPositionRotation(): { position: Vector3Like, rotation: QuaternionLike } {
     return {

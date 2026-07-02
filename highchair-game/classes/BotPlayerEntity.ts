@@ -64,7 +64,7 @@ class BotPlayerUI {
 
 class BotPlayerCamera {
   public mode: PlayerCameraMode = PlayerCameraMode.FIRST_PERSON;
-  public offset: Vector3Like = { x: 0, y: 0.5, z: 0 };
+  public offset: Vector3Like = { x: 0, y: 0.75, z: 0 }; // eye height matches GamePlayerEntity._setupPlayerCamera
   public zoom: number = 1;
   private _orientation = { pitch: 0, yaw: 0 };
   private _attachedEntity: GamePlayerEntity | undefined;

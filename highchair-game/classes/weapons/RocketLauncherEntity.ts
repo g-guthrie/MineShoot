@@ -1,9 +1,11 @@
 import { Audio, CollisionGroup, Entity, Quaternion, Vector3Like, QuaternionLike, RigidBodyType, EntityEvent, Vector3, Collider } from 'highchair';
 import GunEntity from '../GunEntity';
 import type { GunEntityOptions } from '../GunEntity';
-import type GamePlayerEntity from '../GamePlayerEntity';
+import GamePlayerEntity from '../GamePlayerEntity';
 
-const ROCKET_DESTRUCTION_RADIUS = 3;
+const ROCKET_DESTRUCTION_RADIUS = 3;   // blast sphere, world units (old missile: 2)
+const ROCKET_SPEED = 34;               // world units/sec (old missile tuning)
+const ROCKET_LIFETIME_MS = 3000;       // despawn if nothing is hit
 
 const DEFAULT_ROCKET_LAUNCHER_OPTIONS: GunEntityOptions = {
   ammo: 1,
@@ -29,14 +31,6 @@ export default class RocketLauncherEntity extends GunEntity {
     super({ ...DEFAULT_ROCKET_LAUNCHER_OPTIONS, ...options });
   }
 
-  public override shoot(): void {
-    if (!this.parent || !this.processShoot()) return;
-
-    super.shoot();
-    
-    // Cancel input since rocket launcher requires click-to-shoot
-    // (this.parent as GamePlayerEntity).player.input.ml = false;
-  }
 
   public override getMuzzleFlashPositionRotation(): { position: Vector3Like, rotation: QuaternionLike } {
     return {
@@ -52,11 +46,14 @@ export default class RocketLauncherEntity extends GunEntity {
   }
 
   public override shootRaycast(origin: Vector3Like, direction: Vector3Like, length: number) {
-    // Instead of a raycast, we'll spawn a projectile that on collision with a block or entity explodes
-    // and deals damage and blows up blocks
+    // Projectile instead of a raycast: the missile flies until it touches
+    // the world mesh, a placed block, or a player, then explodes.
     if (!this.parent?.world) {
       return;
     }
+
+    const shooter = this.parent as GamePlayerEntity;
+    let exploded = false;
 
     const rocketMissileEntity = new Entity({
       modelUri: 'models/items/rocket-missile.glb',
@@ -68,115 +65,83 @@ export default class RocketLauncherEntity extends GunEntity {
             ...Collider.optionsFromModelUri('models/items/rocket-missile.glb', 0.75),
             collisionGroups: {
               belongsTo: [ CollisionGroup.ENTITY ],
-              collidesWith: [ CollisionGroup.BLOCK ],
+              // The world mesh is an ENTITY/ENVIRONMENT_ENTITY; there are no
+              // voxel blocks except player-built ones.
+              collidesWith: [ CollisionGroup.BLOCK, CollisionGroup.ENTITY, CollisionGroup.ENVIRONMENT_ENTITY, CollisionGroup.PLAYER ],
             }
           },
         ],
-        linearVelocity: { 
-          x: direction.x * 34,
-          y: direction.y * 34,
-          z: direction.z * 34,
+        linearVelocity: {
+          x: direction.x * ROCKET_SPEED,
+          y: direction.y * ROCKET_SPEED,
+          z: direction.z * ROCKET_SPEED,
         },
       }
     });
-    
-    // Create a despawn timer if it doesn't hit
+
+    // Despawn if it never hits anything.
     setTimeout(() => {
       if (rocketMissileEntity.isSpawned) {
         rocketMissileEntity.despawn();
       }
-    }, 3000);
+    }, ROCKET_LIFETIME_MS);
 
-    // Convert direction vector to quaternion that faces in the direction vector
-    const directionQuat = Quaternion.fromEuler(
-      Math.atan2(-direction.y, Math.sqrt(direction.x * direction.x + direction.z * direction.z)) * 180 / Math.PI,
-      Math.atan2(direction.x, direction.z) * 180 / Math.PI,
-      0
-    );
-
-    rocketMissileEntity.on(EntityEvent.BLOCK_COLLISION, ({ blockType, colliderHandleA, colliderHandleB }) => {
-      if (!this.parent?.world || !rocketMissileEntity.isSpawned || blockType.isLiquid) {
-        return;
-      }
+    const explode = (contactPoint: Vector3Like) => {
+      if (exploded || !this.parent?.world || !rocketMissileEntity.isSpawned) return;
+      exploded = true;
 
       const { world } = this.parent;
-      const contactManifold = world.simulation.getContactManifolds(colliderHandleA, colliderHandleB)[0];
 
-      if (!contactManifold) {
-        return;
-      }
-
-      const contactPoint = contactManifold.contactPoints[0];
-      const contactCoordinate = {
-        x: Math.floor(contactPoint.x),
-        y: Math.floor(contactPoint.y), 
-        z: Math.floor(contactPoint.z)
-      };
-
-      // Deal damage to nearby players
-      this.parent.world.entityManager.getAllPlayerEntities().forEach(playerEntity => {
-        const playerPos = Vector3.fromVector3Like(playerEntity.position);
-        const contactPos = Vector3.fromVector3Like(contactPoint);
-        const distance = playerPos.distance(contactPos);
-
+      // Damage nearby players (shooter included: rocket-jumping stays legal).
+      world.entityManager.getAllPlayerEntities().forEach(playerEntity => {
+        const distance = Vector3.fromVector3Like(playerEntity.position)
+          .distance(Vector3.fromVector3Like(contactPoint));
         if (distance <= ROCKET_DESTRUCTION_RADIUS) {
-          (playerEntity as GamePlayerEntity).takeDamage(this.damage, direction, this.parent as GamePlayerEntity);
+          (playerEntity as GamePlayerEntity).takeDamage(this.damage, direction, shooter);
         }
       });
-      
-      // Break blocks
+
+      // Crater any player-built blocks in the blast sphere.
+      const contactCoordinate = {
+        x: Math.floor(contactPoint.x),
+        y: Math.floor(contactPoint.y),
+        z: Math.floor(contactPoint.z),
+      };
       for (let dx = -ROCKET_DESTRUCTION_RADIUS; dx <= ROCKET_DESTRUCTION_RADIUS; dx++) {
         for (let dy = -ROCKET_DESTRUCTION_RADIUS; dy <= ROCKET_DESTRUCTION_RADIUS; dy++) {
           for (let dz = -ROCKET_DESTRUCTION_RADIUS; dz <= ROCKET_DESTRUCTION_RADIUS; dz++) {
-            // Calculate distance from center of explosion
-            const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            
-            // Only destroy blocks within the spherical radius
-            if (distance > ROCKET_DESTRUCTION_RADIUS) {
-              continue;
-            }
-
-            const coordinate = {
+            if (Math.hypot(dx, dy, dz) > ROCKET_DESTRUCTION_RADIUS) continue;
+            world.chunkLattice.setBlock({
               x: contactCoordinate.x + dx,
               y: contactCoordinate.y + dy,
-              z: contactCoordinate.z + dz
-            }
-
-            world.chunkLattice.setBlock(coordinate, 0);
+              z: contactCoordinate.z + dz,
+            }, 0);
           }
         }
       }
 
-      // Explosion Visual
+      // Explosion visual: expands facing back along the flight path.
       const explosionEntity = new Entity({
         modelUri: 'models/environment/explosion.glb',
         modelScale: 0.2,
         rigidBodyOptions: { type: RigidBodyType.KINEMATIC_POSITION },
       });
-
       const explosionDirectionQuat = Quaternion.fromEuler(
-        Math.atan2(-direction.y, Math.sqrt(direction.x * direction.x + direction.z * direction.z)) * 180 / Math.PI + 90,
-        Math.atan2(direction.x, direction.z) * 180 / Math.PI + 180, // Add 180 degrees to invert direction
+        Math.atan2(-direction.y, Math.hypot(direction.x, direction.z)) * 180 / Math.PI + 90,
+        Math.atan2(direction.x, direction.z) * 180 / Math.PI + 180,
         0
       );
-
       explosionEntity.spawn(world, contactPoint, explosionDirectionQuat);
-      explosionEntity.setCollisionGroupsForSolidColliders({ 
-        belongsTo: [],
-        collidesWith: [],
-      })
-
+      explosionEntity.setCollisionGroupsForSolidColliders({ belongsTo: [], collidesWith: [] });
       const explosionEffectInterval = setInterval(() => {
-        if (explosionEntity.opacity <= 0) {
-          explosionEntity.despawn();
+        if (explosionEntity.opacity <= 0 || !explosionEntity.isSpawned) {
+          if (explosionEntity.isSpawned) explosionEntity.despawn();
           clearInterval(explosionEffectInterval);
           return;
         }
-
         explosionEntity.setOpacity(explosionEntity.opacity - 0.1);
       }, 100);
 
-      // Explosion Audio
       (new Audio({
         uri: 'audio/sfx/rocket-launcher-explosion.mp3',
         referenceDistance: 15,
@@ -185,8 +150,40 @@ export default class RocketLauncherEntity extends GunEntity {
       })).play(world);
 
       rocketMissileEntity.despawn();
+    };
+
+    const contactPointFor = (colliderHandleA: number, colliderHandleB: number): Vector3Like | undefined => {
+      const manifold = this.parent?.world?.simulation.getContactManifolds(colliderHandleA, colliderHandleB)[0];
+      return manifold?.contactPoints[0] ?? undefined;
+    };
+
+    rocketMissileEntity.on(EntityEvent.BLOCK_COLLISION, ({ blockType, colliderHandleA, colliderHandleB }) => {
+      if (blockType.isLiquid) return;
+      const contact = contactPointFor(colliderHandleA, colliderHandleB);
+      if (contact) explode(contact);
     });
-    
+
+    // The missile spawns inside the shooter's capsule and passes their own
+    // held gun + muzzle flash on the way out; never explode on any of them.
+    const isShooterGear = (entity: Entity | undefined): boolean => {
+      for (let current = entity; current; current = current.parent) {
+        if (current === shooter) return true;
+      }
+      return false;
+    };
+
+    rocketMissileEntity.on(EntityEvent.ENTITY_COLLISION, ({ otherEntity, colliderHandleA, colliderHandleB }) => {
+      if (isShooterGear(otherEntity) || otherEntity === rocketMissileEntity) return;
+      const contact = contactPointFor(colliderHandleA, colliderHandleB) ?? rocketMissileEntity.position;
+      explode(contact);
+    });
+
+    // Face the missile along its flight path.
+    const directionQuat = Quaternion.fromEuler(
+      Math.atan2(-direction.y, Math.hypot(direction.x, direction.z)) * 180 / Math.PI,
+      Math.atan2(direction.x, direction.z) * 180 / Math.PI,
+      0
+    );
     rocketMissileEntity.spawn(this.parent.world, origin, directionQuat);
   }
 }

@@ -23,11 +23,6 @@ export default class MiningDrillEntity extends MeleeWeaponEntity {
     super({ ...DEFAULT_MINING_DRILL_OPTIONS, ...options, tag: 'mining-drill' });
   }
 
-  public override attack(): void {
-    if (!this.parent || !this.processAttack()) return;
-
-    super.attack();
-  }
 
   public override equip(): void {
     super.equip();

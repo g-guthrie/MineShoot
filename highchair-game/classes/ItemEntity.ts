@@ -269,7 +269,9 @@ export default class ItemEntity extends Entity {
         ...colliderOptions,
         collisionGroups: {
           belongsTo: [ CollisionGroup.ENTITY ],
-          collidesWith: [ CollisionGroup.BLOCK ],
+          // BLOCK alone predates the mesh world — dropped items would fall
+          // straight through it (the world's colliders are entity groups).
+          collidesWith: [ CollisionGroup.BLOCK, CollisionGroup.ENTITY, CollisionGroup.ENVIRONMENT_ENTITY ],
         },
         halfExtents: colliderOptions.halfExtents ? {
           x: colliderOptions.halfExtents.x * modelScale,

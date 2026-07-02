@@ -1,7 +1,6 @@
 import {
   GameServer,
   Player,
-  Quaternion,
   Vector3Like,
   World,
   ColliderShape,
@@ -13,13 +12,12 @@ import worldColliders from '../assets/maps/boxman-world.colliders.json' with { t
 
 import {
   GAME_DURATION_MS,
-  PLAYER_STAND_HEIGHT,
   SPAWN_POINTS,
 } from '../gameConfig';
 
 import GamePlayerEntity from './GamePlayerEntity';
-import ItemFactory from './ItemFactory';
 import BotPlayerEntity from './BotPlayerEntity';
+import TerrainDamageManager from './TerrainDamageManager';
 
 export default class GameManager {
   public static readonly instance = new GameManager();
@@ -140,8 +138,10 @@ export default class GameManager {
    * Gets a random spawn position within the defined spawn region
    */
   public getRandomSpawnPosition(): Vector3Like {
+    // SPAWN_POINTS already include the capsule standing clearance
+    // (gameConfig adds PLAYER_STAND_HEIGHT exactly once).
     const p = SPAWN_POINTS[Math.floor(Math.random() * SPAWN_POINTS.length)];
-    return { x: p.x, y: p.y + PLAYER_STAND_HEIGHT, z: p.z };
+    return { x: p.x, y: p.y, z: p.z };
   }
 
   /**
@@ -206,7 +206,7 @@ export default class GameManager {
         playerEntity.refreshLoadout(); // fresh loadout guns, nothing dropped
         playerEntity.resetCamera();
         playerEntity.resetMaterials();
-        playerEntity.health = 100;
+        playerEntity.health = playerEntity.maxHealth;
         playerEntity.shield = 0;
       }
     });
@@ -231,6 +231,9 @@ export default class GameManager {
       clearTimeout(this._gameTimer);
       this._gameTimer = undefined;
     }
+
+    // Forget partial block damage from the previous round
+    TerrainDamageManager.instance.reset();
 
     // Reset leaderboard
     this.resetLeaderboard();
@@ -311,19 +314,16 @@ export default class GameManager {
     
     this.world.chatManager.sendPlayerMessage(player, 'Game started - most kills wins!', '00FF00');
     this.world.chatManager.sendPlayerMessage(player, '- You spawn with your full loadout: press Esc to change guns');
-    this.world.chatManager.sendPlayerMessage(player, '- Some weapons zoom with "Z"');
+    this.world.chatManager.sendPlayerMessage(player, '- Right-click scopes on scoped guns; with the pickaxe it builds blocks');
   }
 
-  /**
-   * Creates bedrock floor for the game world
-   */
   private _worldMesh: Entity | undefined;
 
   /**
-   * The playfield is the ORIGINAL boxman MineShoot world as one fixed
-   * trimesh model (smooth ramps, pirate ship, kraken and all) — not a
-   * voxel approximation. The voxel lattice underneath is just a bedrock
-   * safety floor and a base for block building.
+   * The playfield is the ORIGINAL boxman MineShoot world: one fixed entity
+   * with per-cuboid box colliders (smooth ramps, pirate ship, kraken and
+   * all) — not a voxel approximation. The chunk lattice starts empty and
+   * only ever holds player-built blocks.
    */
   public _spawnWorldMesh(world: World) {
     if (this._worldMesh?.isSpawned) return;

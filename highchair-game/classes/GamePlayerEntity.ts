@@ -25,6 +25,8 @@ import GameManager from './GameManager';
 const BASE_HEALTH = 100;
 const BASE_SHIELD = 0;
 const BLOCK_MATERIAL_COST = 3;
+const BUILD_REACH = 6; // max distance a block can be placed at
+const VOID_Y = -100;   // below the deepest world geometry; falling past it kills
 // Canonical aim offsets, measured from the model skeleton itself by
 // tools/measure-aim-offsets.mjs (idle stance bone chains; the barrel runs
 // along the hand anchor's -Y). Camera-space tangent units: x < 0 = left,
@@ -211,7 +213,9 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
       this._autoFireHasTarget = false;
 
       if (attacker) {
-        GameManager.instance.addKill(attacker.player.username);
+        if (attacker !== this) {
+          GameManager.instance.addKill(attacker.player.username); // suicides never score
+        }
         this.focusCameraOnPlayer(this); // death cam orbits your own body, not the killer
       }
 
@@ -402,6 +406,8 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   public savePersistedData(): void {}
 
   public setActiveInventorySlotIndex(index: number): void {
+    if (!Number.isInteger(index) || index < 0 || index >= TOTAL_INVENTORY_SLOTS) return;
+
     if (index !== this._inventoryActiveSlotIndex) {
       this._inventory[this._inventoryActiveSlotIndex]?.unequip();
     }
@@ -478,15 +484,11 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   }
 
   public updateHealth(amount: number): void {
-    this.health = Math.min(this.health + amount, this._maxHealth);
-
-    this._updatePlayerUIHealth();
+    this.health += amount; // setter clamps and updates the UI
   }
 
   public updateShield(amount: number): void {
-    this.shield = Math.min(this.shield + amount, this._maxShield);
-
-    this._updatePlayerUIShield();
+    this.shield += amount; // setter clamps and updates the UI
   }
 
   public updateItemInventoryQuantity(item: ItemEntity): void {
@@ -808,13 +810,15 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
 
     if (!this.world) return;
 
-    // Scoped guns ADS on right-click (the old two-finger-click scope zoom);
-    // everything else keeps right-click for block building.
+    // Right-click: scoped guns ADS (the old two-finger-click scope zoom);
+    // the pickaxe builds; other items do nothing.
     const activeItem = this._inventory[this._inventoryActiveSlotIndex];
-    if (activeItem instanceof GunEntity && activeItem.hasScope()) {
-      activeItem.zoomScope();
+    if (activeItem instanceof GunEntity) {
+      if (activeItem.hasScope()) activeItem.zoomScope();
       return;
     }
+
+    if (!(activeItem instanceof MeleeWeaponEntity)) return;
 
     if (this._materials < BLOCK_MATERIAL_COST) {
       this.world?.chatManager?.sendPlayerMessage(this.player, `You need at least ${BLOCK_MATERIAL_COST} materials to build.`, 'FF0000');
@@ -822,27 +826,36 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     }
 
     const { world } = this;
-    const position = this.position;
-    const facingDirection = this.player.camera.facingDirection;
-    const origin = {
-      x: position.x + (facingDirection.x * 0.5),
-      y: position.y + (facingDirection.y * 0.5) + this.player.camera.offset.y,
-      z: position.z + (facingDirection.z * 0.5),
-    };
-
-    const raycastHit = world.simulation.raycast(origin, facingDirection, 4, {
+    const { origin, direction } = this.getReticleAimRay();
+    const raycastHit = world.simulation.raycast(origin, direction, BUILD_REACH, {
       filterExcludeRigidBody: this.rawRigidBody,
     });
+    if (!raycastHit?.hitPoint) return;
 
-    if (raycastHit?.hitBlock) {
-      const { hitBlock } = raycastHit;
-      const placementCoordinate = hitBlock.getNeighborGlobalCoordinateFromHitPoint(raycastHit.hitPoint);
+    // Against a placed block, fill its neighbor cell; against the world
+    // mesh (an entity, not a block) take the empty cell just in front of
+    // the hit surface.
+    const placementCoordinate = raycastHit.hitBlock
+      ? raycastHit.hitBlock.getNeighborGlobalCoordinateFromHitPoint(raycastHit.hitPoint)
+      : {
+          x: Math.floor(raycastHit.hitPoint.x - direction.x * 0.01),
+          y: Math.floor(raycastHit.hitPoint.y - direction.y * 0.01),
+          z: Math.floor(raycastHit.hitPoint.z - direction.z * 0.01),
+        };
 
-      world.chunkLattice.setBlock(placementCoordinate, BUILD_BLOCK_ID);
+    // Never entomb anyone: reject cells overlapping a player capsule.
+    const blockCenter = { x: placementCoordinate.x + 0.5, y: placementCoordinate.y + 0.5, z: placementCoordinate.z + 0.5 };
+    const entombs = world.entityManager.getAllPlayerEntities().some(entity => {
+      const p = entity.position;
+      return Math.abs(p.x - blockCenter.x) < 1
+        && Math.abs(p.z - blockCenter.z) < 1
+        && Math.abs(p.y - blockCenter.y) < entity.height / 2 + 0.5;
+    });
+    if (entombs) return;
 
-      this._materials -= BLOCK_MATERIAL_COST;
-      this._updatePlayerUIMaterials();  
-    }    
+    world.chunkLattice.setBlock(placementCoordinate, BUILD_BLOCK_ID);
+    this._materials -= BLOCK_MATERIAL_COST;
+    this._updatePlayerUIMaterials();
   }
 
   private _handleReload(): void {
@@ -874,7 +887,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
       input.f = false;
     }
 
-    for (let i = 1; i <= TOTAL_INVENTORY_SLOTS; i++) {
+    for (let i = 1; i < TOTAL_INVENTORY_SLOTS; i++) {
       const key = i.toString();
       if (input[key]) {
         this.setActiveInventorySlotIndex(i);
@@ -1077,8 +1090,15 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
       if (!this.isSpawned) return;
 
       try {
-        if (this.position.y < -100 && !this._dead) {
-          this.takeDamage(MAX_HEALTH + MAX_SHIELD, { x: 0, y: 0, z: -1 });
+        if (this.position.y < VOID_Y && !this._dead) {
+          if (GameManager.instance.isGameActive) {
+            this.takeDamage(MAX_HEALTH + MAX_SHIELD, { x: 0, y: 0, z: -1 });
+          } else {
+            // No round running: takeDamage would no-op and the fall would
+            // never end. Just put them back on the map.
+            this.setPosition(GameManager.instance.getRandomSpawnPosition());
+            this.health = this._maxHealth;
+          }
         }
       } catch {
         // Physics body tore down between the isSpawned check and the

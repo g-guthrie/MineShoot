@@ -20,6 +20,11 @@ export default class TerrainDamageManager {
     return BLOCK_ID_MATERIALS[blockId] ?? BLOCK_ID_MATERIALS.default; 
   }
 
+  /** Forget all partial damage (round resets). */
+  public reset(): void {
+    this._blockDamages.clear();
+  }
+
   public damageBlock(world: World, block: Block, damage: number): boolean {
     const coordinateKey = this._coordinateToKey(block.globalCoordinate);
     let blockDamage = this._blockDamages.get(coordinateKey);

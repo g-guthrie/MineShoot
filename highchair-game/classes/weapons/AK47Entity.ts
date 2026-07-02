@@ -30,11 +30,6 @@ export default class AK47Entity extends GunEntity {
     super({ ...DEFAULT_AK47_OPTIONS, ...options });
   }
 
-  public override shoot(): void {
-    if (!this.parent || !this.processShoot()) return;
-
-    super.shoot();
-  }
 
   public override getMuzzleFlashPositionRotation(): { position: Vector3Like, rotation: QuaternionLike } {
     return {

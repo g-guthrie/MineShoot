@@ -34,11 +34,6 @@ export default class ShotgunEntity extends GunEntity {
     super({ ...DEFAULT_SHOTGUN_OPTIONS, ...options });
   }
 
-  public override shoot(): void {
-    if (!this.parent || !this.processShoot()) return;
-
-    super.shoot();
-  }
 
   public override getMuzzleFlashPositionRotation(): { position: Vector3Like, rotation: QuaternionLike } {
     return {

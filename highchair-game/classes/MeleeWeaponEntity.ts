@@ -64,7 +64,7 @@ export default abstract class MeleeWeaponEntity extends ItemEntity {
   }
 
   public attack(): void {
-    if (!this.parent?.world) return;
+    if (!this.parent?.world || !this.processAttack()) return;
 
     const player = this.parent as GamePlayerEntity;
     const { origin, direction } = this.getAttackOriginDirection();
@@ -74,15 +74,9 @@ export default abstract class MeleeWeaponEntity extends ItemEntity {
   }
 
   protected getAttackOriginDirection(): { origin: Vector3Like, direction: Vector3Like } {
+    // Same aim ray as guns: swings land where the reticle points.
     const player = this.parent as GamePlayerEntity;
-    const { x, y, z } = player.position;
-    const cameraYOffset = player.player.camera.offset.y;    
-    const direction = player.player.camera.facingDirection;
-
-    return {
-      origin: { x, y: y + cameraYOffset, z },
-      direction
-    };
+    return player.getReticleAimRay();
   }
 
   protected processAttack(): boolean {

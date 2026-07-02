@@ -23,11 +23,6 @@ export default class PickaxeEntity extends MeleeWeaponEntity {
     super({ ...DEFAULT_PICKAXE_OPTIONS, ...options, tag: 'pickaxe' });
   }
 
-  public override attack(): void {
-    if (!this.parent || !this.processAttack()) return;
-
-    super.attack();
-  }
 
   public override equip(): void {
     super.equip();

@@ -30,12 +30,13 @@ export default class SniperEntity extends GunEntity {
   }
 
   public override shoot(): void {
-    if (!this.parent || !this.processShoot()) return;
+    const ammoBefore = this.ammo;
+    super.shoot(); // base class gates fire rate/ammo
 
-    super.shoot();
-
-    // The sniper auto-reloads shortly after each shot.
-    setTimeout(() => { this.reload() }, 300);
+    // The sniper auto-reloads shortly after each fired shot.
+    if (this.ammo < ammoBefore) {
+      setTimeout(() => this.reload(), 300);
+    }
   }
 
   public override getMuzzleFlashPositionRotation(): { position: Vector3Like, rotation: QuaternionLike } {

@@ -14,9 +14,12 @@ import ItemEntity from './ItemEntity';
 import TerrainDamageManager from './TerrainDamageManager';
 import type { ItemEntityOptions } from './ItemEntity';
 
-export type GunHand = 'left' | 'right' | 'both';
+export type GunHand = import('./ItemEntity').HeldHand;
 
 const TRACER_VISIBLE_START_OFFSET = 1;
+// The original tuning's head/body damage ratio (rifle 78/50, pistol 102/68,
+// machinegun 27/18 — all 1.5x). Applied on top of distance falloff.
+const HEADSHOT_DAMAGE_MULTIPLIER = 1.5;
 const INFINITE_RESERVE_AMMO = -1;
 
 export type GunEntityOptions = {
@@ -108,10 +111,7 @@ export default abstract class GunEntity extends ItemEntity {
 
   public override unequip(): void {
     super.unequip();
-
-    // reset any scope zoom
-    const player = this.parent as GamePlayerEntity;
-    this.zoomScope(true);
+    this.zoomScope(true); // reset any scope zoom
   }
 
   public override spawn(world: World, position: Vector3Like, rotation?: QuaternionLike): void {
@@ -131,6 +131,7 @@ export default abstract class GunEntity extends ItemEntity {
 
   public reload(): void {
     if (!this.parent?.world || this._reloading || !this._hasReserveAmmo()) return;
+    if (this.ammo >= this.maxAmmo) return; // full clip: nothing to reload
     this._startReload();
     this._reloadAudio.play(this.parent.world, true);
 
@@ -140,7 +141,7 @@ export default abstract class GunEntity extends ItemEntity {
   public abstract getMuzzleFlashPositionRotation(): { position: Vector3Like, rotation: QuaternionLike };
 
   public shoot(): void {
-    if (!this.parent?.world) return;
+    if (!this.parent?.world || !this.processShoot()) return;
 
     const player = this.parent as GamePlayerEntity;
     const { origin, direction } = this.getShootOriginDirection();
@@ -457,12 +458,13 @@ export default abstract class GunEntity extends ItemEntity {
 
     const attacker = this.parent as GamePlayerEntity;
     const headshot = this._isHeadshot(hitEntity, hitPoint);
+    const finalDamage = headshot ? Math.round(damage * HEADSHOT_DAMAGE_MULTIPLIER) : damage;
 
-    attacker.dealtDamage(damage, {
+    attacker.dealtDamage(finalDamage, {
       ...feedback,
       headshot,
     });
-    hitEntity.takeDamage(damage, hitDirection, attacker);
+    hitEntity.takeDamage(finalDamage, hitDirection, attacker);
   }
 
   private _isHeadshot(hitEntity: GamePlayerEntity, hitPoint?: Vector3Like): boolean {

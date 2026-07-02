@@ -28,11 +28,6 @@ export default class ScoutRifleEntity extends GunEntity {
     super({ ...DEFAULT_SCOUT_RIFLE_OPTIONS, ...options });
   }
 
-  public override shoot(): void {
-    if (!this.parent || !this.processShoot()) return;
-
-    super.shoot();
-  }
 
   public override getMuzzleFlashPositionRotation(): { position: Vector3Like, rotation: QuaternionLike } {
     return {

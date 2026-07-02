@@ -19,8 +19,6 @@ export const GAME_DURATION_MS = 8 * 60 * 1000; // 8 minutes
 
 export const ITEM_DESPAWN_TIME_MS = 25 * 1000; // 25 seconds
 
-export const MINIMUM_PLAYERS_TO_START = 2;
-
 // Spawn heights are the world collider floor surfaces
 // (tools/export-boxman-glb.mjs). Entity positions are the CAPSULE CENTER,
 // not the feet, so every spawn adds this standing clearance on top.
