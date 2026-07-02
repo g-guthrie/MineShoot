@@ -33,7 +33,8 @@ export type GunEntityOptions = {
   reloadTimeMs: number;      // Seconds to reload.
   shootAudioUri: string;     // The audio played when shooting
   scopeZoom?: number;         // The zoom level when scoped in.
-  centersCameraOnScope?: boolean; // True for sniper scope: zoom recenters camera onto the weapon aim ray.
+  focusesReticleOnScope?: boolean; // True when ADS zooms around the current reticle vector.
+  scopeStyle?: 'none' | 'sniper' | 'scout'; // HUD treatment while scoped.
   pellets?: number;          // Rays per trigger pull (shotguns > 1). Each pellet rolls its own spread, damage and hitmarker.
   spread?: number;           // Max spread cone radius, as tangent units (0.185 ~ 10.5 degrees).
   falloff?: { start: number; end: number; minScalar: number }; // Damage scalar lerps 1 -> minScalar between start and end distance.
@@ -47,7 +48,8 @@ export default abstract class GunEntity extends ItemEntity {
   protected readonly range: number;
   protected readonly reloadTimeMs: number;
   protected readonly scopeZoom: number = 1;
-  protected readonly centersCameraOnScope: boolean;
+  protected readonly focusesReticleOnScope: boolean;
+  protected readonly scopeStyle: 'none' | 'sniper' | 'scout';
   protected readonly pellets: number;
   protected readonly spread: number;
   protected readonly falloff?: { start: number; end: number; minScalar: number };
@@ -80,7 +82,8 @@ export default abstract class GunEntity extends ItemEntity {
     this.range = options.range;
     this.reloadTimeMs = options.reloadTimeMs;
     this.scopeZoom = options.scopeZoom ?? 1;
-    this.centersCameraOnScope = Boolean(options.centersCameraOnScope);
+    this.focusesReticleOnScope = Boolean(options.focusesReticleOnScope);
+    this.scopeStyle = options.scopeStyle ?? (this.focusesReticleOnScope ? 'sniper' : 'none');
 
     this._reloadAudio = new Audio({
       attachedToEntity: this,
@@ -159,19 +162,21 @@ export default abstract class GunEntity extends ItemEntity {
     const player = this.parent as GamePlayerEntity;
     const zoomingIn = player.player.camera.zoom === 1 && !reset;
     const zoom = zoomingIn ? this.scopeZoom : 1;
-    const sniperScopeActive = this.centersCameraOnScope && zoom !== 1;
+    const reticleFocused = this.focusesReticleOnScope && zoom !== 1;
+    const scopeStyle = zoom !== 1 ? this.scopeStyle : 'none';
 
-    if (this.centersCameraOnScope && zoomingIn) {
-      player.centerCameraOnReticleAim();
+    if (this.focusesReticleOnScope && zoomingIn) {
+      player.focusCameraOnReticleAimAtZoom(this.scopeZoom);
     }
 
-    player.setScopedReticleCentered(sniperScopeActive);
+    player.setScopeAimTangentScale(reticleFocused ? 1 / this.scopeZoom : undefined);
 
     player.player.camera.setZoom(zoom);
     player.player.ui.sendData({
       type: 'scope-zoom',
       zoom,
-      sniper: this.centersCameraOnScope,
+      style: scopeStyle,
+      sniper: scopeStyle === 'sniper',
     });
   }
 

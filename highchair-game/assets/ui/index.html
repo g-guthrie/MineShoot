@@ -5,6 +5,7 @@
 
 <!-- UI-->
 <div id="crosshair"></div>
+<div id="precision-reticle-dot"></div>
 <div id="spread-reticle"></div>
 <div id="shotgun-reticle"></div>
 <div id="sniper-scope" aria-hidden="true">
@@ -244,6 +245,7 @@
   // through the live camera every frame, so window size, aspect and scope
   // zoom can never drift the reticle away from where bullets actually go.
   let aimTangentX = 0, aimTangentY = 0;
+  var reticleSpread = 0, reticlePellets = 1;
 
   let lastDebugVisible = false;
 
@@ -307,6 +309,8 @@
 
   function openMenu() {
     if (loadoutPanel.classList.contains('open')) return;
+    clearScopeUi();
+    highchair.sendData({ type: 'clear-scope' });
     loadoutPanel.classList.add('open');
     if (!loadoutCatalog.length) highchair.sendData({ type: 'request-loadout' });
     // Freeze pointer lock so clicking menu buttons doesn't re-lock the
@@ -397,10 +401,23 @@
     }
   }
 
-  function updateSniperScope(active) {
+  var scopeStyle = 'none';
+  var reticleScoped = false;
+
+  function clearScopeUi() {
+    updateScopeZoom({ zoom: 1, style: 'none' });
+    reticleScoped = false;
+    updateReticleSize();
+  }
+
+  function updateScopeZoom(data) {
     if (!sniperScopeEl) return;
-    sniperScopeEl.classList.toggle('active', active);
-    document.body.classList.toggle('sniper-scope-active', active);
+    const active = Number(data?.zoom) !== 1;
+    scopeStyle = active ? (data?.style || (data?.sniper ? 'sniper' : 'none')) : 'none';
+    sniperScopeEl.classList.toggle('active', scopeStyle === 'sniper');
+    document.body.classList.toggle('sniper-scope-active', scopeStyle === 'sniper');
+    document.body.classList.toggle('scout-scope-active', scopeStyle === 'scout');
+    updateReticleSize();
   }
 
   function updateLeaderboard() {
@@ -531,14 +548,13 @@
   }
 
   // ---- reticle (old MineShoot bloom system) ----
-  let reticleSpread = 0, reticlePellets = 1;
-
   function updateReticleSize() {
     const cross = document.getElementById('crosshair');
     const bloom = document.getElementById('spread-reticle');
     const ring = document.getElementById('shotgun-reticle');
     if (!cross || !bloom || !ring) return;
-    const shotgun = reticlePellets >= 6;
+    const precisionScoped = reticleScoped || scopeStyle === 'scout';
+    const shotgun = !precisionScoped && reticlePellets >= 6;
     // Canonical bloom: the same spread value the server scatters shots with
     // sizes this circle (diameter = spread x viewport height), so tuning a
     // gun's spread updates the debug circle automatically. The circle is the
@@ -548,17 +564,17 @@
     const bloomPx = Math.round(reticleSpread * window.innerHeight);
     cross.style.display = shotgun ? 'none' : 'block';
     ring.style.display = shotgun ? 'block' : 'none';
-    bloom.style.display = debug && !shotgun && bloomPx > 3 ? 'block' : 'none';
+    bloom.style.display = debug && !shotgun && !precisionScoped && bloomPx > 3 ? 'block' : 'none';
     if (shotgun) {
       ring.style.width = ring.style.height = bloomPx + 'px';
-    } else {
+    } else if (!precisionScoped) {
       bloom.style.width = bloom.style.height = bloomPx + 'px';
     }
   }
   window.addEventListener('resize', updateReticleSize);
 
   function setReticleTarget(active) {
-    for (const id of ['crosshair', 'spread-reticle', 'shotgun-reticle']) {
+    for (const id of ['crosshair', 'precision-reticle-dot', 'spread-reticle', 'shotgun-reticle']) {
       document.getElementById(id)?.classList.toggle('reticle-target-in-range', Boolean(active));
     }
   }
@@ -744,6 +760,7 @@
     if (type === 'reticle') {
       reticleSpread = Number(data.spread) || 0;
       reticlePellets = Number(data.pellets) || 1;
+      reticleScoped = Boolean(data.scoped);
       aimTangentX = Number(data.tx) || 0;
       aimTangentY = Number(data.ty) || 0;
       updateReticleSize();
@@ -859,8 +876,7 @@
     }
 
     if (type === 'scope-zoom') {
-      const { zoom } = data;
-      updateSniperScope(zoom !== 1 && Boolean(data.sniper));
+      updateScopeZoom(data);
     }
 
     if (type === 'timer-sync') {
@@ -991,6 +1007,31 @@
       0 0 10px rgba(255, 70, 70, 0.28);
   }
 
+  #precision-reticle-dot {
+    position: fixed;
+    top: calc(50% + var(--reticle-screen-y-offset));
+    left: calc(50% + var(--reticle-screen-x-offset));
+    transform: translate(-50%, -50%);
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.72),
+      0 0 8px rgba(255, 255, 255, 0.22);
+    z-index: 11;
+    pointer-events: none;
+    display: none;
+    transition: top 120ms ease-out, left 120ms ease-out, opacity 120ms ease-out;
+  }
+
+  #precision-reticle-dot.reticle-target-in-range {
+    background: rgba(255, 107, 107, 0.96);
+    box-shadow:
+      0 0 0 1px rgba(60, 0, 0, 0.72),
+      0 0 10px rgba(255, 70, 70, 0.34);
+  }
+
   /* Bloom circle: diameter = spread x viewport height (the old formula). */
   #spread-reticle {
     position: fixed;
@@ -1030,9 +1071,24 @@
   }
 
   body.sniper-scope-active #crosshair,
+  body.sniper-scope-active #precision-reticle-dot,
   body.sniper-scope-active #spread-reticle,
   body.sniper-scope-active #shotgun-reticle {
     opacity: 0;
+  }
+
+  body.scout-scope-active #precision-reticle-dot {
+    display: block;
+    opacity: 1;
+  }
+
+  body.scout-scope-active #crosshair {
+    opacity: 0.86;
+  }
+
+  body.scout-scope-active #spread-reticle,
+  body.scout-scope-active #shotgun-reticle {
+    display: none !important;
   }
 
   #sniper-scope {
@@ -1055,7 +1111,7 @@
     position: absolute;
     inset: 0;
     background:
-      radial-gradient(circle at center,
+      radial-gradient(circle at calc(50% + var(--reticle-screen-x-offset)) calc(50% + var(--reticle-screen-y-offset)),
         transparent 0 21.5vmin,
         rgba(0, 0, 0, 0.08) 22vmin,
         rgba(0, 0, 0, 0.92) 26vmin,
@@ -1064,8 +1120,8 @@
 
   #sniper-scope-ring {
     position: absolute;
-    left: 50%;
-    top: 50%;
+    left: calc(50% + var(--reticle-screen-x-offset));
+    top: calc(50% + var(--reticle-screen-y-offset));
     width: 44vmin;
     height: 44vmin;
     transform: translate(-50%, -50%);
@@ -1077,8 +1133,8 @@
   #sniper-scope-cross-v,
   #sniper-scope-cross-h {
     position: absolute;
-    left: 50%;
-    top: 50%;
+    left: calc(50% + var(--reticle-screen-x-offset));
+    top: calc(50% + var(--reticle-screen-y-offset));
     background: rgba(245, 250, 255, 0.86);
     transform: translate(-50%, -50%);
   }

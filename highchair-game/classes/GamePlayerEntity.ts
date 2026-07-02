@@ -84,7 +84,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   private _aimTangentY: number = TWO_HANDED_AIM_TANGENT_Y;
   private _reticleProbeAtMs: number = 0;
   private _reticleTargetActive: boolean = false;
-  private _scopedReticleCentered: boolean = false;
+  private _scopeAimTangentScale: number | undefined;
   private _autoFireHasTarget: boolean = false;
   private _autoFireEngaged: boolean = false;
   private _dead: boolean = false;
@@ -333,8 +333,43 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     };
   }
 
-  public centerCameraOnReticleAim(): void {
-    const { origin, direction } = this.getReticleAimRay();
+  public focusCameraOnReticleAimAtZoom(zoom: number): void {
+    const { pitch, yaw } = this.player.camera.orientation;
+    const cosPitch = Math.cos(pitch);
+    const forward = {
+      x: -Math.sin(yaw) * cosPitch,
+      y: Math.sin(pitch),
+      z: -Math.cos(yaw) * cosPitch,
+    };
+    const right = {
+      x: Math.cos(yaw),
+      y: 0,
+      z: -Math.sin(yaw),
+    };
+    const up = {
+      x: right.y * forward.z - right.z * forward.y,
+      y: right.z * forward.x - right.x * forward.z,
+      z: right.x * forward.y - right.y * forward.x,
+    };
+    // Scoped zoom should orbit around the current reticle vector, not the
+    // viewport center. The remaining tangent is scaled by 1 / zoom, so this
+    // rotates only the rest of the offset into the camera.
+    const focusAmount = 1 - (1 / Math.max(1, zoom));
+    const direction = {
+      x: forward.x + right.x * this._aimTangentX * focusAmount + up.x * this._aimTangentY * focusAmount,
+      y: forward.y + right.y * this._aimTangentX * focusAmount + up.y * this._aimTangentY * focusAmount,
+      z: forward.z + right.z * this._aimTangentX * focusAmount + up.z * this._aimTangentY * focusAmount,
+    };
+    const length = Math.hypot(direction.x, direction.y, direction.z) || 1;
+    direction.x /= length;
+    direction.y /= length;
+    direction.z /= length;
+
+    const origin = {
+      x: this.position.x,
+      y: this.position.y + this.player.camera.offset.y,
+      z: this.position.z,
+    };
     const target = {
       x: origin.x + direction.x * 1000,
       y: origin.y + direction.y * 1000,
@@ -353,11 +388,25 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this.player.camera.facePosition(target);
   }
 
-  public setScopedReticleCentered(active: boolean): void {
-    if (this._scopedReticleCentered === active) return;
+  public setScopeAimTangentScale(scale: number | undefined): void {
+    const normalizedScale = scale && Number.isFinite(scale) && scale > 0 && scale < 1 ? scale : undefined;
+    if (this._scopeAimTangentScale === normalizedScale) return;
 
-    this._scopedReticleCentered = active;
+    this._scopeAimTangentScale = normalizedScale;
     this._sendReticleUI();
+  }
+
+  public clearScopeZoom(): void {
+    const activeItem = this._inventory[this._inventoryActiveSlotIndex];
+    if (activeItem instanceof GunEntity && activeItem.hasScope()) {
+      activeItem.zoomScope(true);
+      return;
+    }
+
+    this._scopeAimTangentScale = undefined;
+    this.player.camera.setZoom(1);
+    this._sendReticleUI();
+    this.player.ui.sendData({ type: 'scope-zoom', zoom: 1, style: 'none', sniper: false });
   }
 
   public isItemActiveInInventory(item: ItemEntity): boolean {
@@ -374,11 +423,11 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   }
 
   public resetCamera(): void {
-    this._scopedReticleCentered = false;
+    this._scopeAimTangentScale = undefined;
     this._setupPlayerCamera();
     this.player.camera.setAttachedToEntity(this);
     this._sendReticleUI();
-    this.player.ui.sendData({ type: 'scope-zoom', zoom: 1, sniper: true });
+    this.player.ui.sendData({ type: 'scope-zoom', zoom: 1, style: 'none', sniper: false });
   }
 
   public resetMaterials(): void {
@@ -392,12 +441,13 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this._dead = false;
     this._autoFireRaycastCooldown = 0;
     this._autoFireHasTarget = false;
-    this._scopedReticleCentered = false;
+    this._scopeAimTangentScale = undefined;
     this.health = this._maxHealth;
     this.shield = 0;
     this.resetAnimations();
     this.player.camera.setAttachedToEntity(this);
     this._setupPlayerCamera();
+    this.player.ui.sendData({ type: 'scope-zoom', zoom: 1, style: 'none', sniper: false });
     this.setActiveInventorySlotIndex(0);
     this.setPosition(GameManager.instance.getRandomSpawnPosition());
     void this._equipLoadout();
@@ -433,8 +483,9 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     const gun = item instanceof GunEntity ? item : undefined;
     const twoHanded = gun?.heldHand === 'both';
 
-    this._aimTangentX = this._scopedReticleCentered ? 0 : (twoHanded ? TWO_HANDED_AIM_TANGENT_X : ONE_HANDED_AIM_TANGENT_X);
-    this._aimTangentY = this._scopedReticleCentered ? 0 : (twoHanded ? TWO_HANDED_AIM_TANGENT_Y : ONE_HANDED_AIM_TANGENT_Y);
+    const tangentScale = this._scopeAimTangentScale ?? 1;
+    this._aimTangentX = (twoHanded ? TWO_HANDED_AIM_TANGENT_X : ONE_HANDED_AIM_TANGENT_X) * tangentScale;
+    this._aimTangentY = (twoHanded ? TWO_HANDED_AIM_TANGENT_Y : ONE_HANDED_AIM_TANGENT_Y) * tangentScale;
 
     this.player.ui.sendData({
       type: 'reticle',
@@ -443,6 +494,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
       range: gun?.getEffectiveRange() ?? 0,
       tx: this._aimTangentX,
       ty: this._aimTangentY,
+      scoped: this._scopeAimTangentScale !== undefined,
     });
   }
 
@@ -535,9 +587,9 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
 
   /** Despawn every gun (slots 1..N); the pickaxe in slot 0 stays. */
   private _despawnGuns(): void {
-    this.setScopedReticleCentered(false);
+    this.setScopeAimTangentScale(undefined);
     this.player.camera.setZoom(1);
-    this.player.ui.sendData({ type: 'scope-zoom', zoom: 1, sniper: true });
+    this.player.ui.sendData({ type: 'scope-zoom', zoom: 1, style: 'none', sniper: false });
 
     for (let i = 1; i < this._inventory.length; i++) {
       const item = this._inventory[i];
@@ -621,6 +673,10 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
 
       if (data.type === 'set-loadout' && Array.isArray(data.guns)) {
         this.setLoadout(data.guns);
+      }
+
+      if (data.type === 'clear-scope') {
+        this.clearScopeZoom();
       }
     });
   }
