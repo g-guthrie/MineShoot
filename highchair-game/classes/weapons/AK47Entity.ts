@@ -8,6 +8,7 @@ const DEFAULT_AK47_OPTIONS: GunEntityOptions = {
   fireRate: 7.5,
   spread: 0.03,
   falloff: { start: 18, end: 36, minScalar: 0.72 },
+  tracer: { seg: 1.25 },
   heldHand: 'both',
   iconImageUri: 'icons/ak-47.png',
   idleAnimation: 'idle_gun_both',

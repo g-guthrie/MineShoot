@@ -6,6 +6,7 @@ const DEFAULT_BOLT_ACTION_SNIPER_OPTIONS: GunEntityOptions = {
   ammo: 4,
   damage: 90,
   fireRate: 0.55,
+  tracer: { seg: 3.2, speed: 420, life: 0.14 },
   heldHand: 'both',
   iconImageUri: 'icons/bolt-action-sniper.png',
   idleAnimation: 'idle_gun_both',

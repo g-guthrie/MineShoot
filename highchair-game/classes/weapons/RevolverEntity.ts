@@ -9,6 +9,7 @@ const DEFAULT_REVOLVER_OPTIONS: GunEntityOptions = {
   fireRate: 2.3,
   spread: 0.015,
   falloff: { start: 7.5, end: 23, minScalar: 0.6 },
+  tracer: { seg: 0.25 },
   heldHand: 'right',
   iconImageUri: 'icons/revolver.png',
   idleAnimation: 'idle_gun_right',

@@ -9,6 +9,7 @@ const DEFAULT_PISTOL_OPTIONS: GunEntityOptions = {
   fireRate: 4.5,
   spread: 0.02,
   falloff: { start: 7.5, end: 23, minScalar: 0.6 },
+  tracer: { seg: 0.25 },
   heldHand: 'right',
   iconImageUri: 'icons/pistol.png',
   idleAnimation: 'idle_gun_right',

@@ -284,8 +284,9 @@ export const RANKS = [
 // Spawn heights are the world collider floor surfaces
 // (tools/export-boxman-glb.mjs). Entity positions are the CAPSULE CENTER,
 // not the feet, so every spawn adds this standing clearance on top.
-// Measured: a player capsule rests with its center 0.757 above the floor.
-export const PLAYER_STAND_HEIGHT = 0.8;
+// Measured: a player capsule (modelScale 0.75) rests with its center
+// 1.135 above the floor.
+export const PLAYER_STAND_HEIGHT = 1.2;
 
 export const SPAWN_POINTS = arenaMeta.spawnPoints.map(point => ({
   ...point,

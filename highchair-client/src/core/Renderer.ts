@@ -1,3 +1,4 @@
+import TracerManager from '../effects/TracerManager';
 import {
   BackSide,
   BoxGeometry,
@@ -119,6 +120,7 @@ export default class Renderer {
   // position. Separating the scenes helps prevent the scene graph from becoming too large
   // and reduces the cost of traversing the scene graph.
   private _scene: Scene;
+  private _tracerManager!: TracerManager;
   private _viewModelScene: Scene;
   private _overlayScene: Scene;
   private _uiScene: Scene;
@@ -156,6 +158,11 @@ export default class Renderer {
     this._scene = new Scene();
     // Debug handle for headless verification tooling.
     (globalThis as Record<string, unknown>).__scene = this._scene;
+    // Bullet tracers (spawns arrive from the game UI via the shared window).
+    this._tracerManager = new TracerManager(this._scene);
+    (globalThis as Record<string, unknown>).__tracers = this._tracerManager;
+    // The game UI projects world-space hit points for damage numbers.
+    (globalThis as Record<string, unknown>).__camera = () => this._game.camera.activeCamera;
     this._viewModelScene = new Scene();
     this._overlayScene = new Scene();
     this._uiScene = new Scene();
@@ -290,6 +297,7 @@ export default class Renderer {
     EventRouter.instance.emit(RendererEventType.Animate, { frameDeltaS });
 
     this._game.arrowManager.update(frameDeltaS);
+    this._tracerManager.update(frameDeltaS);
     this._game.blockMaterialManager.update(frameDeltaS);
     this._game.camera.update(frameDeltaS);
     this._game.audioManager.update();

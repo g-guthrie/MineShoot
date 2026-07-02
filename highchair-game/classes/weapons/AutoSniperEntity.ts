@@ -6,6 +6,7 @@ const DEFAULT_AUTO_SNIPER_OPTIONS: GunEntityOptions = {
   ammo: 8,
   damage: 40,
   fireRate: 1.8,
+  tracer: { seg: 2.4, speed: 360 },
   heldHand: 'both',
   iconImageUri: 'icons/auto-sniper.png',
   idleAnimation: 'idle_gun_both',

@@ -55,6 +55,8 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   private readonly _inventory: (ItemEntity | undefined)[] = new Array(TOTAL_INVENTORY_SLOTS).fill(undefined);
   private _isMobileClient: boolean = false;
   private _autoFireRaycastCooldown: number = 0;
+  private _reticleProbeAtMs: number = 0;
+  private _reticleTargetActive: boolean = false;
   private _autoFireHasTarget: boolean = false;
   private _autoFireEngaged: boolean = false;
   private _dead: boolean = false;
@@ -113,7 +115,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
       player,
       name: 'Player',
       modelUri: 'models/players/soldier-player.gltf',
-      modelScale: 0.5,
+      modelScale: 0.75, // 50% bigger than the hygrounds 0.5 — movement scales with it
     });
 
     this._setupPlayerController();
@@ -140,12 +142,13 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
 
   public override spawn(world: World, position: Vector3Like, rotation?: QuaternionLike): void {
     super.spawn(world, position, rotation);
-    // Movement profile from the original MineShoot tuning (jog 7, run 11,
-    // jump 8.8 at gravity 18). The world's crates and ledges are authored
-    // around that 2.15-unit jump height; SDK defaults can't clear them.
-    this.playerController.walkVelocity = 7;
-    this.playerController.runVelocity = 11;
-    this.playerController.jumpVelocity = 8.8;
+    // Original MineShoot movement (jog 7, run 11, jump 8.8 at gravity 18)
+    // scaled x1.5 with the character size. Velocities and jump velocity
+    // scale linearly; gravity scales too (see index.ts), which keeps air
+    // time identical while jump height scales to 3.2 units.
+    this.playerController.walkVelocity = 10.5;
+    this.playerController.runVelocity = 16.5;
+    this.playerController.jumpVelocity = 13.2;
     this._setupPlayerInventory();
     this._autoHealTicker();
     this._outOfWorldTicker();
@@ -340,6 +343,24 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     }
 
     this._updatePlayerUIInventoryActiveSlot();
+    this._sendReticleUI();
+  }
+
+  /**
+   * Reticle spec for the active item: spread sizes the bloom circle
+   * (radius px = spread x half viewport height, the original MineShoot
+   * formula), pellets >= 6 switches to the shotgun spread ring, range
+   * drives the red in-range tint.
+   */
+  private _sendReticleUI(): void {
+    const item = this._inventory[this._inventoryActiveSlotIndex];
+    const gun = item instanceof GunEntity ? item : undefined;
+    this.player.ui.sendData({
+      type: 'reticle',
+      spread: gun?.getSpread() ?? 0,
+      pellets: gun?.getPellets() ?? 1,
+      range: gun?.getEffectiveRange() ?? 0,
+    });
   }
 
   public setGravity(gravityScale: number): void {
@@ -530,7 +551,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   private _setupPlayerCamera(): void {
     this.player.camera.setMode(PlayerCameraMode.FIRST_PERSON);
     this.player.camera.setViewModelHiddenNodes([ 'head', 'neck', 'torso', 'leg_right', 'leg_left' ]);
-    this.player.camera.setOffset({ x: 0, y: 0.5, z: 0 });
+    this.player.camera.setOffset({ x: 0, y: 0.75, z: 0 }); // eye height scales with the 1.5x character
     this.player.camera.setViewModelPitchesWithCamera(true);
     this.player.camera.setViewModelYawsWithCamera(true);
   }
@@ -561,6 +582,35 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     }
   }
 
+  /** Crosshair turns red while an enemy is under it within the gun's range. */
+  private _updateReticleTarget(): void {
+    const now = performance.now();
+    if (now - this._reticleProbeAtMs < 120 || !this.world) return;
+    this._reticleProbeAtMs = now;
+
+    const item = this._inventory[this._inventoryActiveSlotIndex];
+    let active = false;
+    if (item instanceof GunEntity) {
+      const origin = {
+        x: this.position.x,
+        y: this.position.y + this.player.camera.offset.y,
+        z: this.position.z,
+      };
+      const hit = this.world.simulation.raycast(
+        origin,
+        this.player.camera.facingDirection,
+        item.getEffectiveRange(),
+        { filterExcludeRigidBody: this.rawRigidBody },
+      );
+      active = hit?.hitEntity instanceof GamePlayerEntity && !hit.hitEntity.isDead;
+    }
+
+    if (active !== this._reticleTargetActive) {
+      this._reticleTargetActive = active;
+      this.player.ui.sendData({ type: 'reticle-target', active });
+    }
+  }
+
   private _onTickWithPlayerInput = (payload: EventPayloads[BaseEntityControllerEvent.TICK_WITH_PLAYER_INPUT]): void => {
     const { input } = payload;
 
@@ -569,6 +619,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     }
 
     this._updateGaitCadence();
+    this._updateReticleTarget();
 
     this._applyMobileAutoFire(input);
 

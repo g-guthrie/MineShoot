@@ -4,7 +4,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet">
 
 <!-- UI-->
-<div class="crosshair"></div>
+<div id="crosshair">+</div>
+<div id="spread-reticle"></div>
+<div id="shotgun-reticle"></div>
 
 <div class="loadout-toggle">LOADOUT</div>
 <div class="loadout-panel">
@@ -465,11 +467,47 @@
     }, 1500); // Match animation duration
   }
 
+  // ---- reticle (old MineShoot bloom system) ----
+  let reticleSpread = 0, reticlePellets = 1;
+
+  function updateReticleSize() {
+    const cross = document.getElementById('crosshair');
+    const bloom = document.getElementById('spread-reticle');
+    const ring = document.getElementById('shotgun-reticle');
+    if (!cross || !bloom || !ring) return;
+    const shotgun = reticlePellets >= 6;
+    // radius px = spread x (viewport height / 2) -> diameter = spread x height
+    const bloomPx = Math.round(reticleSpread * window.innerHeight);
+    cross.style.display = shotgun ? 'none' : 'block';
+    ring.style.display = shotgun ? 'block' : 'none';
+    bloom.style.display = !shotgun && bloomPx > 3 ? 'block' : 'none';
+    if (shotgun) {
+      ring.style.width = ring.style.height = bloomPx + 'px';
+    } else {
+      bloom.style.width = bloom.style.height = bloomPx + 'px';
+    }
+  }
+  window.addEventListener('resize', updateReticleSize);
+
+  function setReticleTarget(active) {
+    for (const id of ['crosshair', 'spread-reticle', 'shotgun-reticle']) {
+      document.getElementById(id)?.classList.toggle('reticle-target-in-range', Boolean(active));
+    }
+  }
+
   let hitmarkerTimer;
+  let hitmarkerHeadshotUntil = 0;
 
   function showHitmarker(headshot) {
     const hitmarker = document.querySelector('.hitmarker');
     if (!hitmarker) return;
+
+    const now = Date.now();
+    if (headshot) {
+      hitmarkerHeadshotUntil = now + 160;
+    } else if (now < hitmarkerHeadshotUntil) {
+      headshot = true;
+    }
 
     hitmarker.classList.remove('active', 'headshot');
     hitmarker.offsetHeight;
@@ -669,6 +707,20 @@
 
       lastExp = totalExp;
       lastRank = currentRank;
+    }
+
+    if (type === 'tracer') {
+      globalThis.__tracers?.spawn(data);
+    }
+
+    if (type === 'reticle') {
+      reticleSpread = Number(data.spread) || 0;
+      reticlePellets = Number(data.pellets) || 1;
+      updateReticleSize();
+    }
+
+    if (type === 'reticle-target') {
+      setReticleTarget(data.active);
     }
 
     if (type === 'show-damage') {
@@ -882,36 +934,68 @@
 
 <!-- UI Styles -->
 <style>
-  .crosshair {
+  /* Reticles ported from the original MineShoot HUD (css/main.css). */
+  #crosshair {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: #fff;
+    font-size: 24px;
+    font-weight: bold;
+    z-index: 10;
+    pointer-events: none;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    user-select: none;
+  }
+
+  #crosshair.reticle-target-in-range {
+    color: #ff6b6b;
+    text-shadow:
+      1px 1px 2px rgba(0, 0, 0, 0.8),
+      0 0 10px rgba(255, 70, 70, 0.28);
+  }
+
+  /* Bloom circle: diameter = spread x viewport height (the old formula). */
+  #spread-reticle {
     position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 20px;
-    height: 20px;
+    width: 0;
+    height: 0;
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.38) inset;
+    z-index: 10;
     pointer-events: none;
-    opacity: 0.7;
+    display: none;
   }
 
-  .crosshair::before,
-  .crosshair::after {
-    content: '';
-    position: absolute;
-    background-color: rgba(255, 255, 255, 0.8);
+  #spread-reticle.reticle-target-in-range {
+    border-color: rgba(255, 107, 107, 0.9);
   }
 
-  .crosshair::before {
-    width: 2px;
-    height: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-  }
-
-  .crosshair::after {
-    width: 100%;
-    height: 2px;
+  /* Shotgun pellet-spread ring (replaces the cross entirely). */
+  #shotgun-reticle {
+    position: fixed;
     top: 50%;
-    transform: translateY(-50%);
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 300px;
+    height: 300px;
+    border: 2px solid rgba(255, 255, 255, 0.75);
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45) inset;
+    z-index: 10;
+    pointer-events: none;
+    display: none;
+  }
+
+  #shotgun-reticle.reticle-target-in-range {
+    border-color: rgba(255, 90, 90, 0.92);
+    box-shadow:
+      0 0 0 1px rgba(60, 0, 0, 0.55) inset,
+      0 0 12px rgba(255, 70, 70, 0.22);
   }
 
   #ui-container .game-start-announcement {
@@ -1070,11 +1154,13 @@
   .hitmarker span:nth-child(4) { transform: translate(9px, 9px) rotate(45deg); }
 
   .hitmarker.active {
-    animation: hitmarkerFlash 130ms ease-out forwards;
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    transition: opacity 35ms ease-out, transform 70ms ease-out;
   }
 
   .hitmarker.headshot span {
-    animation: headshotGold 130ms ease-out forwards;
+    background: #ffd34d;
     box-shadow: 0 0 7px rgba(255, 211, 77, 0.85), 0 0 5px rgba(0, 0, 0, 0.9);
   }
 
@@ -1121,18 +1207,6 @@
       opacity: 0;
       transform: translate(-50%, -50%) translate(var(--drift-x), var(--drift-y)) scale(1);
     }
-  }
-
-  @keyframes hitmarkerFlash {
-    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.76); }
-    30% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
-    100% { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
-  }
-
-  @keyframes headshotGold {
-    0% { background: #ffffff; }
-    35% { background: #ffffff; }
-    100% { background: #ffd34d; }
   }
 
   .materials-counter {

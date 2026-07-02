@@ -8,6 +8,7 @@ const DEFAULT_SUBMACHINE_GUN_OPTIONS: GunEntityOptions = {
   fireRate: 11,
   spread: 0.05,
   falloff: { start: 10, end: 22, minScalar: 0.55 },
+  tracer: { seg: 1.0 },
   heldHand: 'right',
   iconImageUri: 'icons/submachine-gun.png',
   idleAnimation: 'idle_gun_right',

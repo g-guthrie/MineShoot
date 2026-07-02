@@ -1,6 +1,7 @@
 import {
   Audio,
   Entity,
+  GameServer,
   Vector3Like,
   Quaternion,
   QuaternionLike,
@@ -29,6 +30,7 @@ export type GunEntityOptions = {
   pellets?: number;          // Rays per trigger pull (shotguns > 1). Each pellet rolls its own spread, damage and hitmarker.
   spread?: number;           // Max spread cone radius, as tangent units (0.185 ~ 10.5 degrees).
   falloff?: { start: number; end: number; minScalar: number }; // Damage scalar lerps 1 -> minScalar between start and end distance.
+  tracer?: { speed?: number; seg?: number; life?: number }; // Tracer travel speed (wu/s), visible segment length, lifetime (s).
 } & ItemEntityOptions;
 
 export default abstract class GunEntity extends ItemEntity {
@@ -41,6 +43,7 @@ export default abstract class GunEntity extends ItemEntity {
   protected readonly pellets: number;
   protected readonly spread: number;
   protected readonly falloff?: { start: number; end: number; minScalar: number };
+  protected readonly tracer?: { speed?: number; seg?: number; life?: number };
 
   protected ammo: number;
   protected totalAmmo: number;
@@ -62,6 +65,7 @@ export default abstract class GunEntity extends ItemEntity {
     this.pellets = options.pellets ?? 1;
     this.spread = options.spread ?? 0;
     this.falloff = options.falloff;
+    this.tracer = options.tracer;
     this.fireRate = options.fireRate;
     this.maxAmmo = options.maxAmmo;
     this.totalAmmo = options.totalAmmo;
@@ -228,6 +232,13 @@ export default abstract class GunEntity extends ItemEntity {
     const raycastHit = this.parent.world.simulation.raycast(origin, direction, length, {
       filterExcludeRigidBody: this.parent.rawRigidBody,
     });
+
+    this._broadcastTracer(world, origin, direction, raycastHit?.hitPoint ?? {
+      x: origin.x + direction.x * length,
+      y: origin.y + direction.y * length,
+      z: origin.z + direction.z * length,
+    });
+
     if (!raycastHit) return;
 
     const hp = raycastHit.hitPoint;
@@ -249,6 +260,30 @@ export default abstract class GunEntity extends ItemEntity {
     }
   }
 
+  /**
+   * Every ray (pellets included) gets a tracer, visible to all players.
+   * The visual starts just ahead of the muzzle and flies to the true
+   * impact point, so tracers, crosshair and hits stay consistent.
+   * (Ported from the original MineShoot hitscan tracer runtime.)
+   */
+  protected _broadcastTracer(world: World, origin: Vector3Like, direction: Vector3Like, end: Vector3Like): void {
+    const packet = {
+      type: 'tracer',
+      o: [
+        +(origin.x + direction.x * 1.2).toFixed(2),
+        +(origin.y + direction.y * 1.2 - 0.12).toFixed(2),
+        +(origin.z + direction.z * 1.2).toFixed(2),
+      ],
+      e: [+end.x.toFixed(2), +end.y.toFixed(2), +end.z.toFixed(2)],
+      speed: this.tracer?.speed,
+      seg: this.tracer?.seg,
+      life: this.tracer?.life,
+    };
+    GameServer.instance.playerManager.getConnectedPlayersByWorld(world).forEach(player => {
+      player.ui.sendData(packet);
+    });
+  }
+
   /** The amount of ammo currently in the clip. */
   public getClipAmmo(): number {
     return this.ammo;
@@ -266,6 +301,16 @@ export default abstract class GunEntity extends ItemEntity {
 
   public getReloadTimeMs(): number {
     return this.reloadTimeMs;
+  }
+
+  /** Spread cone radius in tangent units (bloom reticle sizing). */
+  public getSpread(): number {
+    return this.spread;
+  }
+
+  /** Rays per trigger pull (shotguns use a circle reticle). */
+  public getPellets(): number {
+    return this.pellets;
   }
 
   /** The effective range (in blocks) of the gun. */

@@ -8,6 +8,7 @@ const DEFAULT_LIGHT_MACHINE_GUN_OPTIONS: GunEntityOptions = {
   fireRate: 9,
   spread: 0.045,
   falloff: { start: 18, end: 36, minScalar: 0.7 },
+  tracer: { seg: 1.35 },
   heldHand: 'both',
   iconImageUri: 'icons/light-machine-gun.png',
   idleAnimation: 'idle_gun_both',

@@ -13,6 +13,7 @@ const DEFAULT_SHOTGUN_OPTIONS: GunEntityOptions = {
   pellets: 12,
   spread: 0.185,
   falloff: { start: 7.5, end: 12.5, minScalar: 0.35 },
+  tracer: { seg: 0.7, life: 0.09 },
   heldHand: 'both',
   iconImageUri: 'icons/shotgun.png',
   idleAnimation: 'idle_gun_both',
