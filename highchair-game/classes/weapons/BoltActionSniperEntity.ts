@@ -38,10 +38,9 @@ export default class BoltActionSniperEntity extends GunEntity {
   }
 
   public override getMuzzleFlashPositionRotation(): { position: Vector3Like, rotation: QuaternionLike } {
-    return { // TODO: FIX MUZZLE FLASH POSITION
-      position: { x: 0, y: 0.01, z: -1.25 },
+    return {
+      position: { x: 0, y: 0.15, z: -2.23 },
       rotation: Quaternion.fromEuler(0, 90, 0),
     };
   }
 }
-

@@ -159,7 +159,7 @@ export default class Renderer {
     // Debug handle for headless verification tooling.
     (globalThis as Record<string, unknown>).__scene = this._scene;
     // Bullet tracers (spawns arrive from the game UI via the shared window).
-    this._tracerManager = new TracerManager(this._scene);
+    this._tracerManager = new TracerManager(this._scene, this._game.entityManager);
     (globalThis as Record<string, unknown>).__tracers = this._tracerManager;
     // The game UI projects world-space hit points for damage numbers.
     (globalThis as Record<string, unknown>).__camera = () => this._game.camera.activeCamera;

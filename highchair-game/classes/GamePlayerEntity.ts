@@ -26,6 +26,11 @@ import GameManager from './GameManager';
 const BASE_HEALTH = 100;
 const BASE_SHIELD = 0;
 const BLOCK_MATERIAL_COST = 3;
+const DEFAULT_RETICLE_VIEWPORT_HEIGHT = 720;
+const DEFAULT_RETICLE_VIEWPORT_WIDTH = 1280;
+const RETICLE_SCREEN_X_OFFSET_PX = -38;
+const RETICLE_SCREEN_Y_OFFSET_PX = 0;
+const TWO_HANDED_RETICLE_SCREEN_Y_OFFSET_PX = 40;
 const INTERACT_DISTANCE = 4;
 const MOBILE_AUTOFIRE_SAMPLE_INTERVAL_TICKS = 3;
 const MAX_HEALTH = 100;
@@ -55,6 +60,10 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   private readonly _inventory: (ItemEntity | undefined)[] = new Array(TOTAL_INVENTORY_SLOTS).fill(undefined);
   private _isMobileClient: boolean = false;
   private _autoFireRaycastCooldown: number = 0;
+  private _reticleAimViewportHeight: number = DEFAULT_RETICLE_VIEWPORT_HEIGHT;
+  private _reticleAimViewportWidth: number = DEFAULT_RETICLE_VIEWPORT_WIDTH;
+  private _reticleScreenXOffsetPx: number = RETICLE_SCREEN_X_OFFSET_PX;
+  private _reticleScreenYOffsetPx: number = RETICLE_SCREEN_Y_OFFSET_PX;
   private _reticleProbeAtMs: number = 0;
   private _reticleTargetActive: boolean = false;
   private _autoFireHasTarget: boolean = false;
@@ -269,6 +278,55 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     return this._inventory.findIndex(slot => slot === item);
   }
 
+  public getReticleAimRay(): { origin: Vector3Like, direction: Vector3Like } {
+    return {
+      origin: {
+        x: this.position.x,
+        y: this.position.y + this.player.camera.offset.y,
+        z: this.position.z,
+      },
+      direction: this.getReticleAimDirection(),
+    };
+  }
+
+  public getReticleAimDirection(): Vector3Like {
+    const { pitch, yaw } = this.player.camera.orientation;
+    const cosPitch = Math.cos(pitch);
+    const forward = {
+      x: -Math.sin(yaw) * cosPitch,
+      y: Math.sin(pitch),
+      z: -Math.cos(yaw) * cosPitch,
+    };
+    const right = {
+      x: Math.cos(yaw),
+      y: 0,
+      z: -Math.sin(yaw),
+    };
+    const up = {
+      x: right.y * forward.z - right.z * forward.y,
+      y: right.z * forward.x - right.x * forward.z,
+      z: right.x * forward.y - right.y * forward.x,
+    };
+    const aspect = this._reticleAimViewportWidth / this._reticleAimViewportHeight;
+    const verticalFovRadians = this.player.camera.fov * Math.PI / 180;
+    const viewScale = Math.tan(verticalFovRadians / 2) / this.player.camera.zoom;
+    const screenX = (this._reticleScreenXOffsetPx / this._reticleAimViewportWidth) * 2;
+    const screenY = (-this._reticleScreenYOffsetPx / this._reticleAimViewportHeight) * 2;
+    const x = screenX * aspect * viewScale;
+    const y = screenY * viewScale;
+    const direction = {
+      x: forward.x + right.x * x + up.x * y,
+      y: forward.y + right.y * x + up.y * y,
+      z: forward.z + right.z * x + up.z * y,
+    };
+    const length = Math.hypot(direction.x, direction.y, direction.z) || 1;
+    return {
+      x: direction.x / length,
+      y: direction.y / length,
+      z: direction.z / length,
+    };
+  }
+
   public isItemActiveInInventory(item: ItemEntity): boolean {
     return this._inventory[this._inventoryActiveSlotIndex] === item;
   }
@@ -355,11 +413,20 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   private _sendReticleUI(): void {
     const item = this._inventory[this._inventoryActiveSlotIndex];
     const gun = item instanceof GunEntity ? item : undefined;
+    const yOffsetPx = gun?.heldHand === 'both'
+      ? TWO_HANDED_RETICLE_SCREEN_Y_OFFSET_PX
+      : RETICLE_SCREEN_Y_OFFSET_PX;
+
+    this._reticleScreenXOffsetPx = RETICLE_SCREEN_X_OFFSET_PX;
+    this._reticleScreenYOffsetPx = yOffsetPx;
+
     this.player.ui.sendData({
       type: 'reticle',
       spread: gun?.getSpread() ?? 0,
       pellets: gun?.getPellets() ?? 1,
       range: gun?.getEffectiveRange() ?? 0,
+      xOffsetPx: RETICLE_SCREEN_X_OFFSET_PX,
+      yOffsetPx,
     });
   }
 
@@ -534,6 +601,11 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
         return;
       }
 
+      if (data.type === 'reticle-layout') {
+        this._setReticleAimLayout(data);
+        return;
+      }
+
       if (data.type === 'inventory-select') {
         this.setActiveInventorySlotIndex(data.index);
       }
@@ -554,6 +626,26 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this.player.camera.setOffset({ x: 0, y: 0.75, z: 0 }); // eye height scales with the 1.5x character
     this.player.camera.setViewModelPitchesWithCamera(true);
     this.player.camera.setViewModelYawsWithCamera(true);
+  }
+
+  private _setReticleAimLayout(data: Record<string, unknown>): void {
+    const width = Number(data.viewportWidth);
+    const height = Number(data.viewportHeight);
+    const xOffset = Number(data.xOffsetPx);
+    const yOffset = Number(data.yOffsetPx);
+
+    if (Number.isFinite(width) && width >= 320) {
+      this._reticleAimViewportWidth = Math.min(4096, width);
+    }
+    if (Number.isFinite(height) && height >= 240) {
+      this._reticleAimViewportHeight = Math.min(4096, height);
+    }
+    if (Number.isFinite(xOffset)) {
+      this._reticleScreenXOffsetPx = Math.max(-512, Math.min(512, xOffset));
+    }
+    if (Number.isFinite(yOffset)) {
+      this._reticleScreenYOffsetPx = Math.max(-512, Math.min(512, yOffset));
+    }
   }
 
   public static setStrideTune(value: number): void {
@@ -591,14 +683,10 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     const item = this._inventory[this._inventoryActiveSlotIndex];
     let active = false;
     if (item instanceof GunEntity) {
-      const origin = {
-        x: this.position.x,
-        y: this.position.y + this.player.camera.offset.y,
-        z: this.position.z,
-      };
+      const { origin, direction } = this.getReticleAimRay();
       const hit = this.world.simulation.raycast(
         origin,
-        this.player.camera.facingDirection,
+        direction,
         item.getEffectiveRange(),
         { filterExcludeRigidBody: this.rawRigidBody },
       );
@@ -697,15 +785,11 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
       return false;
     }
 
-    const origin = {
-      x: this.position.x,
-      y: this.position.y + this.player.camera.offset.y,
-      z: this.position.z,
-    };
+    const { origin, direction } = this.getReticleAimRay();
 
     const raycastHit = this.world.simulation.raycast(
       origin,
-      this.player.camera.facingDirection,
+      direction,
       activeGun.getEffectiveRange(),
       {
         filterExcludeRigidBody: this.rawRigidBody,

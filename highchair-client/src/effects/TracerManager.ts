@@ -7,12 +7,17 @@ import {
   Scene,
   Vector3,
 } from 'three';
+import type EntityManager from '../entities/EntityManager';
 
 export type TracerSpawn = {
-  /** World-space muzzle position [x, y, z]. */
+  /** Fallback world-space muzzle position [x, y, z]. */
   o: [number, number, number];
   /** World-space impact / max-range end point [x, y, z]. */
   e: [number, number, number];
+  /** Muzzle flash entity id. Used when available for exact rendered muzzle origin. */
+  m?: number;
+  /** Visible tracer start distance from the muzzle origin in world units. */
+  so?: number;
   /** Travel speed in world units per second (default 280). */
   speed?: number;
   /** Visible segment length in world units (default 2.1). */
@@ -45,6 +50,7 @@ const MAX_TRACERS = 96;
  * globalThis.__tracers.
  */
 export default class TracerManager {
+  private _entityManager?: EntityManager;
   private _pool: Tracer[] = [];
   private _cursor = 0;
   private _mesh: InstancedMesh;
@@ -53,9 +59,12 @@ export default class TracerManager {
   private _tmpQuat = new Quaternion();
   private _tmpScale = new Vector3();
   private _tmpMid = new Vector3();
+  private _tmpOrigin = new Vector3();
   private _up = new Vector3(0, 1, 0);
 
-  public constructor(scene: Scene) {
+  public constructor(scene: Scene, entityManager?: EntityManager) {
+    this._entityManager = entityManager;
+
     const geo = new CylinderGeometry(0.03, 0.03, 1, 8);
     const mat = new MeshBasicMaterial({
       color: 0xfff2c9,
@@ -91,19 +100,29 @@ export default class TracerManager {
     this._cursor = (this._cursor + 1) % MAX_TRACERS;
     const t = this._pool[this._cursor];
 
-    t.origin.set(data.o[0], data.o[1], data.o[2]);
-    t.dir.set(data.e[0], data.e[1], data.e[2]).sub(t.origin);
-    const len = t.dir.length();
+    const muzzleOrigin = this._resolveMuzzleOrigin(data);
+    t.dir.set(data.e[0], data.e[1], data.e[2]).sub(muzzleOrigin);
+    const fullLen = t.dir.length();
+    if (fullLen <= 0.001) return;
+    t.dir.divideScalar(fullLen);
+
+    const startOffsetRaw = Number(data.so ?? 0);
+    const startOffset = Number.isFinite(startOffsetRaw)
+      ? Math.min(Math.max(0, startOffsetRaw), Math.max(0, fullLen - 0.05))
+      : 0;
+    t.origin.copy(muzzleOrigin).addScaledVector(t.dir, startOffset);
+    const len = fullLen - startOffset;
     if (len <= 0.001) return;
-    t.dir.divideScalar(len);
-    t.head.copy(t.origin);
-    t.tail.copy(t.origin);
-    t.traveled = 0;
-    t.maxDistance = len;
     t.segmentLength = Math.max(0.05, Number(data.seg ?? 2.1));
+    t.traveled = Math.min(len, t.segmentLength);
+    t.head.copy(t.origin).addScaledVector(t.dir, t.traveled);
+    t.tail.copy(t.origin);
+    t.maxDistance = len;
     t.speed = Math.max(1, Number(data.speed ?? 280));
     t.framesAlive = 0;
     t.life = Math.max(0.01, Number(data.life ?? 0.11));
+    this._writeTracerMatrix(this._cursor, t);
+    this._mesh.instanceMatrix.needsUpdate = true;
   }
 
   public update(dt: number): void {
@@ -128,13 +147,30 @@ export default class TracerManager {
         continue;
       }
 
-      this._tmpMid.copy(t.tail).add(t.head).multiplyScalar(0.5);
-      this._tmpQuat.setFromUnitVectors(this._up, t.dir);
-      this._tmpScale.set(1, Math.max(0.05, t.head.distanceTo(t.tail) * 0.82), 1);
-      this._tmpMatrix.compose(this._tmpMid, this._tmpQuat, this._tmpScale);
-      this._mesh.setMatrixAt(i, this._tmpMatrix);
+      this._writeTracerMatrix(i, t);
       dirty = true;
     }
     if (dirty) this._mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  private _resolveMuzzleOrigin(data: TracerSpawn): Vector3 {
+    const muzzleEntityId = Number(data.m);
+    if (this._entityManager && Number.isFinite(muzzleEntityId)) {
+      const entity = this._entityManager.getEntity(muzzleEntityId);
+      const positionedEntity = entity as { getWorldPosition?: (target: Vector3) => Vector3 } | undefined;
+      if (typeof positionedEntity?.getWorldPosition === 'function') {
+        return positionedEntity.getWorldPosition(this._tmpOrigin);
+      }
+    }
+
+    return this._tmpOrigin.set(data.o[0], data.o[1], data.o[2]);
+  }
+
+  private _writeTracerMatrix(index: number, t: Tracer): void {
+    this._tmpMid.copy(t.tail).add(t.head).multiplyScalar(0.5);
+    this._tmpQuat.setFromUnitVectors(this._up, t.dir);
+    this._tmpScale.set(1, Math.max(0.05, t.head.distanceTo(t.tail) * 0.82), 1);
+    this._tmpMatrix.compose(this._tmpMid, this._tmpQuat, this._tmpScale);
+    this._mesh.setMatrixAt(index, this._tmpMatrix);
   }
 }

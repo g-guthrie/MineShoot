@@ -4,7 +4,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet">
 
 <!-- UI-->
-<div id="crosshair">+</div>
+<div id="crosshair"></div>
 <div id="spread-reticle"></div>
 <div id="shotgun-reticle"></div>
 
@@ -224,11 +224,41 @@
   const summarySelfNameEl = document.querySelector('.summary-self-name');
   const summarySelfKillsEl = document.querySelector('.summary-self-kills');
 
+  function getReticleScreenYOffsetPx() {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue('--reticle-screen-y-offset');
+    const px = Number.parseFloat(raw);
+    return Number.isFinite(px) ? px : 0;
+  }
+
+  function getReticleScreenXOffsetPx() {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue('--reticle-screen-x-offset');
+    const px = Number.parseFloat(raw);
+    return Number.isFinite(px) ? px : -38;
+  }
+
+  function setReticleScreenOffset(xOffsetPx, yOffsetPx) {
+    const x = Number(xOffsetPx);
+    const y = Number(yOffsetPx);
+    document.documentElement.style.setProperty('--reticle-screen-x-offset', `${Number.isFinite(x) ? x : -38}px`);
+    document.documentElement.style.setProperty('--reticle-screen-y-offset', `${Number.isFinite(y) ? y : 0}px`);
+  }
+
+  function sendReticleLayout() {
+    highchair.sendData({
+      type: 'reticle-layout',
+      xOffsetPx: getReticleScreenXOffsetPx(),
+      yOffsetPx: getReticleScreenYOffsetPx(),
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+    });
+  }
+
   const isMobileClient = Boolean(highchair?.isMobile);
   highchair.sendData({
     type: 'client-platform',
     isMobile: isMobileClient,
   });
+  sendReticleLayout();
 
   // ---- loadout menu ----
   let loadoutCatalog = [];
@@ -487,7 +517,10 @@
       bloom.style.width = bloom.style.height = bloomPx + 'px';
     }
   }
-  window.addEventListener('resize', updateReticleSize);
+  window.addEventListener('resize', () => {
+    updateReticleSize();
+    sendReticleLayout();
+  });
 
   function setReticleTarget(active) {
     for (const id of ['crosshair', 'spread-reticle', 'shotgun-reticle']) {
@@ -716,7 +749,9 @@
     if (type === 'reticle') {
       reticleSpread = Number(data.spread) || 0;
       reticlePellets = Number(data.pellets) || 1;
+      setReticleScreenOffset(data.xOffsetPx, data.yOffsetPx);
       updateReticleSize();
+      sendReticleLayout();
     }
 
     if (type === 'reticle-target') {
@@ -934,32 +969,60 @@
 
 <!-- UI Styles -->
 <style>
+  :root {
+    --reticle-screen-x-offset: -38px;
+    --reticle-screen-y-offset: 0px;
+  }
+
   /* Reticles ported from the original MineShoot HUD (css/main.css). */
   #crosshair {
     position: fixed;
-    top: 50%; left: 50%;
+    top: calc(50% + var(--reticle-screen-y-offset));
+    left: calc(50% + var(--reticle-screen-x-offset));
     transform: translate(-50%, -50%);
-    color: #fff;
-    font-size: 24px;
-    font-weight: bold;
+    width: 20px;
+    height: 20px;
+    opacity: 0.7;
     z-index: 10;
     pointer-events: none;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
     user-select: none;
   }
 
-  #crosshair.reticle-target-in-range {
-    color: #ff6b6b;
-    text-shadow:
-      1px 1px 2px rgba(0, 0, 0, 0.8),
+  #crosshair::before,
+  #crosshair::after {
+    content: '';
+    position: absolute;
+    background-color: rgba(255, 255, 255, 0.84);
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+  }
+
+  #crosshair::before {
+    width: 2px;
+    height: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  #crosshair::after {
+    width: 100%;
+    height: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  #crosshair.reticle-target-in-range::before,
+  #crosshair.reticle-target-in-range::after {
+    background-color: rgba(255, 107, 107, 0.92);
+    box-shadow:
+      0 0 4px rgba(0, 0, 0, 0.8),
       0 0 10px rgba(255, 70, 70, 0.28);
   }
 
   /* Bloom circle: diameter = spread x viewport height (the old formula). */
   #spread-reticle {
     position: fixed;
-    top: 50%;
-    left: 50%;
+    top: calc(50% + var(--reticle-screen-y-offset));
+    left: calc(50% + var(--reticle-screen-x-offset));
     transform: translate(-50%, -50%);
     width: 0;
     height: 0;
@@ -978,8 +1041,8 @@
   /* Shotgun pellet-spread ring (replaces the cross entirely). */
   #shotgun-reticle {
     position: fixed;
-    top: 50%;
-    left: 50%;
+    top: calc(50% + var(--reticle-screen-y-offset));
+    left: calc(50% + var(--reticle-screen-x-offset));
     transform: translate(-50%, -50%);
     width: 300px;
     height: 300px;

@@ -16,6 +16,8 @@ import type { ItemEntityOptions } from './ItemEntity';
 
 export type GunHand = 'left' | 'right' | 'both';
 
+const TRACER_VISIBLE_START_OFFSET = 1;
+
 export type GunEntityOptions = {
   ammo: number;              // The amount of ammo in the clip.
   damage: number;            // The damage of the gun.
@@ -161,14 +163,7 @@ export default abstract class GunEntity extends ItemEntity {
 
   protected getShootOriginDirection(): { origin: Vector3Like, direction: Vector3Like } {
     const player = this.parent as GamePlayerEntity;
-    const { x, y, z } = player.position;
-    const cameraYOffset = player.player.camera.offset.y;    
-    const direction = player.player.camera.facingDirection;
-    
-    return {
-      origin: { x, y: y + cameraYOffset, z },
-      direction
-    };
+    return player.getReticleAimRay();
   }
 
   protected processShoot(): boolean {
@@ -262,19 +257,22 @@ export default abstract class GunEntity extends ItemEntity {
 
   /**
    * Every ray (pellets included) gets a tracer, visible to all players.
-   * The visual starts just ahead of the muzzle and flies to the true
-   * impact point, so tracers, crosshair and hits stay consistent.
-   * (Ported from the original MineShoot hitscan tracer runtime.)
+   * Hit logic stays reticle-based, but the visual line starts from the
+   * rendered muzzle flash and travels toward the true impact point.
    */
   protected _broadcastTracer(world: World, origin: Vector3Like, direction: Vector3Like, end: Vector3Like): void {
+    const muzzleOrigin = this._getTracerFallbackMuzzleOrigin(origin);
+    const muzzleEntityId = this._muzzleFlashChildEntity?.id;
     const packet = {
       type: 'tracer',
       o: [
-        +(origin.x + direction.x * 1.2).toFixed(2),
-        +(origin.y + direction.y * 1.2 - 0.12).toFixed(2),
-        +(origin.z + direction.z * 1.2).toFixed(2),
+        +muzzleOrigin.x.toFixed(2),
+        +muzzleOrigin.y.toFixed(2),
+        +muzzleOrigin.z.toFixed(2),
       ],
       e: [+end.x.toFixed(2), +end.y.toFixed(2), +end.z.toFixed(2)],
+      m: muzzleEntityId,
+      so: TRACER_VISIBLE_START_OFFSET,
       speed: this.tracer?.speed,
       seg: this.tracer?.seg,
       life: this.tracer?.life,
@@ -282,6 +280,51 @@ export default abstract class GunEntity extends ItemEntity {
     GameServer.instance.playerManager.getConnectedPlayersByWorld(world).forEach(player => {
       player.ui.sendData(packet);
     });
+  }
+
+  private _getTracerFallbackMuzzleOrigin(rayOrigin: Vector3Like): Vector3Like {
+    if (!(this.parent instanceof GamePlayerEntity)) return rayOrigin;
+
+    const player = this.parent;
+    const { position: muzzleLocalPosition } = this.getMuzzleFlashPositionRotation();
+    const local = {
+      x: this.position.x + muzzleLocalPosition.x,
+      y: this.position.y + muzzleLocalPosition.y,
+      z: this.position.z + muzzleLocalPosition.z,
+    };
+    const { forward, right, up } = this._getCameraBasis(player);
+
+    return {
+      x: rayOrigin.x + right.x * local.x + up.x * local.y - forward.x * local.z,
+      y: rayOrigin.y + right.y * local.x + up.y * local.y - forward.y * local.z,
+      z: rayOrigin.z + right.z * local.x + up.z * local.y - forward.z * local.z,
+    };
+  }
+
+  private _getCameraBasis(player: GamePlayerEntity): {
+    forward: Vector3Like;
+    right: Vector3Like;
+    up: Vector3Like;
+  } {
+    const { pitch, yaw } = player.player.camera.orientation;
+    const cosPitch = Math.cos(pitch);
+    const forward = {
+      x: -Math.sin(yaw) * cosPitch,
+      y: Math.sin(pitch),
+      z: -Math.cos(yaw) * cosPitch,
+    };
+    const right = {
+      x: Math.cos(yaw),
+      y: 0,
+      z: -Math.sin(yaw),
+    };
+    const up = {
+      x: right.y * forward.z - right.z * forward.y,
+      y: right.z * forward.x - right.x * forward.z,
+      z: right.x * forward.y - right.y * forward.x,
+    };
+
+    return { forward, right, up };
   }
 
   /** The amount of ammo currently in the clip. */
