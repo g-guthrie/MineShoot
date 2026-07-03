@@ -121,6 +121,110 @@ for (const cell of biomeCells) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Taste pass 1: saturation. The original palette reads washed-out in the
+// engine's soft-sun lighting; push chroma uniformly (keeps hue relations).
+// ---------------------------------------------------------------------------
+const SATURATION_BOOST = 1.18;
+
+function boostSaturation(rgb) {
+  const r = (rgb >> 16 & 255) / 255, g = (rgb >> 8 & 255) / 255, b = (rgb & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return rgb; // grays stay gray
+  const d = max - min;
+  let sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  switch (max) {
+    case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+    case g: h = ((b - r) / d + 2) / 6; break;
+    default: h = ((r - g) / d + 4) / 6; break;
+  }
+  sat = Math.min(1, sat * SATURATION_BOOST);
+  const q = l < 0.5 ? l * (1 + sat) : l + sat - l * sat;
+  const pp = 2 * l - q;
+  const hue = t => {
+    let x = t;
+    if (x < 0) x += 1;
+    if (x > 1) x -= 1;
+    if (x < 1 / 6) return pp + (q - pp) * 6 * x;
+    if (x < 1 / 2) return q;
+    if (x < 2 / 3) return pp + (q - pp) * (2 / 3 - x) * 6;
+    return pp;
+  };
+  const to255 = v => Math.max(0, Math.min(255, Math.round(v * 255)));
+  return (to255(hue(h + 1 / 3)) << 16) | (to255(hue(h)) << 8) | to255(hue(h - 1 / 3));
+}
+
+for (const e of entries) e.color = boostSaturation(e.color);
+for (const e of decorEntries) e.color = boostSaturation(e.color);
+
+// ---------------------------------------------------------------------------
+// Taste pass 2: z-fighting. Coplanar faces of different-colored cuboids
+// flicker; separate them by an epsilon, moving the smaller box (sub-cm —
+// invisible, and the colliders shift with it).
+// ---------------------------------------------------------------------------
+const ZFIGHT_EPSILON = 0.008;
+const PLANE_TOLERANCE = 1e-3;
+
+function rectsOverlap(a0, a1, b0, b1) {
+  return a0 < b1 - 1e-4 && b0 < a1 - 1e-4;
+}
+
+{
+  const boxes = entries
+    .map((e, i) => ({ e, i, vol: e.w * e.h * e.d }))
+    .filter(b => !b.e.rotY && !b.e.tiltX);
+  let separations = 0;
+
+  for (let a = 0; a < boxes.length; a++) {
+    for (let b = a + 1; b < boxes.length; b++) {
+      const A = boxes[a].e, B = boxes[b].e;
+      if (A.color === B.color) continue; // same color: seams are invisible
+
+      // Broad-phase reject
+      if (Math.abs(A.x - B.x) > (A.w + B.w) / 2 + 0.01) continue;
+      if (Math.abs(A.y - B.y) > (A.h + B.h) / 2 + 0.01) continue;
+      if (Math.abs(A.z - B.z) > (A.d + B.d) / 2 + 0.01) continue;
+
+      const small = boxes[a].vol <= boxes[b].vol ? A : B;
+      const smallSign = small === A ? 1 : -1; // move the smaller one
+
+      // Coplanar horizontal faces (the classic overlay flicker)
+      const overlapXZ =
+        rectsOverlap(A.x - A.w / 2, A.x + A.w / 2, B.x - B.w / 2, B.x + B.w / 2) &&
+        rectsOverlap(A.z - A.d / 2, A.z + A.d / 2, B.z - B.d / 2, B.z + B.d / 2);
+      if (overlapXZ) {
+        const topA = A.y + A.h / 2, topB = B.y + B.h / 2;
+        const botA = A.y - A.h / 2, botB = B.y - B.h / 2;
+        if (Math.abs(topA - topB) < PLANE_TOLERANCE) { small.y += ZFIGHT_EPSILON; separations++; continue; }
+        if (Math.abs(botA - topB) < PLANE_TOLERANCE || Math.abs(topA - botB) < PLANE_TOLERANCE) continue; // stacked, fine
+      }
+
+      // Coplanar vertical faces
+      const overlapXY =
+        rectsOverlap(A.x - A.w / 2, A.x + A.w / 2, B.x - B.w / 2, B.x + B.w / 2) &&
+        rectsOverlap(A.y - A.h / 2, A.y + A.h / 2, B.y - B.h / 2, B.y + B.h / 2);
+      const overlapYZ =
+        rectsOverlap(A.y - A.h / 2, A.y + A.h / 2, B.y - B.h / 2, B.y + B.h / 2) &&
+        rectsOverlap(A.z - A.d / 2, A.z + A.d / 2, B.z - B.d / 2, B.z + B.d / 2);
+      if (overlapYZ) {
+        const eastA = A.x + A.w / 2, eastB = B.x + B.w / 2;
+        const westA = A.x - A.w / 2, westB = B.x - B.w / 2;
+        if (Math.abs(eastA - eastB) < PLANE_TOLERANCE) { small.x += ZFIGHT_EPSILON * smallSign * (eastA >= westA ? 1 : 1); separations++; continue; }
+        if (Math.abs(westA - westB) < PLANE_TOLERANCE) { small.x -= ZFIGHT_EPSILON; separations++; continue; }
+      }
+      if (overlapXY) {
+        const southA = A.z + A.d / 2, southB = B.z + B.d / 2;
+        const northA = A.z - A.d / 2, northB = B.z - B.d / 2;
+        if (Math.abs(southA - southB) < PLANE_TOLERANCE) { small.z += ZFIGHT_EPSILON; separations++; continue; }
+        if (Math.abs(northA - northB) < PLANE_TOLERANCE) { small.z -= ZFIGHT_EPSILON; separations++; continue; }
+      }
+    }
+  }
+  console.log(`z-fight pass: ${separations} coplanar faces separated`);
+}
+
 console.log(`captured ${entries.length} cuboids across ${biomeCells.length} biomes`);
 
 // ---------------------------------------------------------------------------

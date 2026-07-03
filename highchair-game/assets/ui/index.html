@@ -27,6 +27,16 @@
   <div class="menu-shell">
     <div class="menu-kicker">INSTANT BROWSER PVP</div>
     <h1 class="menu-title">PVP BY GREER</h1>
+    <div class="menu-modes">
+      <div class="menu-mode selected" data-mode="deathmatch">
+        <div class="mode-name">DEATHMATCH</div>
+        <div class="mode-desc">Free-for-all &middot; most kills wins</div>
+      </div>
+      <div class="menu-mode" data-mode="zombies" id="menu-mode-zombies" style="display: none;">
+        <div class="mode-name">ZOMBIES</div>
+        <div class="mode-desc">Co-op waves &middot; hold the center</div>
+      </div>
+    </div>
     <div class="menu-controls">
       <span class="menu-pill">WASD move</span><span class="menu-pill">SHIFT run</span><span class="menu-pill">SPACE jump</span><span class="menu-pill">CLICK shoot</span><span class="menu-pill">R-CLICK scope / build</span><span class="menu-pill">R reload</span><span class="menu-pill">ESC menu</span>
     </div>
@@ -321,6 +331,20 @@
     }
     closeMenu();
   });
+
+  // Zombies runs as its own server; surface the mode card wherever we can
+  // reach one (local dev today, its own deployment later).
+  (function initModeSelect() {
+    const zombies = document.getElementById('menu-mode-zombies');
+    if (!zombies) return;
+    const isLocal = /^(localhost|127\.)/.test(window.location.hostname);
+    if (isLocal) {
+      zombies.style.display = 'block';
+      zombies.addEventListener('click', () => {
+        window.location.href = window.location.pathname + '?join=127.0.0.1:8081';
+      });
+    }
+  })();
 
   // The menu is the start screen: open until the player enters the match.
   openMenu();
@@ -2382,9 +2406,12 @@
     inset: 0;
     pointer-events: auto;
     z-index: 70;
-    background: rgba(16, 22, 35, 0.34);
-    backdrop-filter: blur(10px) saturate(120%);
-    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    /* The original instantpvp.com home screen: the beloved backdrop under
+       a dark wash (menu-shell-v4 #overlay). */
+    background:
+      linear-gradient(180deg, rgba(7, 13, 24, 0.18), rgba(7, 13, 24, 0.36)),
+      url('{{CDN_ASSETS_URL}}/ui/images/menu_backdrop_6036.jpg') center / cover no-repeat,
+      #101623;
   }
   .loadout-panel.open { display: flex; align-items: center; justify-content: center; }
 
@@ -2428,6 +2455,45 @@
     font-weight: 800;
     letter-spacing: 4px;
     color: #07111f;
+  }
+
+  .menu-modes {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 12px;
+  }
+
+  .menu-mode {
+    flex: 0 1 220px;
+    padding: 10px 14px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.42);
+    box-shadow: inset 0 0 0 1px rgba(121, 139, 164, 0.22);
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.1s ease, box-shadow 0.1s ease;
+  }
+
+  .menu-mode:hover { background: rgba(255, 255, 255, 0.62); }
+
+  .menu-mode.selected {
+    background: rgba(47, 109, 255, 0.16);
+    box-shadow: inset 0 0 0 2px #2f6dff;
+  }
+
+  .menu-mode .mode-name {
+    font-family: Orbitron, Rajdhani, Inter, system-ui, sans-serif;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 1.6px;
+    color: #07111f;
+  }
+
+  .menu-mode .mode-desc {
+    font-size: 11px;
+    color: #657286;
+    margin-top: 2px;
   }
 
   .menu-controls {
