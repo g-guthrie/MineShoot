@@ -1,5 +1,6 @@
 import { 
   CollisionGroup,
+  GameServer,
   Audio,
   BaseEntityControllerEvent,
   DefaultPlayerEntity,
@@ -213,9 +214,18 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this._updatePlayerUIMaterials();
   }
 
+  /** Everyone's UI learns who is dead, so client hit prediction skips corpses. */
+  private _broadcastDeadState(dead: boolean): void {
+    if (!this.world) return;
+    GameServer.instance.playerManager.getConnectedPlayersByWorld(this.world).forEach(player => {
+      player.ui.sendData({ type: 'player-dead', id: this.id, dead });
+    });
+  }
+
   public checkDeath(attacker?: GamePlayerEntity): void {
     if (this.health <= 0) {
       this._dead = true;
+      this._broadcastDeadState(true);
       this._autoFireRaycastCooldown = 0;
       this._autoFireHasTarget = false;
       this._setMovementEnabled(false);
@@ -403,6 +413,8 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
       clearTimeout(this._respawnTimer);
       this._respawnTimer = undefined;
     }
+
+    this._broadcastDeadState(false);
     this._dead = false;
     this._autoFireRaycastCooldown = 0;
     this._autoFireHasTarget = false;

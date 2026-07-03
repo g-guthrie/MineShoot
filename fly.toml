@@ -1,6 +1,6 @@
-# PvP by Greer — game server on Fly.io.
+# PeeVeePee — game server on Fly.io.
 # Deploy: fly launch --copy-config --no-deploy && fly deploy
-app = "pvp-by-greer"
+app = "peeveepee"
 primary_region = "ord"
 
 [build]

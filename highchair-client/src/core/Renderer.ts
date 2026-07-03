@@ -168,12 +168,12 @@ export default class Renderer {
     // mirrors the server's PLAYER_HITBOX ray tests against these).
     (globalThis as Record<string, unknown>).__playerTargets = () => {
       const local = this._game.camera.gameCameraAttachedEntity;
-      const out: Array<{ x: number; y: number; z: number }> = [];
+      const out: Array<{ id: number; x: number; y: number; z: number }> = [];
       for (const entity of this._game.entityManager.getAllEntities()) {
         if (entity === local || !entity.visible || entity.attached || entity.isEnvironmental) continue;
         if (!entity.modelUri?.includes('models/players/soldier-player.gltf')) continue;
         const p = entity.getWorldPosition(new Vector3());
-        out.push({ x: p.x, y: p.y, z: p.z });
+        out.push({ id: entity.id, x: p.x, y: p.y, z: p.z });
       }
       return out;
     };

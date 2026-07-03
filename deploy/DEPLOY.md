@@ -1,4 +1,4 @@
-# Going live — PvP by Greer
+# Going live — PeeVeePee
 
 One platform, one app, one URL. The Fly machine runs the game server and
 serves the client from the same origin — the page a player loads IS the

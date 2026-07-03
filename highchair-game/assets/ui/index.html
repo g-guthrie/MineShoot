@@ -27,8 +27,8 @@
      select, no HUD. Shown before entering; MAIN MENU returns here. -->
 <div class="home-menu">
   <div class="menu-shell">
-    <div class="menu-kicker">INSTANT BROWSER PVP</div>
-    <h1 class="menu-title">PVP BY GREER</h1>
+    <div class="menu-kicker">PVP BY GREER &middot; INSTANT BROWSER PVP</div>
+    <h1 class="menu-title">PEEVEEPEE</h1>
     <div class="menu-modes">
       <div class="menu-mode selected" data-mode="deathmatch">
         <div class="mode-name">DEATHMATCH</div>
@@ -882,6 +882,7 @@
   let predictedReloading = false;
   let predictedLastShotAt = 0;
   const predictions = [];       // { at, weapon }
+  const deadTargetIds = new Set(); // entity ids the server marked dead
   let mouseHeld = false;
   let autoFireTimer = null;
 
@@ -966,6 +967,7 @@
       let bestT = Infinity;
       let bestHead = false;
       for (const target of targets) {
+        if (deadTargetIds.has(target.id)) continue; // no hitmarkers on corpses
         const feetY = target.y - PREDICT_PLAYER_HEIGHT / 2;
         const bodyHalf = PREDICT_PLAYER_HEIGHT * PREDICT_BODY_HALF_FRAC;
         const headHalf = PREDICT_PLAYER_HEIGHT * PREDICT_HEAD_HALF_FRAC;
@@ -1243,6 +1245,11 @@
 
     if (type === 'tracer') {
       globalThis.__tracers?.spawn(data);
+    }
+
+    if (type === 'player-dead') {
+      if (data.dead) deadTargetIds.add(Number(data.id));
+      else deadTargetIds.delete(Number(data.id));
     }
 
     if (type === 'reticle') {
