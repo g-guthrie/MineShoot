@@ -9,7 +9,7 @@
     "package": "node node_modules/highchair/bin/scripts.js package",
     "upgrade-assets-library": "node node_modules/highchair/bin/scripts.js upgrade-assets-library",
     "upgrade-project": "node node_modules/highchair/bin/scripts.js upgrade-project",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && node tools/check-mirrors.mjs",
     "start": "PATH=../scripts:$PATH tsx index.ts",
     "postinstall": "node dev/patch-webtransport.mjs"
   },
