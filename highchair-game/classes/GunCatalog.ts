@@ -23,14 +23,11 @@ export const GUN_CATALOG: readonly GunCatalogEntry[] = [
   { id: 'mining-drill', label: 'Mining Drill', icon: 'icons/mining-drill.png' },
 ];
 
-export const LOADOUT_SLOTS = 5;
+export const LOADOUT_SLOTS = 2;
 
 export const DEFAULT_LOADOUT: readonly string[] = [
   'ak47',
   'shotgun',
-  'submachine-gun',
-  'sniper',
-  'rocket-launcher',
 ];
 
 export function isCatalogGun(id: unknown): id is string {

@@ -15,7 +15,6 @@ const DEFAULT_SNIPER_OPTIONS: GunEntityOptions = {
   maxAmmo: 4,
   totalAmmo: 24,
   scopeZoom: 5,
-  focusesReticleOnScope: true,
   scopeStyle: 'sniper',
   modelUri: 'models/items/sniper.glb',
   modelScale: 1.3,

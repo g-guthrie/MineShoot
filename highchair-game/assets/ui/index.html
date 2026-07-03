@@ -7,6 +7,7 @@
 <div id="crosshair"></div>
 <div id="precision-reticle-dot"></div>
 <div id="spread-reticle"></div>
+<div id="hit-pulse"></div>
 <div id="shotgun-reticle"></div>
 <div id="sniper-scope" aria-hidden="true">
   <div id="sniper-scope-vignette"></div>
@@ -151,42 +152,14 @@
 
 <div class="inventory-hud">
   <div class="inventory-slot inventory-active-slot" data-slot="0">
-    <div class="slot-number">F</div>
-    <img class="slot-icon" style="display: none;">
-    <div class="slot-quantity" style="display: none;"></div>
-    <div class="slot-name" style="display: none;"></div>
-  </div>
-
-  <div class="inventory-slot" data-slot="1">
     <div class="slot-number">1</div>
     <img class="slot-icon" style="display: none;">
     <div class="slot-quantity" style="display: none;"></div>
     <div class="slot-name" style="display: none;"></div>
   </div>
 
-  <div class="inventory-slot" data-slot="2">
+  <div class="inventory-slot" data-slot="1">
     <div class="slot-number">2</div>
-    <img class="slot-icon" style="display: none;">
-    <div class="slot-quantity" style="display: none;"></div>
-    <div class="slot-name" style="display: none;"></div>
-  </div>
-
-  <div class="inventory-slot" data-slot="3">
-    <div class="slot-number">3</div>
-    <img class="slot-icon" style="display: none;">
-    <div class="slot-quantity" style="display: none;"></div>
-    <div class="slot-name" style="display: none;"></div>
-  </div>
-
-  <div class="inventory-slot" data-slot="4">
-    <div class="slot-number">4</div>
-    <img class="slot-icon" style="display: none;">
-    <div class="slot-quantity" style="display: none;"></div>
-    <div class="slot-name" style="display: none;"></div>
-  </div>
-
-  <div class="inventory-slot" data-slot="5">
-    <div class="slot-number">5</div>
     <img class="slot-icon" style="display: none;">
     <div class="slot-quantity" style="display: none;"></div>
     <div class="slot-name" style="display: none;"></div>
@@ -242,12 +215,14 @@
   // Canonical aim anchoring: the server sends the active gun's true angular
   // offset (camera-space tangents measured from the model skeleton by
   // tools/measure-aim-offsets.mjs). The reticle position is re-projected
-  // through the live camera every frame, so window size, aspect and scope
-  // zoom can never drift the reticle away from where bullets actually go.
+  // through the live camera every frame; scoped zoom uses this screen point
+  // as a render-layer magnification origin without changing weapon aim.
   let aimTangentX = 0, aimTangentY = 0;
   var reticleSpread = 0, reticlePellets = 1;
 
   let lastDebugVisible = false;
+  let lastReticleProjectionScale = 0;
+  let scopeZoom = 1;
 
   function positionReticles() {
     const debugNow = Boolean(globalThis.__debugVisible);
@@ -262,6 +237,11 @@
       const yPx = -aimTangentY * e[5] * 0.5 * window.innerHeight;
       document.documentElement.style.setProperty('--reticle-screen-x-offset', xPx.toFixed(1) + 'px');
       document.documentElement.style.setProperty('--reticle-screen-y-offset', yPx.toFixed(1) + 'px');
+      if (Math.abs(e[5] - lastReticleProjectionScale) > 0.0001) {
+        lastReticleProjectionScale = e[5];
+        updateReticleSize();
+      }
+      updateScopeMagnificationOrigin();
     }
     requestAnimationFrame(positionReticles);
   }
@@ -404,6 +384,44 @@
   var scopeStyle = 'none';
   var reticleScoped = false;
 
+  function getReticleScreenPoint() {
+    const style = getComputedStyle(document.documentElement);
+    const xOffset = parseFloat(style.getPropertyValue('--reticle-screen-x-offset')) || 0;
+    const yOffset = parseFloat(style.getPropertyValue('--reticle-screen-y-offset')) || 0;
+    return {
+      x: window.innerWidth * 0.5 + xOffset,
+      y: window.innerHeight * 0.5 + yOffset,
+    };
+  }
+
+  function getScopeZoomElements() {
+    return [
+      document.querySelector('body > canvas'),
+      document.getElementById('scene-ui-container'),
+    ].filter(Boolean);
+  }
+
+  function updateScopeMagnificationOrigin() {
+    if (scopeZoom === 1) return;
+    const pivot = getReticleScreenPoint();
+    for (const el of getScopeZoomElements()) {
+      el.style.transformOrigin = `${pivot.x.toFixed(1)}px ${pivot.y.toFixed(1)}px`;
+    }
+  }
+
+  function applyScopeMagnification(zoom) {
+    scopeZoom = Number.isFinite(Number(zoom)) && Number(zoom) > 1 ? Number(zoom) : 1;
+    const transform = scopeZoom === 1 ? '' : `scale(${scopeZoom})`;
+    const pivot = getReticleScreenPoint();
+
+    for (const el of getScopeZoomElements()) {
+      el.style.transformOrigin = `${pivot.x.toFixed(1)}px ${pivot.y.toFixed(1)}px`;
+      el.style.transition = 'transform 180ms ease-out';
+      el.style.transform = transform;
+      el.style.willChange = scopeZoom === 1 ? '' : 'transform';
+    }
+  }
+
   function clearScopeUi() {
     updateScopeZoom({ zoom: 1, style: 'none' });
     reticleScoped = false;
@@ -412,11 +430,12 @@
 
   function updateScopeZoom(data) {
     if (!sniperScopeEl) return;
-    const active = Number(data?.zoom) !== 1;
+    const zoom = Number(data?.zoom) || 1;
+    const active = zoom !== 1;
+    applyScopeMagnification(zoom);
     scopeStyle = active ? (data?.style || (data?.sniper ? 'sniper' : 'none')) : 'none';
     sniperScopeEl.classList.toggle('active', scopeStyle === 'sniper');
     document.body.classList.toggle('sniper-scope-active', scopeStyle === 'sniper');
-    document.body.classList.toggle('scout-scope-active', scopeStyle === 'scout');
     updateReticleSize();
   }
 
@@ -553,15 +572,15 @@
     const bloom = document.getElementById('spread-reticle');
     const ring = document.getElementById('shotgun-reticle');
     if (!cross || !bloom || !ring) return;
-    const precisionScoped = reticleScoped || scopeStyle === 'scout';
+    const precisionScoped = reticleScoped;
     const shotgun = !precisionScoped && reticlePellets >= 6;
-    // Canonical bloom: the same spread value the server scatters shots with
-    // sizes this circle (diameter = spread x viewport height), so tuning a
-    // gun's spread updates the debug circle automatically. The circle is the
-    // guaranteed-hit cone, shown in debug mode (H); the shotgun ring is that
-    // gun's reticle and always shows.
+    // Canonical bloom: the server sends the unscoped tangent-space spread.
+    // The HUD projects it through the live camera, so FOV changes resize the
+    // circle from the same value bullets sample. Scoped CSS magnification does
+    // not scale this HUD circle; the server tightens shot spread by zoom.
     const debug = Boolean(globalThis.__debugVisible);
-    const bloomPx = Math.round(reticleSpread * window.innerHeight);
+    const projectionScale = globalThis.__camera?.()?.projectionMatrix?.elements?.[5] || 1;
+    const bloomPx = Math.round(reticleSpread * projectionScale * window.innerHeight);
     cross.style.display = shotgun ? 'none' : 'block';
     ring.style.display = shotgun ? 'block' : 'none';
     bloom.style.display = debug && !shotgun && !precisionScoped && bloomPx > 3 ? 'block' : 'none';
@@ -579,10 +598,209 @@
     }
   }
 
+  // ---- swipe/scroll weapon toggle ----
+  // Ported from the original MineShoot weapon-swap-input.js: a trackpad
+  // swipe emits a momentum burst of wheel events; accumulate until the
+  // trigger threshold, toggle ONCE, then lock out until the burst dies
+  // down. Discrete mouse-wheel notches toggle immediately with the same
+  // lockout. Direction-agnostic: two weapons means "the other one".
+  const WEAPON_SWAP = {
+    switchLockoutMs: 1000,
+    gestureTimeoutMs: 420,
+    noiseThresholdPx: 8,
+    releaseEpsilonPx: 4,
+    triggerThresholdPx: 24,
+    axisDominanceRatio: 1.1,
+  };
+  const swapState = { accum: 0, blocked: false, lastEventAt: 0, lockUntil: 0, sawQuietRelease: false, switchLockUntil: 0 };
+
+  function requestWeaponToggle() {
+    highchair.sendData({ type: 'switch-weapon' });
+  }
+
+  window.addEventListener('wheel', (e) => {
+    if (!document.pointerLockElement) return; // menu scrolling stays free
+    e.preventDefault();
+
+    const now = performance.now();
+    if (swapState.switchLockUntil > now) return;
+
+    const scale = e.deltaMode === 1 ? WEAPON_SWAP.triggerThresholdPx : e.deltaMode === 2 ? window.innerHeight : 1;
+    const dx = (Number(e.deltaX) || 0) * scale;
+    const dy = (Number(e.deltaY) || 0) * scale;
+    const absDx = Math.abs(dx), absDy = Math.abs(dy);
+    const isDiscreteWheel = e.deltaMode !== 0;
+    const isNoise = absDx < WEAPON_SWAP.noiseThresholdPx && absDy < WEAPON_SWAP.noiseThresholdPx;
+    const quietRelease = absDx <= WEAPON_SWAP.releaseEpsilonPx && absDy <= WEAPON_SWAP.releaseEpsilonPx;
+    const gestureTimedOut = swapState.lastEventAt > 0 && (now - swapState.lastEventAt) > WEAPON_SWAP.gestureTimeoutMs;
+    const primary = absDy >= absDx * WEAPON_SWAP.axisDominanceRatio ? dy
+      : absDx >= absDy * WEAPON_SWAP.axisDominanceRatio ? dx
+      : (absDy >= absDx ? dy : dx);
+
+    if (isDiscreteWheel) {
+      if (isNoise) return;
+      swapState.accum = 0; swapState.blocked = false;
+      swapState.switchLockUntil = now + WEAPON_SWAP.switchLockoutMs;
+      requestWeaponToggle();
+      return;
+    }
+
+    if (swapState.blocked) {
+      if (quietRelease) {
+        swapState.sawQuietRelease = true;
+        swapState.lastEventAt = now;
+        if (now >= swapState.lockUntil) { swapState.accum = 0; swapState.blocked = false; swapState.sawQuietRelease = false; }
+        return;
+      }
+      if (now < swapState.lockUntil) { swapState.lastEventAt = now; return; }
+      if (swapState.sawQuietRelease || gestureTimedOut) {
+        swapState.accum = 0; swapState.blocked = false; swapState.sawQuietRelease = false;
+      } else {
+        swapState.lastEventAt = now;
+        return;
+      }
+    }
+
+    swapState.lastEventAt = now;
+    if (quietRelease) { swapState.accum = 0; return; }
+    if (isNoise) return;
+
+    swapState.accum += Math.abs(primary);
+    if (swapState.accum < WEAPON_SWAP.triggerThresholdPx) return;
+
+    swapState.accum = 0;
+    swapState.blocked = true;
+    swapState.lockUntil = now + WEAPON_SWAP.switchLockoutMs;
+    swapState.sawQuietRelease = false;
+    swapState.switchLockUntil = now + WEAPON_SWAP.switchLockoutMs;
+    requestWeaponToggle();
+  }, { passive: false });
+
+  // ---- hit-confirm audio ----
+  // The original MineShoot bulletImpact synth (js/presentation/audio.js):
+  // procedural WebAudio, with head / shotgun / kill variants. No assets.
+  let hitAudioCtx = null;
+  let hitNoiseBuffer = null;
+
+  function hitCtx() {
+    if (!hitAudioCtx) {
+      const Ctor = window.AudioContext || window.webkitAudioContext;
+      if (!Ctor) return null;
+      hitAudioCtx = new Ctor();
+    }
+    if (hitAudioCtx.state === 'suspended') hitAudioCtx.resume();
+    return hitAudioCtx;
+  }
+
+  function ensureNoiseBuffer(c) {
+    if (hitNoiseBuffer && hitNoiseBuffer.sampleRate === c.sampleRate) return hitNoiseBuffer;
+    const size = Math.floor(c.sampleRate * 0.7);
+    hitNoiseBuffer = c.createBuffer(1, size, c.sampleRate);
+    const data = hitNoiseBuffer.getChannelData(0);
+    for (let i = 0; i < size; i++) data[i] = (Math.random() * 2 - 1) * (0.65 + Math.random() * 0.35);
+    return hitNoiseBuffer;
+  }
+
+  function playNoiseBurst(c, o) {
+    const start = c.currentTime + (o.delay || 0);
+    const end = start + Math.max(0.01, o.duration || 0.08);
+    const source = c.createBufferSource();
+    const gain = c.createGain();
+    const filter = c.createBiquadFilter();
+    source.buffer = ensureNoiseBuffer(c);
+    filter.type = o.filterType || 'bandpass';
+    filter.frequency.setValueAtTime(Math.max(80, o.frequency || 1200), start);
+    filter.Q.setValueAtTime(Math.max(0.0001, o.q || 0.8), start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, o.vol || 0.06), start + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, end);
+    source.connect(filter); filter.connect(gain); gain.connect(c.destination);
+    source.start(start); source.stop(end + 0.02);
+  }
+
+  function playOscBurst(c, o) {
+    const start = c.currentTime + (o.delay || 0);
+    const end = start + Math.max(0.01, o.duration || 0.08);
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.type = o.type || 'triangle';
+    osc.frequency.setValueAtTime(Math.max(20, o.startFreq || 220), start);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(20, o.endFreq || o.startFreq || 220), end);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, o.vol || 0.12), start + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, end);
+    osc.connect(gain); gain.connect(c.destination);
+    osc.start(start); osc.stop(end + 0.02);
+  }
+
+  function playKillFinisher(c, head) {
+    playNoiseBurst(c, { duration: 0.018, vol: 0.1, frequency: 6200, q: 2.8, filterType: 'highpass' });
+    playNoiseBurst(c, { duration: 0.085, vol: 0.078, frequency: 2600, q: 1.5, filterType: 'bandpass', delay: 0.0015 });
+    playNoiseBurst(c, { duration: 0.14, vol: 0.055, frequency: 980, q: 0.9, filterType: 'bandpass', delay: 0.006 });
+    playOscBurst(c, { type: 'square', startFreq: head ? 1240 : 1080, endFreq: head ? 760 : 660, duration: 0.045, vol: 0.055, delay: 0.001 });
+    playOscBurst(c, { type: 'triangle', startFreq: head ? 320 : 286, endFreq: head ? 120 : 108, duration: 0.22, vol: 0.125, delay: 0.002 });
+    playOscBurst(c, { type: 'sine', startFreq: head ? 520 : 440, endFreq: head ? 300 : 250, duration: 0.12, vol: 0.046, delay: 0.014 });
+    playOscBurst(c, { type: 'triangle', startFreq: head ? 700 : 620, endFreq: head ? 460 : 400, duration: 0.07, vol: 0.04, delay: 0.024 });
+  }
+
+  function playBulletImpact(opts) {
+    const c = hitCtx();
+    if (!c) return;
+    const killed = Boolean(opts.killed);
+    const head = opts.hitType === 'head';
+    const isShotgun = /shotgun/i.test(String(opts.weapon || ''));
+    playNoiseBurst(c, {
+      duration: isShotgun ? 0.042 : (head ? 0.055 : 0.07),
+      vol: (head ? 0.04 : 0.048) * (isShotgun ? 1.08 : 1),
+      frequency: head ? (isShotgun ? 3080 : 2600) : (isShotgun ? 2200 : 1800),
+      q: head ? 2.2 : (isShotgun ? 1.7 : 1.3),
+      filterType: 'bandpass',
+    });
+    playNoiseBurst(c, {
+      duration: isShotgun ? 0.034 : 0.05,
+      vol: isShotgun ? 0.032 : 0.02,
+      frequency: isShotgun ? 3400 : 4200,
+      q: isShotgun ? 2.4 : 1.6,
+      filterType: 'highpass',
+      delay: isShotgun ? 0.0015 : 0.004,
+    });
+    if (isShotgun) {
+      playNoiseBurst(c, { duration: 0.026, vol: head ? 0.022 : 0.026, frequency: 1900, q: 3.2, filterType: 'bandpass', delay: 0.003 });
+    }
+    playOscBurst(c, {
+      type: head ? 'square' : 'triangle',
+      startFreq: head ? (isShotgun ? 620 : 540) : (isShotgun ? 250 : 220),
+      endFreq: head ? (isShotgun ? 260 : 220) : (isShotgun ? 135 : 110),
+      duration: killed ? 0.12 : (isShotgun ? 0.05 : 0.07),
+      vol: killed ? 0.018 : (isShotgun ? 0.018 : 0.028),
+      delay: 0.002,
+    });
+    if (killed) playKillFinisher(c, head);
+  }
+
+  // Shotgun aggregation (the old 60ms window): one sound per blast, not 12.
+  let lastHitSoundAt = 0;
+  function playHitConfirm(opts) {
+    const now = performance.now();
+    if (now - lastHitSoundAt < 60 && !opts.killed) return;
+    lastHitSoundAt = now;
+    playBulletImpact(opts);
+  }
+
+  // ---- reticle hit pulse (CoD-style ring) ----
+  function pulseReticle(killed) {
+    const el = document.getElementById('hit-pulse');
+    if (!el) return;
+    el.classList.remove('active', 'kill');
+    void el.offsetHeight; // restart the animation
+    if (killed) el.classList.add('kill');
+    el.classList.add('active');
+  }
+
   let hitmarkerTimer;
   let hitmarkerHeadshotUntil = 0;
 
-  function showHitmarker(headshot) {
+  function showHitmarker(headshot, killed) {
     const hitmarker = document.querySelector('.hitmarker');
     if (!hitmarker) return;
 
@@ -593,15 +811,16 @@
       headshot = true;
     }
 
-    hitmarker.classList.remove('active', 'headshot');
+    hitmarker.classList.remove('active', 'headshot', 'kill');
     hitmarker.offsetHeight;
     if (headshot) hitmarker.classList.add('headshot');
+    if (killed) hitmarker.classList.add('kill');
     hitmarker.classList.add('active');
 
     clearTimeout(hitmarkerTimer);
     hitmarkerTimer = setTimeout(() => {
-      hitmarker.classList.remove('active', 'headshot');
-    }, 130);
+      hitmarker.classList.remove('active', 'headshot', 'kill');
+    }, killed ? 300 : 130); // kills hold like the old showKillMarker
   }
 
   function showDamageNumber(data) {
@@ -636,7 +855,7 @@
 
     setTimeout(() => {
       damageNumber.remove();
-    }, 760);
+    }, 950);
   }
 
   highchair.registerSceneUITemplate('item-label', (id, onState) => {
@@ -771,8 +990,14 @@
     }
 
     if (type === 'show-damage') {
-      showHitmarker(Boolean(data.headshot));
+      showHitmarker(Boolean(data.headshot), Boolean(data.killed));
       showDamageNumber(data);
+      playHitConfirm({
+        killed: Boolean(data.killed),
+        hitType: data.headshot ? 'head' : 'body',
+        weapon: data.weaponName || '',
+      });
+      pulseReticle(Boolean(data.killed));
     }
 
     if (type === 'health') {
@@ -974,7 +1199,7 @@
     z-index: 10;
     pointer-events: none;
     user-select: none;
-    transition: top 120ms ease-out, left 120ms ease-out, opacity 120ms ease-out;
+    transition: opacity 120ms ease-out;
   }
 
   #crosshair::before,
@@ -1022,7 +1247,7 @@
     z-index: 11;
     pointer-events: none;
     display: none;
-    transition: top 120ms ease-out, left 120ms ease-out, opacity 120ms ease-out;
+    transition: opacity 120ms ease-out;
   }
 
   #precision-reticle-dot.reticle-target-in-range {
@@ -1032,7 +1257,7 @@
       0 0 10px rgba(255, 70, 70, 0.34);
   }
 
-  /* Bloom circle: diameter = spread x viewport height (the old formula). */
+  /* Bloom circle: diameter = spread x camera projection scale x viewport height. */
   #spread-reticle {
     position: fixed;
     top: calc(50% + var(--reticle-screen-y-offset));
@@ -1046,11 +1271,42 @@
     z-index: 10;
     pointer-events: none;
     display: none;
-    transition: top 120ms ease-out, left 120ms ease-out, opacity 120ms ease-out;
+    transition: opacity 120ms ease-out;
   }
 
   #spread-reticle.reticle-target-in-range {
     border-color: rgba(255, 107, 107, 0.9);
+  }
+
+  /* Hit-confirm pulse: a ring that snaps out from the reticle on every
+     confirmed hit (red + bigger on kills). */
+  #hit-pulse {
+    position: fixed;
+    top: calc(50% + var(--reticle-screen-y-offset));
+    left: calc(50% + var(--reticle-screen-x-offset));
+    width: 34px;
+    height: 34px;
+    margin: -17px 0 0 -17px;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    z-index: 11;
+    pointer-events: none;
+    opacity: 0;
+    transform: scale(0.55);
+  }
+
+  #hit-pulse.active {
+    animation: hitPulse 190ms ease-out forwards;
+  }
+
+  #hit-pulse.kill {
+    border-color: rgba(255, 70, 70, 0.95);
+    animation-duration: 300ms;
+  }
+
+  @keyframes hitPulse {
+    0% { opacity: 0.95; transform: scale(0.55); }
+    100% { opacity: 0; transform: scale(1.5); }
   }
 
   /* Shotgun pellet-spread ring (replaces the cross entirely). */
@@ -1067,7 +1323,7 @@
     z-index: 10;
     pointer-events: none;
     display: none;
-    transition: top 120ms ease-out, left 120ms ease-out, opacity 120ms ease-out;
+    transition: opacity 120ms ease-out;
   }
 
   body.sniper-scope-active #crosshair,
@@ -1075,20 +1331,6 @@
   body.sniper-scope-active #spread-reticle,
   body.sniper-scope-active #shotgun-reticle {
     opacity: 0;
-  }
-
-  body.scout-scope-active #precision-reticle-dot {
-    display: block;
-    opacity: 1;
-  }
-
-  body.scout-scope-active #crosshair {
-    opacity: 0.86;
-  }
-
-  body.scout-scope-active #spread-reticle,
-  body.scout-scope-active #shotgun-reticle {
-    display: none !important;
   }
 
   #sniper-scope {
@@ -1268,6 +1510,16 @@
     box-shadow: 0 0 7px rgba(255, 211, 77, 0.85), 0 0 5px rgba(0, 0, 0, 0.9);
   }
 
+  /* Kill marker: bigger, red, holds longer (the old showKillMarker). */
+  .hitmarker.kill {
+    transform: translate(-50%, -50%) scale(1.35);
+  }
+
+  .hitmarker.kill span {
+    background: #ff4444;
+    box-shadow: 0 0 9px rgba(255, 68, 68, 0.9), 0 0 5px rgba(0, 0, 0, 0.9);
+  }
+
   .hit-damage-number {
     --start-x: 0px;
     --start-y: 0px;
@@ -1279,7 +1531,7 @@
     font-weight: 800;
     line-height: 1;
     text-shadow: 0 2px 0 rgba(0, 0, 0, 0.9), 0 0 6px rgba(0, 0, 0, 0.75);
-    animation: damagePopup 760ms cubic-bezier(0.12, 0.72, 0.18, 1) forwards;
+    animation: damagePopup 950ms ease-out forwards;
     position: absolute;
     left: 50%;
     top: 50%;
@@ -1298,18 +1550,19 @@
     font-size: 18px;
   }
 
+  /* The original MineShoot floatUp: moving and fading from the first
+     frame — pop in at full size, rise ~80px, gone in a second. */
   @keyframes damagePopup {
     0% {
-      opacity: 0;
-      transform: translate(-50%, -50%) translate(var(--start-x), var(--start-y)) scale(0.64);
-    }
-    18% {
       opacity: 1;
-      transform: translate(-50%, -50%) translate(var(--start-x), var(--start-y)) scale(1.18);
+      transform: translate(-50%, -50%) translate(var(--start-x), var(--start-y)) translateY(0) scale(1.12);
+    }
+    12% {
+      transform: translate(-50%, -50%) translate(var(--start-x), var(--start-y)) translateY(-9px) scale(1);
     }
     100% {
       opacity: 0;
-      transform: translate(-50%, -50%) translate(var(--drift-x), var(--drift-y)) scale(1);
+      transform: translate(-50%, -50%) translate(var(--start-x), var(--start-y)) translateY(-80px) scale(0.96);
     }
   }
 

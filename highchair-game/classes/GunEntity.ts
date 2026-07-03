@@ -33,10 +33,9 @@ export type GunEntityOptions = {
   reloadTimeMs: number;      // Seconds to reload.
   shootAudioUri: string;     // The audio played when shooting
   scopeZoom?: number;         // The zoom level when scoped in.
-  focusesReticleOnScope?: boolean; // True when ADS zooms around the current reticle vector.
-  scopeStyle?: 'none' | 'sniper' | 'scout'; // HUD treatment while scoped.
+  scopeStyle?: 'none' | 'sniper'; // HUD treatment while scoped.
   pellets?: number;          // Rays per trigger pull (shotguns > 1). Each pellet rolls its own spread, damage and hitmarker.
-  spread?: number;           // Max spread cone radius, as tangent units (0.185 ~ 10.5 degrees).
+  spread?: number;           // Max unscoped bloom radius in camera tangent units.
   falloff?: { start: number; end: number; minScalar: number }; // Damage scalar lerps 1 -> minScalar between start and end distance.
   tracer?: { speed?: number; seg?: number; life?: number }; // Tracer travel speed (wu/s), visible segment length, lifetime (s).
 } & ItemEntityOptions;
@@ -48,8 +47,7 @@ export default abstract class GunEntity extends ItemEntity {
   protected readonly range: number;
   protected readonly reloadTimeMs: number;
   protected readonly scopeZoom: number = 1;
-  protected readonly focusesReticleOnScope: boolean;
-  protected readonly scopeStyle: 'none' | 'sniper' | 'scout';
+  protected readonly scopeStyle: 'none' | 'sniper';
   protected readonly pellets: number;
   protected readonly spread: number;
   protected readonly falloff?: { start: number; end: number; minScalar: number };
@@ -61,6 +59,7 @@ export default abstract class GunEntity extends ItemEntity {
   private _muzzleFlashChildEntity: Entity | undefined;
   private _reloadAudio: Audio;
   private _reloading: boolean = false;
+  private _scoped: boolean = false;
   private _shootAudio: Audio;
 
   public constructor(options: GunEntityOptions) {
@@ -82,8 +81,7 @@ export default abstract class GunEntity extends ItemEntity {
     this.range = options.range;
     this.reloadTimeMs = options.reloadTimeMs;
     this.scopeZoom = options.scopeZoom ?? 1;
-    this.focusesReticleOnScope = Boolean(options.focusesReticleOnScope);
-    this.scopeStyle = options.scopeStyle ?? (this.focusesReticleOnScope ? 'sniper' : 'none');
+    this.scopeStyle = options.scopeStyle ?? 'none';
 
     this._reloadAudio = new Audio({
       attachedToEntity: this,
@@ -151,7 +149,7 @@ export default abstract class GunEntity extends ItemEntity {
     
     this._performShootEffects(player);
     for (let i = 0; i < this.pellets; i++) {
-      this.shootRaycast(origin, this._spreadDirection(direction), this.range, i, this.pellets);
+      this.shootRaycast(origin, this._spreadDirection(player, direction), this.range, i, this.pellets);
     }
     this._updateUI(player);
   }
@@ -160,18 +158,10 @@ export default abstract class GunEntity extends ItemEntity {
     if (!this.parent?.world || this.scopeZoom === 1) return;
 
     const player = this.parent as GamePlayerEntity;
-    const zoomingIn = player.player.camera.zoom === 1 && !reset;
-    const zoom = zoomingIn ? this.scopeZoom : 1;
-    const reticleFocused = this.focusesReticleOnScope && zoom !== 1;
+    this._scoped = reset ? false : !this._scoped;
+    const zoom = this._scoped ? this.scopeZoom : 1;
     const scopeStyle = zoom !== 1 ? this.scopeStyle : 'none';
 
-    if (this.focusesReticleOnScope && zoomingIn) {
-      player.focusCameraOnReticleAimAtZoom(this.scopeZoom);
-    }
-
-    player.setScopeAimTangentScale(reticleFocused ? 1 / this.scopeZoom : undefined);
-
-    player.player.camera.setZoom(zoom);
     player.player.ui.sendData({
       type: 'scope-zoom',
       zoom,
@@ -205,31 +195,19 @@ export default abstract class GunEntity extends ItemEntity {
     return true;
   }
 
-  /** Jitters a direction uniformly within the gun's spread cone. */
-  protected _spreadDirection(direction: Vector3Like): Vector3Like {
+  /** Jitters a direction uniformly inside the reticle bloom circle. */
+  protected _spreadDirection(player: GamePlayerEntity, direction: Vector3Like): Vector3Like {
     if (this.spread <= 0) return direction;
 
-    // Orthonormal basis perpendicular to the aim direction.
-    const up = Math.abs(direction.y) < 0.99 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
-    let rx = direction.y * up.z - direction.z * up.y;
-    let ry = direction.z * up.x - direction.x * up.z;
-    let rz = direction.x * up.y - direction.y * up.x;
-    const rl = Math.hypot(rx, ry, rz);
-    rx /= rl; ry /= rl; rz /= rl;
-    const ux = ry * direction.z - rz * direction.y;
-    const uy = rz * direction.x - rx * direction.z;
-    const uz = rx * direction.y - ry * direction.x;
-
-    // Uniform sample on a disc of radius `spread` (tangent units).
-    const r = this.spread * Math.sqrt(Math.random());
+    // This is the same tangent-space disc the HUD projects into the debug
+    // bloom circle. CSS scoped magnification scales the rendered world but
+    // not the HUD, so the ray cone tightens by active scope zoom.
+    const spread = this.getCurrentBulletSpread();
+    const r = spread * Math.sqrt(Math.random());
     const t = Math.random() * Math.PI * 2;
     const ox = r * Math.cos(t), oy = r * Math.sin(t);
 
-    const dx = direction.x + rx * ox + ux * oy;
-    const dy = direction.y + ry * ox + uy * oy;
-    const dz = direction.z + rz * ox + uz * oy;
-    const dl = Math.hypot(dx, dy, dz);
-    return { x: dx / dl, y: dy / dl, z: dz / dl };
+    return player.getReticleAimDirectionWithOffset(ox, oy);
   }
 
   /** Damage scalar at a given hit distance, per the gun's falloff curve. */
@@ -372,9 +350,18 @@ export default abstract class GunEntity extends ItemEntity {
     return this.scopeZoom > 1;
   }
 
-  /** Spread cone radius in tangent units (bloom reticle sizing). */
+  /** Unscoped bloom radius in camera tangent units. This defines the HUD circle. */
   public getSpread(): number {
     return this.spread;
+  }
+
+  /** Current bullet RNG radius in camera tangent units. */
+  public getCurrentBulletSpread(): number {
+    return this.spread / this._activeScopeZoom();
+  }
+
+  private _activeScopeZoom(): number {
+    return this._scoped ? Math.max(1, this.scopeZoom) : 1;
   }
 
   /** Rays per trigger pull (shotguns use a circle reticle). */
@@ -465,11 +452,12 @@ export default abstract class GunEntity extends ItemEntity {
     const headshot = this._isHeadshot(hitEntity, hitPoint);
     const finalDamage = headshot ? Math.round(damage * HEADSHOT_DAMAGE_MULTIPLIER) : damage;
 
+    hitEntity.takeDamage(finalDamage, hitDirection, attacker);
     attacker.dealtDamage(finalDamage, {
       ...feedback,
       headshot,
+      killed: hitEntity.isDead,
     });
-    hitEntity.takeDamage(finalDamage, hitDirection, attacker);
   }
 
   private _isHeadshot(hitEntity: GamePlayerEntity, hitPoint?: Vector3Like): boolean {

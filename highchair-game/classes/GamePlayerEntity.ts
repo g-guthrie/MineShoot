@@ -15,7 +15,6 @@ import {
 
 import GunEntity from './GunEntity';
 import ItemEntity from './ItemEntity';
-import PickaxeEntity from './weapons/PickaxeEntity';
 import ItemFactory from './ItemFactory';
 import { DEFAULT_LOADOUT, GUN_CATALOG, LOADOUT_SLOTS, isCatalogGun } from './GunCatalog';
 import MeleeWeaponEntity from './MeleeWeaponEntity';
@@ -27,6 +26,9 @@ const BASE_SHIELD = 0;
 const BLOCK_MATERIAL_COST = 3;
 const BUILD_REACH = 6; // max distance a block can be placed at
 const VOID_Y = -100;   // below the deepest world geometry; falling past it kills
+const PLAYER_WALK_VELOCITY = 10.5;
+const PLAYER_RUN_VELOCITY = 16.5;
+const PLAYER_JUMP_VELOCITY = 13.2;
 // Canonical aim offsets, measured from the model skeleton itself by
 // tools/measure-aim-offsets.mjs (idle stance bone chains; the barrel runs
 // along the hand anchor's -Y). Camera-space tangent units: x < 0 = left,
@@ -41,7 +43,7 @@ const INTERACT_DISTANCE = 4;
 const MOBILE_AUTOFIRE_SAMPLE_INTERVAL_TICKS = 3;
 const MAX_HEALTH = 100;
 const MAX_SHIELD = 100;
-const TOTAL_INVENTORY_SLOTS = 6;
+const TOTAL_INVENTORY_SLOTS = 2; // two loadout guns; the pickaxe is sunsetted
 const STARTING_MATERIALS = 30;
 const INFINITE_RESERVE_AMMO = -1;
 const RADAR_SEGMENTS = 8;
@@ -70,6 +72,7 @@ interface InventoryItem {
 
 export interface DamageFeedback {
   headshot?: boolean;
+  killed?: boolean;
   pelletIndex?: number;
   pelletCount?: number;
   weaponName?: string;
@@ -84,7 +87,6 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   private _aimTangentY: number = TWO_HANDED_AIM_TANGENT_Y;
   private _reticleProbeAtMs: number = 0;
   private _reticleTargetActive: boolean = false;
-  private _scopeAimTangentScale: number | undefined;
   private _autoFireHasTarget: boolean = false;
   private _autoFireEngaged: boolean = false;
   private _dead: boolean = false;
@@ -162,9 +164,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     // scaled x1.5 with the character size. Velocities and jump velocity
     // scale linearly; gravity scales too (see index.ts), which keeps air
     // time identical while jump height scales to 3.2 units.
-    this.playerController.walkVelocity = 10.5;
-    this.playerController.runVelocity = 16.5;
-    this.playerController.jumpVelocity = 13.2;
+    this._setMovementEnabled(true);
 
     // Players never physically shove each other — capsule-vs-capsule
     // contacts let one player catapult another (solver depenetration).
@@ -215,6 +215,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
       this._dead = true;
       this._autoFireRaycastCooldown = 0;
       this._autoFireHasTarget = false;
+      this._setMovementEnabled(false);
 
       if (attacker) {
         if (attacker !== this) {
@@ -226,11 +227,6 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
       this._despawnGuns(); // loadout guns return fresh at respawn, nothing drops
 
       if (this.isSpawned && this.world) {
-        // reset player inputs
-        Object.keys(this.player.input).forEach(key => {
-          this.player.input[key] = false;
-        });
-
         this.playerController.idleLoopedAnimations = [ 'sleep' ];
         this.world.chatManager.sendPlayerMessage(this.player, 'You have died! Respawning in 5 seconds...', 'FF0000');
         this._respawnTimer = setTimeout(() => this.respawn(), 5 * 1000);
@@ -257,6 +253,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
       type: 'show-damage',
       damage,
       headshot: Boolean(feedback.headshot),
+      killed: Boolean(feedback.killed),
       pelletIndex: feedback.pelletIndex ?? 0,
       pelletCount: feedback.pelletCount ?? 1,
       weaponName: feedback.weaponName ?? '',
@@ -264,11 +261,6 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   }
   
   public dropActiveInventoryItem(): void {
-    if (this._inventoryActiveSlotIndex === 0) {
-      this.world?.chatManager?.sendPlayerMessage(this.player, 'You cannot drop your pickaxe!');
-      return;
-    }
-
     const item = this._inventory[this._inventoryActiveSlotIndex];
     if (!item) return;
 
@@ -303,6 +295,10 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   }
 
   public getReticleAimDirection(): Vector3Like {
+    return this.getReticleAimDirectionWithOffset(0, 0);
+  }
+
+  public getReticleAimDirectionWithOffset(offsetX: number, offsetY: number): Vector3Like {
     const { pitch, yaw } = this.player.camera.orientation;
     const cosPitch = Math.cos(pitch);
     const forward = {
@@ -322,8 +318,8 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     };
     // The stance's angular offset is a physical property of the character,
     // so it needs no viewport, FOV or zoom input — it cannot drift.
-    const x = this._aimTangentX;
-    const y = this._aimTangentY;
+    const x = this._aimTangentX + offsetX;
+    const y = this._aimTangentY + offsetY;
     const direction = {
       x: forward.x + right.x * x + up.x * y,
       y: forward.y + right.y * x + up.y * y,
@@ -337,69 +333,6 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     };
   }
 
-  public focusCameraOnReticleAimAtZoom(zoom: number): void {
-    const { pitch, yaw } = this.player.camera.orientation;
-    const cosPitch = Math.cos(pitch);
-    const forward = {
-      x: -Math.sin(yaw) * cosPitch,
-      y: Math.sin(pitch),
-      z: -Math.cos(yaw) * cosPitch,
-    };
-    const right = {
-      x: Math.cos(yaw),
-      y: 0,
-      z: -Math.sin(yaw),
-    };
-    const up = {
-      x: right.y * forward.z - right.z * forward.y,
-      y: right.z * forward.x - right.x * forward.z,
-      z: right.x * forward.y - right.y * forward.x,
-    };
-    // Scoped zoom should orbit around the current reticle vector, not the
-    // viewport center. The remaining tangent is scaled by 1 / zoom, so this
-    // rotates only the rest of the offset into the camera.
-    const focusAmount = 1 - (1 / Math.max(1, zoom));
-    const direction = {
-      x: forward.x + right.x * this._aimTangentX * focusAmount + up.x * this._aimTangentY * focusAmount,
-      y: forward.y + right.y * this._aimTangentX * focusAmount + up.y * this._aimTangentY * focusAmount,
-      z: forward.z + right.z * this._aimTangentX * focusAmount + up.z * this._aimTangentY * focusAmount,
-    };
-    const length = Math.hypot(direction.x, direction.y, direction.z) || 1;
-    direction.x /= length;
-    direction.y /= length;
-    direction.z /= length;
-
-    const origin = {
-      x: this.position.x,
-      y: this.position.y + this.player.camera.offset.y,
-      z: this.position.z,
-    };
-    const target = {
-      x: origin.x + direction.x * 1000,
-      y: origin.y + direction.y * 1000,
-      z: origin.z + direction.z * 1000,
-    };
-
-    // The SDK exposes facePosition publicly but its typed surface does not
-    // expose orientation setters. The runtime has them; updating both sides
-    // keeps immediate server-side shots aligned with the client camera swing.
-    const camera = this.player.camera as typeof this.player.camera & {
-      setOrientationPitch?: (pitch: number) => void;
-      setOrientationYaw?: (yaw: number) => void;
-    };
-    camera.setOrientationYaw?.(Math.atan2(-direction.x, -direction.z));
-    camera.setOrientationPitch?.(Math.asin(Math.max(-1, Math.min(1, direction.y))));
-    this.player.camera.facePosition(target);
-  }
-
-  public setScopeAimTangentScale(scale: number | undefined): void {
-    const normalizedScale = scale && Number.isFinite(scale) && scale > 0 && scale < 1 ? scale : undefined;
-    if (this._scopeAimTangentScale === normalizedScale) return;
-
-    this._scopeAimTangentScale = normalizedScale;
-    this._sendReticleUI();
-  }
-
   public clearScopeZoom(): void {
     const activeItem = this._inventory[this._inventoryActiveSlotIndex];
     if (activeItem instanceof GunEntity && activeItem.hasScope()) {
@@ -407,7 +340,6 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
       return;
     }
 
-    this._scopeAimTangentScale = undefined;
     this.player.camera.setZoom(1);
     this._sendReticleUI();
     this.player.ui.sendData({ type: 'scope-zoom', zoom: 1, style: 'none', sniper: false });
@@ -426,8 +358,26 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this.playerController.runLoopedAnimations = ['run_lower', 'run_upper'];
   }
 
+  private _setMovementEnabled(enabled: boolean): void {
+    this.playerController.walkVelocity = enabled ? PLAYER_WALK_VELOCITY : 0;
+    this.playerController.runVelocity = enabled ? PLAYER_RUN_VELOCITY : 0;
+    this.playerController.jumpVelocity = enabled ? PLAYER_JUMP_VELOCITY : 0;
+
+    if (!enabled) {
+      this._clearPlayerInput(this.player.input);
+      if (this.isSpawned) {
+        this.resetLinearVelocity();
+      }
+    }
+  }
+
+  private _clearPlayerInput(input: EventPayloads[BaseEntityControllerEvent.TICK_WITH_PLAYER_INPUT]['input']): void {
+    Object.keys(input).forEach(key => {
+      input[key] = false;
+    });
+  }
+
   public resetCamera(): void {
-    this._scopeAimTangentScale = undefined;
     this._setupPlayerCamera();
     this.player.camera.setAttachedToEntity(this);
     this._sendReticleUI();
@@ -449,7 +399,8 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this._dead = false;
     this._autoFireRaycastCooldown = 0;
     this._autoFireHasTarget = false;
-    this._scopeAimTangentScale = undefined;
+    this._setMovementEnabled(true);
+    this._clearPlayerInput(this.player.input);
     this.health = this._maxHealth;
     this.shield = 0;
     this.resetAnimations();
@@ -458,10 +409,22 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this.player.ui.sendData({ type: 'scope-zoom', zoom: 1, style: 'none', sniper: false });
     this.setActiveInventorySlotIndex(0);
     this.setPosition(GameManager.instance.getRandomSpawnPosition({ excludeEntity: this }));
+    this.resetLinearVelocity();
     void this._equipLoadout();
   }
 
   public savePersistedData(): void {}
+
+  /** Swipe/scroll toggle: with two slots this is direction-agnostic. */
+  public switchToNextWeapon(): void {
+    for (let step = 1; step < TOTAL_INVENTORY_SLOTS; step++) {
+      const index = (this._inventoryActiveSlotIndex + step) % TOTAL_INVENTORY_SLOTS;
+      if (this._inventory[index]) {
+        this.setActiveInventorySlotIndex(index);
+        return;
+      }
+    }
+  }
 
   public setActiveInventorySlotIndex(index: number): void {
     if (!Number.isInteger(index) || index < 0 || index >= TOTAL_INVENTORY_SLOTS) return;
@@ -481,19 +444,14 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   }
 
   /**
-   * Reticle spec for the active item: spread sizes the bloom circle
-   * (radius px = spread x half viewport height, the original MineShoot
-   * formula), pellets >= 6 switches to the shotgun spread ring, range
-   * drives the red in-range tint.
+   * Reticle spec for the active item: spread is the canonical bloom radius
+   * in camera tangent units. The HUD projects it through the live camera, so
+   * FOV changes resize the circle from the same value bullets sample.
    */
   private _sendReticleUI(): void {
     const item = this._inventory[this._inventoryActiveSlotIndex];
     const gun = item instanceof GunEntity ? item : undefined;
-    const twoHanded = gun?.heldHand === 'both';
-
-    const tangentScale = this._scopeAimTangentScale ?? 1;
-    this._aimTangentX = (twoHanded ? TWO_HANDED_AIM_TANGENT_X : ONE_HANDED_AIM_TANGENT_X) * tangentScale;
-    this._aimTangentY = (twoHanded ? TWO_HANDED_AIM_TANGENT_Y : ONE_HANDED_AIM_TANGENT_Y) * tangentScale;
+    this._updateAimTangentsForActiveItem();
 
     this.player.ui.sendData({
       type: 'reticle',
@@ -502,8 +460,17 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
       range: gun?.getEffectiveRange() ?? 0,
       tx: this._aimTangentX,
       ty: this._aimTangentY,
-      scoped: this._scopeAimTangentScale !== undefined,
+      scoped: false,
     });
+  }
+
+  private _updateAimTangentsForActiveItem(): void {
+    const item = this._inventory[this._inventoryActiveSlotIndex];
+    const gun = item instanceof GunEntity ? item : undefined;
+    const twoHanded = gun?.heldHand === 'both';
+
+    this._aimTangentX = twoHanded ? TWO_HANDED_AIM_TANGENT_X : ONE_HANDED_AIM_TANGENT_X;
+    this._aimTangentY = twoHanded ? TWO_HANDED_AIM_TANGENT_Y : ONE_HANDED_AIM_TANGENT_Y;
   }
 
   public setGravity(gravityScale: number): void {
@@ -586,20 +553,15 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   }
 
   private _setupPlayerInventory(): void {
-    const pickaxe = new PickaxeEntity();
-    pickaxe.spawn(this.world!, this.position);
-    pickaxe.pickup(this);
-
     void this._equipLoadout();
   }
 
-  /** Despawn every gun (slots 1..N); the pickaxe in slot 0 stays. */
+  /** Despawn every loadout gun. */
   private _despawnGuns(): void {
-    this.setScopeAimTangentScale(undefined);
     this.player.camera.setZoom(1);
     this.player.ui.sendData({ type: 'scope-zoom', zoom: 1, style: 'none', sniper: false });
 
-    for (let i = 1; i < this._inventory.length; i++) {
+    for (let i = 0; i < this._inventory.length; i++) {
       const item = this._inventory[i];
       if (!item) continue;
       if (item.isSpawned) item.despawn();
@@ -673,6 +635,10 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
 
       if (data.type === 'inventory-select') {
         this.setActiveInventorySlotIndex(data.index);
+      }
+
+      if (data.type === 'switch-weapon') {
+        this.switchToNextWeapon();
       }
 
       if (data.type === 'request-loadout') {
@@ -753,6 +719,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     const { input } = payload;
 
     if (this._dead) {
+      this._clearPlayerInput(input);
       return;
     }
 
@@ -946,15 +913,10 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
   }
 
   private _handleInventoryHotkeys(input: any): void {
-    if (input.f) {
-      this.setActiveInventorySlotIndex(0);
-      input.f = false;
-    }
-
-    for (let i = 1; i < TOTAL_INVENTORY_SLOTS; i++) {
+    for (let i = 1; i <= TOTAL_INVENTORY_SLOTS; i++) {
       const key = i.toString();
       if (input[key]) {
-        this.setActiveInventorySlotIndex(i);
+        this.setActiveInventorySlotIndex(i - 1); // keys 1/2 -> slots 0/1
         input[key] = false;
       }
     }

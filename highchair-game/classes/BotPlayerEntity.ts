@@ -19,8 +19,19 @@ import { SPAWN_POINTS } from '../gameConfig';
 const AIM_JITTER_RADIANS = 0.055;
 const AIM_JITTER_RANDOM_MIN_SCALE = 0.6;
 const AIM_JITTER_RANDOM_MAX_SCALE = 2.6;
-const MELEE_ATTACK_RANGE = 2.4;
-const PICKAXE_SLOT_INDEX = 0;
+const BOT_AGGRO_RANGE = 48;
+const BOT_AGGRO_RANGE_SQ = BOT_AGGRO_RANGE * BOT_AGGRO_RANGE;
+const BOT_FORGET_RANGE = 68;
+const BOT_FORGET_RANGE_SQ = BOT_FORGET_RANGE * BOT_FORGET_RANGE;
+const BOT_WALK_VELOCITY = 8;
+const BOT_RUN_VELOCITY = 12;
+const BOT_PERSONAL_SPACE_RANGE = 7;
+const BOT_GUN_BACKPEDAL_RANGE = 11;
+const BOT_MIN_GUN_PREFERRED_RANGE = 16;
+const BOT_MAX_GUN_PREFERRED_RANGE = 32;
+const BOT_DEFENSIVE_MELEE_RANGE = 6;
+const MELEE_ATTACK_RANGE = 2.1;
+const PRIMARY_SLOT_INDEX = 0; // first loadout gun (the pickaxe is sunsetted)
 const LOOT_INTERACT_RANGE = 1.5;
 const NAVIGATION_PROGRESS_INTERVAL_MS = 600;
 const NAVIGATION_MIN_PROGRESS = 0.35;
@@ -333,6 +344,8 @@ export default class BotPlayerEntity extends GamePlayerEntity {
   public override spawn(world: World, position: Vector3Like, rotation?: QuaternionLike): void {
     this._driver.joinWorld(world);
     super.spawn(world, position, rotation);
+    this.playerController.walkVelocity = BOT_WALK_VELOCITY;
+    this.playerController.runVelocity = BOT_RUN_VELOCITY;
     this._lastWorldId = world.id;
     this._bindLoop(world);
   }
@@ -479,10 +492,15 @@ export default class BotPlayerEntity extends GamePlayerEntity {
         continue;
       }
 
-      const dist = this._distanceSq(position, entity.position);
-      if (dist < closestEnemyDist) {
+      const distSq = this._distanceSq(position, entity.position);
+      const maxTargetDistSq = entity === this._targetEnemy ? BOT_FORGET_RANGE_SQ : BOT_AGGRO_RANGE_SQ;
+      if (distSq > maxTargetDistSq) {
+        continue;
+      }
+
+      if (distSq < closestEnemyDist) {
         closestEnemy = entity;
-        closestEnemyDist = dist;
+        closestEnemyDist = distSq;
       }
     }
 
@@ -728,6 +746,19 @@ export default class BotPlayerEntity extends GamePlayerEntity {
     }
 
     this._recordNavigationProgress(target);
+  }
+
+  private _retreatFrom(threat: Vector3Like, deltaTimeMs: number): void {
+    this._facePosition(threat, true, AIM_JITTER_RADIANS * 0.4);
+
+    const input = this.player.input as PlayerInput;
+    input.s = true;
+    input.sh = true;
+    this._strafe(deltaTimeMs);
+
+    if (this.playerController.isGrounded && Math.random() < 0.015) {
+      input.sp = true;
+    }
   }
 
   private _strafe(deltaTimeMs: number): void {
@@ -1028,7 +1059,7 @@ export default class BotPlayerEntity extends GamePlayerEntity {
       return true;
     }
 
-    this.setActiveInventorySlotIndex(PICKAXE_SLOT_INDEX);
+    this.setActiveInventorySlotIndex(PRIMARY_SLOT_INDEX);
     const input = this.player.input as PlayerInput;
     input.ml = true;
 
@@ -1266,7 +1297,7 @@ export default class BotPlayerEntity extends GamePlayerEntity {
 
     if (!bestGunInfo) {
       if (!activeGun) {
-        this.setActiveInventorySlotIndex(PICKAXE_SLOT_INDEX);
+        this.setActiveInventorySlotIndex(PRIMARY_SLOT_INDEX);
       }
       return undefined;
     }
@@ -1326,9 +1357,16 @@ export default class BotPlayerEntity extends GamePlayerEntity {
     }
 
     const input = this.player.input as PlayerInput;
-    const preferredRange = Math.max(6, gun.getEffectiveRange() * 0.6);
+    const preferredRange = Math.max(
+      BOT_MIN_GUN_PREFERRED_RANGE,
+      Math.min(BOT_MAX_GUN_PREFERRED_RANGE, gun.getEffectiveRange() * 0.45),
+    );
 
     if (!hasLineOfSight) {
+      if (distance < BOT_GUN_BACKPEDAL_RANGE) {
+        this._retreatFrom(enemyPosition, deltaTimeMs);
+        return;
+      }
       if (this._maybeBreakBlockForTarget(enemyPosition, true)) {
         return;
       }
@@ -1341,10 +1379,12 @@ export default class BotPlayerEntity extends GamePlayerEntity {
       this._blockBreakExpiresAt = 0;
     }
 
-    if (distance > preferredRange) {
+    if (distance < BOT_PERSONAL_SPACE_RANGE) {
+      this._retreatFrom(enemyPosition, deltaTimeMs);
+    } else if (distance < BOT_GUN_BACKPEDAL_RANGE) {
+      this._retreatFrom(enemyPosition, deltaTimeMs);
+    } else if (distance > preferredRange) {
       this._moveTowards(enemyPosition);
-    } else if (distance < preferredRange * 0.4) {
-      input.s = true;
     } else {
       this._strafe(deltaTimeMs);
     }
@@ -1362,18 +1402,27 @@ export default class BotPlayerEntity extends GamePlayerEntity {
   }
 
   private _handleMeleeCombat(enemyPosition: Vector3Like, distance: number, deltaTimeMs: number): void {
-    this.setActiveInventorySlotIndex(PICKAXE_SLOT_INDEX);
+    this.setActiveInventorySlotIndex(PRIMARY_SLOT_INDEX);
     this._facePosition(enemyPosition, true, AIM_JITTER_RADIANS * 0.5);
 
     const input = this.player.input as PlayerInput;
 
-    if (distance > MELEE_ATTACK_RANGE || !this._hasLineOfSight(enemyPosition, distance)) {
-      this._moveTowards(enemyPosition);
+    if (!this._hasLineOfSight(enemyPosition, distance)) {
+      this._strafe(deltaTimeMs);
+      return;
+    }
+
+    if (distance > MELEE_ATTACK_RANGE) {
+      if (distance < BOT_DEFENSIVE_MELEE_RANGE) {
+        this._retreatFrom(enemyPosition, deltaTimeMs);
+      } else {
+        this._strafe(deltaTimeMs);
+      }
       return;
     }
 
     input.ml = true;
-    this._strafe(deltaTimeMs);
+    this._retreatFrom(enemyPosition, deltaTimeMs);
 
     if (Math.random() < 0.05 && this.playerController.isGrounded) {
       input.sp = true;

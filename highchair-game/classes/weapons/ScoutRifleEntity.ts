@@ -15,8 +15,6 @@ const DEFAULT_SCOUT_RIFLE_OPTIONS: GunEntityOptions = {
   maxAmmo: 8,
   totalAmmo: 40,
   scopeZoom: 2.5,
-  focusesReticleOnScope: true,
-  scopeStyle: 'scout',
   modelUri: 'models/items/scout-rifle.glb',
   modelScale: 1.3,
   range: 120,

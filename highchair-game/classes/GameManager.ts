@@ -305,7 +305,7 @@ export default class GameManager {
     // Reset player state
     this.world.entityManager.getAllPlayerEntities().forEach(playerEntity => {
       if (playerEntity instanceof GamePlayerEntity) {
-        playerEntity.setActiveInventorySlotIndex(0); // reset to pickaxe at slot 0
+        playerEntity.setActiveInventorySlotIndex(0); // reset to the primary weapon
         playerEntity.refreshLoadout(); // fresh loadout guns, nothing dropped
         playerEntity.resetCamera();
         playerEntity.resetMaterials();
@@ -318,7 +318,7 @@ export default class GameManager {
     this.world.entityManager.getAllEntities().forEach(entity => {
       const heldByPlayer = entity.parent instanceof GamePlayerEntity;
       const isWorldMesh = entity === this._worldMesh;
-      if (!(entity instanceof GamePlayerEntity) && entity.tag !== 'pickaxe' && !heldByPlayer && !isWorldMesh) {
+      if (!(entity instanceof GamePlayerEntity) && !heldByPlayer && !isWorldMesh) {
         // allow 1 event loop for drop to resolve, there's some 
         // weird bug here otherwise we need to investigate later.
         setTimeout(() => {
