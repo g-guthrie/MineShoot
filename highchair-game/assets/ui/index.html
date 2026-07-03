@@ -23,7 +23,9 @@
 </div>
 <div id="combat-beacons" aria-hidden="true"></div>
 
-<div class="loadout-panel menu-root">
+<!-- Home screen: the instantpvp.com main menu — backdrop image, mode
+     select, no HUD. Shown before entering; MAIN MENU returns here. -->
+<div class="home-menu">
   <div class="menu-shell">
     <div class="menu-kicker">INSTANT BROWSER PVP</div>
     <h1 class="menu-title">PVP BY GREER</h1>
@@ -38,15 +40,25 @@
       </div>
     </div>
     <div class="menu-controls">
-      <span class="menu-pill">WASD move</span><span class="menu-pill">SHIFT run</span><span class="menu-pill">SPACE jump</span><span class="menu-pill">CLICK shoot</span><span class="menu-pill">R-CLICK scope / build</span><span class="menu-pill">R reload</span><span class="menu-pill">ESC menu</span>
+      <span class="menu-pill">WASD move</span><span class="menu-pill">SHIFT run</span><span class="menu-pill">SPACE jump</span><span class="menu-pill">CLICK shoot</span><span class="menu-pill">R-CLICK scope</span><span class="menu-pill">SWIPE swap gun</span><span class="menu-pill">R reload</span><span class="menu-pill">ESC menu</span>
     </div>
+    <div class="loadout-actions">
+      <button class="home-play">ENTER MATCH</button>
+    </div>
+  </div>
+</div>
+
+<!-- In-game menu (Esc): loadout as a light overlay on the live scene. -->
+<div class="loadout-panel game-menu">
+  <div class="menu-shell game-menu-shell">
     <div class="menu-card">
       <div class="loadout-title">Choose your guns</div>
-      <div class="loadout-hint">Pick up to <span class="loadout-max">5</span>. Applied immediately and on every respawn.</div>
+      <div class="loadout-hint">Pick <span class="loadout-max">2</span>. Applied immediately and on every respawn.</div>
       <div class="loadout-grid"></div>
     </div>
     <div class="loadout-actions">
-      <button class="loadout-apply">ENTER MATCH</button>
+      <button class="loadout-apply">BACK TO THE FIGHT</button>
+      <button class="menu-home-btn">MAIN MENU</button>
     </div>
   </div>
 </div>
@@ -297,8 +309,38 @@
     }
   }
 
-  function openMenu() {
-    if (loadoutPanel.classList.contains('open')) return;
+  // Two distinct surfaces:
+  //  - HOME: the instantpvp.com main menu (backdrop image, mode select).
+  //    Shown before entering and via MAIN MENU; the HUD is hidden.
+  //  - GAME MENU: Esc in-game — the loadout as a light overlay on the
+  //    live scene, HUD still visible underneath.
+  const homeMenu = document.querySelector('.home-menu');
+  let hasEnteredMatch = false;
+
+  function setHudHidden(hidden) {
+    document.body.toggleAttribute('data-home-open', hidden);
+  }
+
+  function showHome() {
+    clearScopeUi();
+    highchair.sendData({ type: 'clear-scope' });
+    loadoutPanel.classList.remove('open');
+    homeMenu.classList.add('open');
+    setHudHidden(true);
+    highchair.freezePointerLock(true);
+  }
+
+  function enterMatch() {
+    homeMenu.classList.remove('open');
+    loadoutPanel.classList.remove('open');
+    setHudHidden(false);
+    hasEnteredMatch = true;
+    highchair.freezePointerLock(false);
+    highchair.lockPointer(true);
+  }
+
+  function openGameMenu() {
+    if (homeMenu.classList.contains('open') || loadoutPanel.classList.contains('open')) return;
     clearScopeUi();
     highchair.sendData({ type: 'clear-scope' });
     loadoutPanel.classList.add('open');
@@ -308,29 +350,36 @@
     highchair.freezePointerLock(true);
   }
 
-  function closeMenu() {
+  function closeGameMenu() {
     if (!loadoutPanel.classList.contains('open')) return;
+    if (loadoutSelected.length) {
+      highchair.sendData({ type: 'set-loadout', guns: loadoutSelected });
+    }
     loadoutPanel.classList.remove('open');
     highchair.freezePointerLock(false);
     highchair.lockPointer(true);
   }
 
-  // Esc exits pointer lock (browser-reserved); treat that as "open the menu".
-  // Re-locking (clicking back into the game) closes it.
+  // Esc exits pointer lock (browser-reserved). Before the first entry the
+  // home screen owns the screen; afterwards Esc means the in-game menu.
   document.addEventListener('pointerlockchange', () => {
     if (document.pointerLockElement) {
+      homeMenu.classList.remove('open');
       loadoutPanel.classList.remove('open');
-    } else {
-      openMenu();
+      setHudHidden(false);
+    } else if (hasEnteredMatch) {
+      openGameMenu();
     }
   });
 
-  document.querySelector('.loadout-apply').addEventListener('click', () => {
+  document.querySelector('.home-play').addEventListener('click', () => {
     if (loadoutSelected.length) {
       highchair.sendData({ type: 'set-loadout', guns: loadoutSelected });
     }
-    closeMenu();
+    enterMatch();
   });
+  document.querySelector('.loadout-apply').addEventListener('click', closeGameMenu);
+  document.querySelector('.menu-home-btn').addEventListener('click', showHome);
 
   // Zombies runs as its own server; surface the mode card wherever we can
   // reach one (local dev today, its own deployment later).
@@ -346,8 +395,8 @@
     }
   })();
 
-  // The menu is the start screen: open until the player enters the match.
-  openMenu();
+  // The home screen is the entry point.
+  showHome();
 
   function updateCombatRadar(state) {
     if (!combatRadarEl || !combatRadarSlicesEl || !combatRadarCoreEl) return;
@@ -2620,20 +2669,69 @@
 
   /* Frosted-glass menu, ported from the original PvP by Greer
      menu-shell-v4 design system. */
+  /* HOME: the instantpvp.com main menu. The beloved backdrop lives HERE
+     and only here, under the menu-shell-v4 dark wash. */
+  .home-menu {
+    display: none;
+    position: fixed;
+    inset: 0;
+    pointer-events: auto;
+    z-index: 80;
+    background:
+      linear-gradient(180deg, rgba(7, 13, 24, 0.18), rgba(7, 13, 24, 0.36)),
+      url('{{CDN_ASSETS_URL}}/ui/images/menu_backdrop_6036.jpg') center / cover no-repeat,
+      #101623;
+  }
+  .home-menu.open { display: flex; align-items: center; justify-content: center; }
+
+  /* The home screen owns the whole view: no HUD chrome behind it. */
+  body[data-home-open] #crosshair,
+  body[data-home-open] #spread-reticle,
+  body[data-home-open] #shotgun-reticle,
+  body[data-home-open] #hit-pulse,
+  body[data-home-open] #sniper-scope,
+  body[data-home-open] #combat-radar,
+  body[data-home-open] #combat-beacons,
+  body[data-home-open] .leaderboard,
+  body[data-home-open] .hud,
+  body[data-home-open] .inventory-hud,
+  body[data-home-open] .hitmarker,
+  body[data-home-open] .hit-damage-container,
+  body[data-home-open] .damage-indicator-container,
+  body[data-home-open] .game-start-announcement,
+  body[data-home-open] .scope-overlay {
+    display: none !important;
+  }
+
+  /* GAME MENU (Esc): a light overlay on the live scene — the world stays
+     visible and slightly dimmed behind the glass. */
   .loadout-panel {
     display: none;
     position: fixed;
     inset: 0;
     pointer-events: auto;
     z-index: 70;
-    /* The original instantpvp.com home screen: the beloved backdrop under
-       a dark wash (menu-shell-v4 #overlay). */
-    background:
-      linear-gradient(180deg, rgba(7, 13, 24, 0.18), rgba(7, 13, 24, 0.36)),
-      url('{{CDN_ASSETS_URL}}/ui/images/menu_backdrop_6036.jpg') center / cover no-repeat,
-      #101623;
+    background: rgba(12, 18, 30, 0.30);
+    backdrop-filter: blur(7px) saturate(115%);
+    -webkit-backdrop-filter: blur(7px) saturate(115%);
   }
   .loadout-panel.open { display: flex; align-items: center; justify-content: center; }
+
+  .game-menu-shell { width: 560px; }
+
+  .menu-home-btn {
+    background: rgba(255, 255, 255, 0.72);
+    color: #172033;
+    box-shadow: inset 0 0 0 1px rgba(185, 199, 220, 0.92);
+  }
+  .menu-home-btn:hover { background: rgba(255, 255, 255, 0.9); }
+
+  .home-play {
+    background: linear-gradient(180deg, rgba(64, 124, 255, 0.96), rgba(34, 91, 222, 0.96));
+    color: #f8fbff;
+    box-shadow: inset 0 0 0 1px rgba(185, 199, 220, 0.92), 0 12px 26px rgba(34, 91, 222, 0.25);
+  }
+  .home-play:hover { filter: brightness(1.06); }
 
   .menu-shell {
     width: 640px;
@@ -2785,7 +2883,7 @@
     font-weight: 700;
     letter-spacing: 0.8px;
   }
-  .loadout-actions { display: flex; justify-content: center; }
+  .loadout-actions { display: flex; justify-content: center; gap: 10px; }
   .loadout-actions button {
     padding: 12px 46px;
     border: 0;
