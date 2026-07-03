@@ -504,6 +504,42 @@ fs.writeFileSync(OUT, out);
 // Solid cuboids as physics colliders, in final world coordinates (the mesh
 // entity spawns at y+2 over the bedrock shell; see GameManager).
 const WORLD_MESH_LIFT = 0; // world sits at zero: ground-slab tops are the y=0 plane
+// Chunky decor is SOLID: the original marked all addDecor() visual-only,
+// so dock support beams, ship masts, tree trunks and the fuel spheres let
+// players walk straight through them. Substantial cylinders/cones/spheres
+// now get a box collider (approximated from their bounds, same yaw/tilt);
+// planes, tori and small props stay walk-through.
+const decorColliders = [];
+for (const e of decorEntries) {
+  if (!e.geometry || !e.mesh || e.opacity < 0.5) continue;
+  const g = e.geometry;
+  let w, h, d;
+  if (typeof g.radiusTop === 'number' || typeof g.radiusBottom === 'number') {
+    const r = Math.max(Number(g.radiusTop || 0), Number(g.radiusBottom || 0));
+    if (r < 0.15 || Number(g.height || 0) < 0.8) continue; // thin/short props
+    w = d = r * 2; h = Number(g.height);
+  } else if (typeof g.radius === 'number' && typeof g.height === 'number') {
+    const r = Number(g.radius);
+    if (r < 0.15 || Number(g.height || 0) < 0.8) continue; // cones (canopies pass)
+    w = d = r * 2; h = Number(g.height);
+  } else if (typeof g.radius === 'number' && typeof g.tube !== 'number') {
+    const r = Number(g.radius);
+    if (r < 0.5) continue; // only big spheres (reactor fuel) block movement
+    w = h = d = r * 2;
+  } else {
+    continue; // planes, tori, shapes: atmosphere only
+  }
+  decorColliders.push({
+    x: +(e.mesh.position.x + OFFSET).toFixed(3),
+    y: +e.mesh.position.y.toFixed(3),
+    z: +(e.mesh.position.z + OFFSET).toFixed(3),
+    hx: +(w / 2).toFixed(3), hy: +(h / 2).toFixed(3), hz: +(d / 2).toFixed(3),
+    rotY: +Number(e.mesh.rotation.y || 0).toFixed(4),
+    tiltX: +Number(e.mesh.rotation.x || 0).toFixed(4),
+  });
+}
+console.log(`solid decor: ${decorColliders.length} colliders (beams, masts, trunks, spheres)`);
+
 const colliders = entries
   .filter(e => e.solid && e.opacity >= 0.5)
   .map(e => ({
@@ -517,7 +553,8 @@ const colliders = entries
     x: +(c.x + OFFSET).toFixed(3), y: +c.y.toFixed(3), z: +(c.z + OFFSET).toFixed(3),
     hx: +c.hx.toFixed(3), hy: +c.hy.toFixed(3), hz: +c.hz.toFixed(3),
     rotY: 0, tiltX: 0,
-  })));
+  })))
+  .concat(decorColliders);
 fs.writeFileSync(path.join(here, '..', 'assets', 'maps', 'boxman-world.colliders.json'), JSON.stringify(colliders));
 console.log(`colliders: ${colliders.length} solid cuboids`);
 console.log(`wrote ${OUT}: ${(total / 1024).toFixed(0)} KB, ${cuboids} cuboids baked, ${materials.length} materials/meshes`);

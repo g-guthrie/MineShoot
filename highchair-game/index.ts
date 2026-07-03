@@ -36,7 +36,7 @@ startServer(world => {
   // Original MineShoot gravity (18) scaled x1.5 with the character size —
   // paired with the x1.5 movement profile in GamePlayerEntity it keeps the
   // old air-time feel while jump height scales to 3.2 units.
-  world.simulation.setGravity({ x: 0, y: -33.75, z: 0 }); // 18 x1.875, matching the character scale
+  world.simulation.setGravity({ x: 0, y: -43.9, z: 0 }); // 18 x2.44, matching the character scale
 
   // Set lighting: soft sun so terrain steps don't read as black checkering.
   world.setAmbientLightIntensity(1.1);

@@ -29,9 +29,9 @@ const VOID_Y = -100;   // below the deepest world geometry; falling past it kill
 // Original MineShoot movement (jog 7, run 11, jump 8.8 at gravity 18)
 // scaled x1.875 with the character (1.5 then 1.25 growth passes). Gravity
 // scales in index.ts, keeping air time identical while jumps grow.
-const PLAYER_WALK_VELOCITY = 13.1;
-const PLAYER_RUN_VELOCITY = 20.6;
-const PLAYER_JUMP_VELOCITY = 16.5;
+const PLAYER_WALK_VELOCITY = 17;
+const PLAYER_RUN_VELOCITY = 26.8;
+const PLAYER_JUMP_VELOCITY = 21.5;
 // Canonical aim offsets, measured from the model skeleton itself by
 // tools/measure-aim-offsets.mjs (idle stance bone chains; the barrel runs
 // along the hand anchor's -Y). Camera-space tangent units: x < 0 = left,
@@ -145,7 +145,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
       player,
       name: 'Player',
       modelUri: 'models/players/soldier-player.gltf',
-      modelScale: 0.9375, // hygrounds 0.5 x1.5 x1.25 — movement, eyes and hitboxes scale with it
+      modelScale: 1.22, // hygrounds 0.5 x1.5 x1.25 x1.3 — movement, eyes and hitboxes scale with it
     });
 
     this._setupPlayerController();
@@ -263,12 +263,16 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     });
   }
   
+  /**
+   * Weapons never exist on the map: "dropping" despawns the item outright
+   * (no throw, no ground pickup — the loadout is the only source of guns).
+   */
   public dropActiveInventoryItem(): void {
     const item = this._inventory[this._inventoryActiveSlotIndex];
     if (!item) return;
 
     item.unequip();
-    item.drop(this.position, this.player.camera.facingDirection);
+    if (item.isSpawned) item.despawn();
     this._inventory[this._inventoryActiveSlotIndex] = undefined;
     this._updatePlayerUIInventory();
     this._updatePlayerUIInventoryActiveSlot();
@@ -667,7 +671,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this.player.camera.setMode(PlayerCameraMode.FIRST_PERSON);
     this.player.camera.setZoom(1);
     this.player.camera.setViewModelHiddenNodes([ 'head', 'neck', 'torso', 'leg_right', 'leg_left' ]);
-    this.player.camera.setOffset({ x: 0, y: 0.94, z: 0 }); // eye height scales with the 1.875x character
+    this.player.camera.setOffset({ x: 0, y: 1.22, z: 0 }); // eye height scales with the 2.44x character
     this.player.camera.setViewModelPitchesWithCamera(true);
     this.player.camera.setViewModelYawsWithCamera(true);
   }
@@ -687,9 +691,16 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     const walkV = this.playerController.walkVelocity || 4;
     const runV = this.playerController.runVelocity || 8;
     const ref = speed > walkV * 1.15 ? runV : walkV;
+
+    // Backpedaling plays the same clips in reverse — feet push the way
+    // the body actually travels instead of moonwalking.
+    const facing = this.player.camera.facingDirection;
+    const movingBackward = speed > 0.3 && (v.x * facing.x + v.z * facing.z) < -0.1;
+    const sign = movingBackward ? -1 : 1;
+
     const target = speed < 0.3
       ? 1
-      : Math.min(2.6, Math.max(0.5, (speed / ref) * GamePlayerEntity._strideTune));
+      : sign * Math.min(2.6, Math.max(0.5, (speed / ref) * GamePlayerEntity._strideTune));
 
     if (Math.abs(target - this._gaitRate) < 0.08) return;
     this._gaitRate = target;

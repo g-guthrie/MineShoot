@@ -22,9 +22,9 @@ export const ITEM_DESPAWN_TIME_MS = 25 * 1000; // 25 seconds
 // Spawn heights are the world collider floor surfaces
 // (tools/export-boxman-glb.mjs). Entity positions are the CAPSULE CENTER,
 // not the feet, so every spawn adds this standing clearance on top.
-// Measured: a player capsule (modelScale 0.9375) rests with its center
-// 1.427 above the floor.
-export const PLAYER_STAND_HEIGHT = 1.5;
+// Measured: a player capsule (modelScale 1.22) rests with its center
+// 1.855 above the floor.
+export const PLAYER_STAND_HEIGHT = 1.93;
 
 // ---------------------------------------------------------------------------
 // Canonical player hitboxes. Axis-aligned boxes centered on the entity,
@@ -34,11 +34,13 @@ export const PLAYER_STAND_HEIGHT = 1.5;
 // The body box runs feet -> bottom of head; the head box extends a bit above
 // the model. Volumes are ~2x the old model-bounds boxes by design.
 // ---------------------------------------------------------------------------
+// Widths carry an extra +25% volume on top of the body scale (x1.118 in
+// x/z): forgiving Destiny-style target acquisition by design.
 export const PLAYER_HITBOX = {
-  bodyHalfWidthFrac: 0.33,  // half width/depth as a fraction of height
+  bodyHalfWidthFrac: 0.369, // half width/depth as a fraction of height
   bodyTopFrac: 0.75,        // body box top (feet = 0): bottom of the head
-  headHalfWidthFrac: 0.24,
-  headTopFrac: 1.08,        // pokes a bit above the model
+  headHalfWidthFrac: 0.268,
+  headTopFrac: 1.1,         // pokes a bit above the model
 } as const;
 
 export const SPAWN_POINTS = arenaMeta.spawnPoints.map(point => ({
