@@ -26,9 +26,12 @@ const BASE_SHIELD = 0;
 const BLOCK_MATERIAL_COST = 3;
 const BUILD_REACH = 6; // max distance a block can be placed at
 const VOID_Y = -100;   // below the deepest world geometry; falling past it kills
-const PLAYER_WALK_VELOCITY = 10.5;
-const PLAYER_RUN_VELOCITY = 16.5;
-const PLAYER_JUMP_VELOCITY = 13.2;
+// Original MineShoot movement (jog 7, run 11, jump 8.8 at gravity 18)
+// scaled x1.875 with the character (1.5 then 1.25 growth passes). Gravity
+// scales in index.ts, keeping air time identical while jumps grow.
+const PLAYER_WALK_VELOCITY = 13.1;
+const PLAYER_RUN_VELOCITY = 20.6;
+const PLAYER_JUMP_VELOCITY = 16.5;
 // Canonical aim offsets, measured from the model skeleton itself by
 // tools/measure-aim-offsets.mjs (idle stance bone chains; the barrel runs
 // along the hand anchor's -Y). Camera-space tangent units: x < 0 = left,
@@ -142,7 +145,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
       player,
       name: 'Player',
       modelUri: 'models/players/soldier-player.gltf',
-      modelScale: 0.75, // 50% bigger than the hygrounds 0.5 — movement scales with it
+      modelScale: 0.9375, // hygrounds 0.5 x1.5 x1.25 — movement, eyes and hitboxes scale with it
     });
 
     this._setupPlayerController();
@@ -458,6 +461,11 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
       spread: gun?.getSpread() ?? 0,
       pellets: gun?.getPellets() ?? 1,
       range: gun?.getEffectiveRange() ?? 0,
+      damage: gun?.getDamage() ?? 0,
+      falloff: gun?.getFalloff() ?? null,
+      fireRate: gun?.getFireRate() ?? 0,
+      hitscan: gun?.isHitscan() ?? false,
+      weaponName: gun?.name ?? '',
       tx: this._aimTangentX,
       ty: this._aimTangentY,
       scoped: false,
@@ -659,7 +667,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this.player.camera.setMode(PlayerCameraMode.FIRST_PERSON);
     this.player.camera.setZoom(1);
     this.player.camera.setViewModelHiddenNodes([ 'head', 'neck', 'torso', 'leg_right', 'leg_left' ]);
-    this.player.camera.setOffset({ x: 0, y: 0.75, z: 0 }); // eye height scales with the 1.5x character
+    this.player.camera.setOffset({ x: 0, y: 0.94, z: 0 }); // eye height scales with the 1.875x character
     this.player.camera.setViewModelPitchesWithCamera(true);
     this.player.camera.setViewModelYawsWithCamera(true);
   }

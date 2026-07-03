@@ -437,6 +437,26 @@ export default abstract class GunEntity extends ItemEntity {
     return this.pellets;
   }
 
+  /** Base damage per ray (client prediction mirrors the server math). */
+  public getDamage(): number {
+    return this.damage;
+  }
+
+  /** Damage falloff curve, if any. */
+  public getFalloff(): { start: number; end: number; minScalar: number } | undefined {
+    return this.falloff;
+  }
+
+  /** Rounds per second (client prediction mirrors the fire gate). */
+  public getFireRate(): number {
+    return this.fireRate;
+  }
+
+  /** Hitscan guns are client-predictable; projectile guns are not. */
+  public isHitscan(): boolean {
+    return true;
+  }
+
   /** The effective range (in blocks) of the gun. */
   public getEffectiveRange(): number {
     return this.range;

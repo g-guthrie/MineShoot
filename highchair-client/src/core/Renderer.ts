@@ -19,6 +19,7 @@ import {
   SRGBColorSpace,
   UniformsUtils,
   Vector2,
+  Vector3,
   WebGLRenderer,
   WebGLRenderTarget,
 } from 'three';
@@ -163,6 +164,19 @@ export default class Renderer {
     (globalThis as Record<string, unknown>).__tracers = this._tracerManager;
     // The game UI projects world-space hit points for damage numbers.
     (globalThis as Record<string, unknown>).__camera = () => this._game.camera.activeCamera;
+    // Enemy player positions for client-side hit prediction (the game UI
+    // mirrors the server's PLAYER_HITBOX ray tests against these).
+    (globalThis as Record<string, unknown>).__playerTargets = () => {
+      const local = this._game.camera.gameCameraAttachedEntity;
+      const out: Array<{ x: number; y: number; z: number }> = [];
+      for (const entity of this._game.entityManager.getAllEntities()) {
+        if (entity === local || !entity.visible || entity.attached || entity.isEnvironmental) continue;
+        if (!entity.modelUri?.includes('models/players/soldier-player.gltf')) continue;
+        const p = entity.getWorldPosition(new Vector3());
+        out.push({ x: p.x, y: p.y, z: p.z });
+      }
+      return out;
+    };
     this._viewModelScene = new Scene();
     this._overlayScene = new Scene();
     this._uiScene = new Scene();

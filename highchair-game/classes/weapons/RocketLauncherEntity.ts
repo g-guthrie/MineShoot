@@ -32,6 +32,10 @@ export default class RocketLauncherEntity extends GunEntity {
   }
 
 
+  public override isHitscan(): boolean {
+    return false; // projectile: the client never predicts rocket hits
+  }
+
   public override getMuzzleFlashPositionRotation(): { position: Vector3Like, rotation: QuaternionLike } {
     return {
       position: { x: 0.03, y: 0.6, z: -1.5 },

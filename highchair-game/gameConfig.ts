@@ -22,9 +22,9 @@ export const ITEM_DESPAWN_TIME_MS = 25 * 1000; // 25 seconds
 // Spawn heights are the world collider floor surfaces
 // (tools/export-boxman-glb.mjs). Entity positions are the CAPSULE CENTER,
 // not the feet, so every spawn adds this standing clearance on top.
-// Measured: a player capsule (modelScale 0.75) rests with its center
-// 1.135 above the floor.
-export const PLAYER_STAND_HEIGHT = 1.2;
+// Measured: a player capsule (modelScale 0.9375) rests with its center
+// 1.427 above the floor.
+export const PLAYER_STAND_HEIGHT = 1.5;
 
 // ---------------------------------------------------------------------------
 // Canonical player hitboxes. Axis-aligned boxes centered on the entity,

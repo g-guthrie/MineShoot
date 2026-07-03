@@ -10,7 +10,7 @@ const PLAYER_MODEL_URI = 'models/players/soldier-player.gltf';
 // against on the server: an axis-aligned body box (feet to head-base) and
 // a head box poking a bit above the model, sized as fractions of entity
 // height so they scale with the character.
-const PLAYER_HEIGHT = 2.27; // soldier-player at modelScale 0.75
+const PLAYER_HEIGHT = 2.854; // soldier-player at modelScale 0.9375 (probe-measured)
 const HITBOX_BODY_HALF_WIDTH_FRAC = 0.33;
 const HITBOX_BODY_TOP_FRAC = 0.75;
 const HITBOX_HEAD_HALF_WIDTH_FRAC = 0.24;

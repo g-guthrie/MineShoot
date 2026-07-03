@@ -811,6 +811,170 @@
     playBulletImpact(opts);
   }
 
+  // ---- client-predicted hits ----
+  // Ported architecture from the original MineShoot feedback-sync.js: on
+  // trigger pull the client resolves the shot itself against the rendered
+  // enemies and fires ALL feedback instantly (marker, number, sound,
+  // pulse). Server confirms consume the prediction within a 900ms TTL and
+  // stay silent; unconfirmed predictions just age out ("that damage
+  // didn't count"). Kills are authoritative-only.
+  const PREDICTION_TTL_MS = 900;
+  const PREDICTED_HIT_MAX = 48;
+  // Mirror of highchair-game gameConfig PLAYER_HITBOX + DebugRenderer.
+  const PREDICT_PLAYER_HEIGHT = 2.854;
+  const PREDICT_BODY_HALF_FRAC = 0.33;
+  const PREDICT_BODY_TOP_FRAC = 0.75;
+  const PREDICT_HEAD_HALF_FRAC = 0.24;
+  const PREDICT_HEAD_TOP_FRAC = 1.08;
+  const PREDICT_HEADSHOT_MULTIPLIER = 1.5;
+
+  let predictedGun = null;      // from the reticle packet
+  let predictedAmmo = 0;        // clip mirror from ammo-indicator
+  let predictedReloading = false;
+  let predictedLastShotAt = 0;
+  const predictions = [];       // { at, weapon }
+  let mouseHeld = false;
+  let autoFireTimer = null;
+
+  function consumePrediction(weaponName) {
+    const now = performance.now();
+    for (let i = predictions.length - 1; i >= 0; i--) {
+      const entry = predictions[i];
+      if (now - entry.at > PREDICTION_TTL_MS) { predictions.splice(i, 1); continue; }
+      if (entry.weapon === weaponName) { predictions.splice(i, 1); return true; }
+    }
+    return false;
+  }
+
+  function rayVsAabb(ox, oy, oz, dx, dy, dz, minX, minY, minZ, maxX, maxY, maxZ) {
+    let tMin = 0, tMax = Infinity;
+    const axes = [[ox, dx, minX, maxX], [oy, dy, minY, maxY], [oz, dz, minZ, maxZ]];
+    for (const [o, d, mn, mx] of axes) {
+      if (Math.abs(d) < 1e-9) {
+        if (o < mn || o > mx) return undefined;
+        continue;
+      }
+      let t1 = (mn - o) / d, t2 = (mx - o) / d;
+      if (t1 > t2) { const t = t1; t1 = t2; t2 = t; }
+      tMin = Math.max(tMin, t1);
+      tMax = Math.min(tMax, t2);
+      if (tMin > tMax) return undefined;
+    }
+    return tMin;
+  }
+
+  function predictFalloff(dist) {
+    const f = predictedGun && predictedGun.falloff;
+    if (!f) return 1;
+    if (dist <= f.start) return 1;
+    if (dist >= f.end) return f.minScalar;
+    return 1 - (1 - f.minScalar) * ((dist - f.start) / (f.end - f.start));
+  }
+
+  function predictShot() {
+    const gun = predictedGun;
+    const cam = globalThis.__camera?.();
+    const targets = globalThis.__playerTargets?.();
+    if (!gun || !gun.hitscan || !cam || !targets || !targets.length) return;
+    if (predictedReloading || predictedAmmo <= 0 || gun.fireRate <= 0) return;
+
+    const now = performance.now();
+    if (now - predictedLastShotAt < 1000 / gun.fireRate) return;
+    predictedLastShotAt = now;
+
+    // Aim ray: camera basis + the canonical stance tangents.
+    const e = cam.matrixWorld.elements;
+    const rx = e[0], ry = e[1], rz = e[2];
+    const ux = e[4], uy = e[5], uz = e[6];
+    const fx = -e[8], fy = -e[9], fz = -e[10];
+    const ox = e[12], oy = e[13], oz = e[14];
+    let ax = fx + rx * aimTangentX + ux * aimTangentY;
+    let ay = fy + ry * aimTangentX + uy * aimTangentY;
+    let az = fz + rz * aimTangentX + uz * aimTangentY;
+    const al = Math.hypot(ax, ay, az) || 1;
+    ax /= al; ay /= al; az /= al;
+
+    let anyHit = false;
+    let anyHead = false;
+    let totalShown = 0;
+
+    for (let pellet = 0; pellet < Math.max(1, gun.pellets); pellet++) {
+      // Same sqrt-uniform cone sampling as the server.
+      let dx = ax, dy = ay, dz = az;
+      if (gun.spread > 0) {
+        const r = gun.spread * Math.sqrt(Math.random());
+        const t = Math.random() * Math.PI * 2;
+        const sx = r * Math.cos(t), sy = r * Math.sin(t);
+        dx = ax + rx * sx + ux * sy;
+        dy = ay + ry * sx + uy * sy;
+        dz = az + rz * sx + uz * sy;
+        const dl = Math.hypot(dx, dy, dz) || 1;
+        dx /= dl; dy /= dl; dz /= dl;
+      }
+
+      // Nearest enemy hitbox within range (no world occlusion client-side;
+      // the server confirm is authoritative and misses simply age out).
+      let bestT = Infinity;
+      let bestHead = false;
+      for (const target of targets) {
+        const feetY = target.y - PREDICT_PLAYER_HEIGHT / 2;
+        const bodyHalf = PREDICT_PLAYER_HEIGHT * PREDICT_BODY_HALF_FRAC;
+        const headHalf = PREDICT_PLAYER_HEIGHT * PREDICT_HEAD_HALF_FRAC;
+        const splitY = feetY + PREDICT_PLAYER_HEIGHT * PREDICT_BODY_TOP_FRAC;
+        const headT = rayVsAabb(ox, oy, oz, dx, dy, dz,
+          target.x - headHalf, splitY, target.z - headHalf,
+          target.x + headHalf, feetY + PREDICT_PLAYER_HEIGHT * PREDICT_HEAD_TOP_FRAC, target.z + headHalf);
+        const bodyT = rayVsAabb(ox, oy, oz, dx, dy, dz,
+          target.x - bodyHalf, feetY, target.z - bodyHalf,
+          target.x + bodyHalf, splitY, target.z + bodyHalf);
+        const t = Math.min(headT ?? Infinity, bodyT ?? Infinity);
+        if (t < bestT && t <= gun.range) {
+          bestT = t;
+          bestHead = (headT ?? Infinity) <= (bodyT ?? Infinity);
+        }
+      }
+      if (!Number.isFinite(bestT)) continue;
+
+      anyHit = true;
+      anyHead = anyHead || bestHead;
+      const base = Math.max(1, Math.round(gun.damage * predictFalloff(bestT)));
+      const dmg = bestHead ? Math.round(base * PREDICT_HEADSHOT_MULTIPLIER) : base;
+
+      // World-anchored number at the predicted impact point.
+      const hitPoint = { x: ox + dx * bestT, y: oy + dy * bestT, z: oz + dz * bestT };
+      showDamageNumber({
+        damage: dmg,
+        headshot: bestHead,
+        pelletIndex: pellet,
+        pelletCount: gun.pellets,
+        worldPoint: hitPoint,
+      });
+      totalShown++;
+
+      predictions.push({ at: now, weapon: gun.weaponName });
+      while (predictions.length > PREDICTED_HIT_MAX) predictions.shift();
+    }
+
+    if (anyHit) {
+      showHitmarker(anyHead, false);
+      playHitConfirm({ killed: false, hitType: anyHead ? 'head' : 'body', weapon: gun.weaponName });
+      pulseReticle(false);
+    }
+  }
+
+  document.addEventListener('mousedown', (event) => {
+    if (event.button !== 0 || !document.pointerLockElement) return;
+    mouseHeld = true;
+    predictShot();
+    clearInterval(autoFireTimer);
+    autoFireTimer = setInterval(() => {
+      if (!mouseHeld || !document.pointerLockElement) { clearInterval(autoFireTimer); return; }
+      predictShot();
+    }, 25);
+  });
+  document.addEventListener('mouseup', () => { mouseHeld = false; clearInterval(autoFireTimer); });
+  document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement) { mouseHeld = false; clearInterval(autoFireTimer); } });
+
   // ---- reticle hit pulse (CoD-style ring) ----
   function pulseReticle(killed) {
     const el = document.getElementById('hit-pulse');
@@ -847,6 +1011,25 @@
     }, killed ? 300 : 130); // kills hold like the old showKillMarker
   }
 
+  function projectWorldPoint(p) {
+    const cam = globalThis.__camera?.();
+    if (!cam || !cam.matrixWorldInverse || !cam.projectionMatrix) return null;
+    const vi = cam.matrixWorldInverse.elements;
+    const pr = cam.projectionMatrix.elements;
+    const vx = vi[0] * p.x + vi[4] * p.y + vi[8] * p.z + vi[12];
+    const vy = vi[1] * p.x + vi[5] * p.y + vi[9] * p.z + vi[13];
+    const vz = vi[2] * p.x + vi[6] * p.y + vi[10] * p.z + vi[14];
+    const vw = vi[3] * p.x + vi[7] * p.y + vi[11] * p.z + vi[15];
+    const cx = pr[0] * vx + pr[4] * vy + pr[8] * vz + pr[12] * vw;
+    const cy = pr[1] * vx + pr[5] * vy + pr[9] * vz + pr[13] * vw;
+    const cw = pr[3] * vx + pr[7] * vy + pr[11] * vz + pr[15] * vw;
+    if (!cw || cw <= 0) return null; // behind the camera
+    return {
+      x: (cx / cw * 0.5 + 0.5) * window.innerWidth,
+      y: (-cy / cw * 0.5 + 0.5) * window.innerHeight,
+    };
+  }
+
   function showDamageNumber(data) {
     const container = document.querySelector('.hit-damage-container');
     if (!container) return;
@@ -870,8 +1053,22 @@
     const damageNumber = document.createElement('div');
     damageNumber.className = `hit-damage-number${headshot ? ' headshot' : ''}${isPelletCloud ? ' pellet' : ''}`;
     damageNumber.textContent = damage;
-    damageNumber.style.setProperty('--start-x', `${startX.toFixed(1)}px`);
-    damageNumber.style.setProperty('--start-y', `${startY.toFixed(1)}px`);
+
+    // Predicted hits anchor at the world-space impact point (projected
+    // through the live camera); server-only confirms cluster around the
+    // reticle as before.
+    const screen = data.worldPoint ? projectWorldPoint(data.worldPoint) : null;
+    if (screen) {
+      // The container is a zero-size point at screen center; anchor
+      // relative to it.
+      damageNumber.style.left = `${(screen.x - window.innerWidth / 2).toFixed(1)}px`;
+      damageNumber.style.top = `${(screen.y - window.innerHeight / 2).toFixed(1)}px`;
+      damageNumber.style.setProperty('--start-x', `${((Math.random() - 0.5) * 36).toFixed(1)}px`);
+      damageNumber.style.setProperty('--start-y', `${((Math.random() - 0.5) * 14).toFixed(1)}px`);
+    } else {
+      damageNumber.style.setProperty('--start-x', `${startX.toFixed(1)}px`);
+      damageNumber.style.setProperty('--start-y', `${startY.toFixed(1)}px`);
+    }
     damageNumber.style.setProperty('--drift-x', `${driftX.toFixed(1)}px`);
     damageNumber.style.setProperty('--drift-y', `${driftY.toFixed(1)}px`);
 
@@ -935,6 +1132,9 @@
 
     if (type === 'ammo-indicator') {
       const { ammo, totalAmmo, show, reloading } = data;
+
+      if (typeof ammo === 'number') predictedAmmo = ammo;
+      if (reloading !== undefined) predictedReloading = Boolean(reloading);
 
       if (show !== undefined) {
         const ammoIndicator = document.querySelector('.ammo-indicator');
@@ -1006,6 +1206,16 @@
       reticleScoped = Boolean(data.scoped);
       aimTangentX = Number(data.tx) || 0;
       aimTangentY = Number(data.ty) || 0;
+      predictedGun = {
+        spread: reticleSpread,
+        pellets: reticlePellets,
+        range: Number(data.range) || 0,
+        damage: Number(data.damage) || 0,
+        falloff: data.falloff || null,
+        fireRate: Number(data.fireRate) || 0,
+        hitscan: Boolean(data.hitscan),
+        weaponName: String(data.weaponName || ''),
+      };
       updateReticleSize();
     }
 
@@ -1014,14 +1224,24 @@
     }
 
     if (type === 'show-damage') {
-      showHitmarker(Boolean(data.headshot), Boolean(data.killed));
-      showDamageNumber(data);
-      playHitConfirm({
-        killed: Boolean(data.killed),
-        hitType: data.headshot ? 'head' : 'body',
-        weapon: data.weaponName || '',
-      });
-      pulseReticle(Boolean(data.killed));
+      const killed = Boolean(data.killed);
+      const matched = consumePrediction(String(data.weaponName || ''));
+
+      // Kills are authoritative-only: always shown, never predicted.
+      if (killed) {
+        showHitmarker(Boolean(data.headshot), true);
+        playHitConfirm({ killed: true, hitType: data.headshot ? 'head' : 'body', weapon: data.weaponName || '' });
+        pulseReticle(true);
+        if (!matched) showDamageNumber(data);
+      } else if (!matched) {
+        // Unpredicted (rockets, edge cases): show the authoritative confirm.
+        showHitmarker(Boolean(data.headshot), false);
+        showDamageNumber(data);
+        playHitConfirm({ killed: false, hitType: data.headshot ? 'head' : 'body', weapon: data.weaponName || '' });
+        pulseReticle(false);
+      }
+      // Matched non-kill confirms are suppressed: the prediction already
+      // showed everything the moment the trigger was pulled.
     }
 
     if (type === 'health') {
