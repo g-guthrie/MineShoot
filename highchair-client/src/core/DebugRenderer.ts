@@ -5,13 +5,16 @@ import { NetworkManagerEventType } from '../network/NetworkManager';
 import type { NetworkManagerEventPayload } from '../network/NetworkManager';
 
 const PLAYER_MODEL_URI = 'models/players/soldier-player.gltf';
-// The head/body split mirrors the server's headshot rule
-// (GunEntity._isHeadshot: head = top 25% of entity height), so what debug
-// mode draws is exactly what the server scores. Boxes are derived from the
-// rendered model bounds — they scale with the character automatically and
-// can never overlap (the body's top IS the head's bottom).
-const PLAYER_HEAD_HEIGHT_FRACTION = 0.25;
-const PLAYER_HEAD_XZ_INSET = 0.28;
+// Canonical player hitboxes — MUST mirror PLAYER_HITBOX in
+// highchair-game/gameConfig.ts. These are the exact volumes bullets test
+// against on the server: an axis-aligned body box (feet to head-base) and
+// a head box poking a bit above the model, sized as fractions of entity
+// height so they scale with the character.
+const PLAYER_HEIGHT = 2.27; // soldier-player at modelScale 0.75
+const HITBOX_BODY_HALF_WIDTH_FRAC = 0.33;
+const HITBOX_BODY_TOP_FRAC = 0.75;
+const HITBOX_HEAD_HALF_WIDTH_FRAC = 0.24;
+const HITBOX_HEAD_TOP_FRAC = 1.08;
 const BODY_BOX_COLOR = new Color(0x58d68d);
 const HEAD_BOX_COLOR = new Color(0xffd34d);
 const ENTITY_BOX_COLOR = new Color(0x6ec6ff);
@@ -39,9 +42,12 @@ export default class DebugRenderer {
 
     this._hitboxMesh = new LineSegments(
       new BufferGeometry(),
-      new LineBasicMaterial({ color: 0xffffff, vertexColors: true })
+      // depthTest off: the boxes hug the model, so depth-tested lines were
+      // swallowed by the body while standing (only visible on corpses).
+      new LineBasicMaterial({ color: 0xffffff, vertexColors: true, depthTest: false, transparent: true })
     );
     this._hitboxMesh.frustumCulled = false;
+    this._hitboxMesh.renderOrder = 50;
     this._hitboxMesh.visible = false;
 
     this._game.renderer.addToScene(this._mesh);
@@ -131,23 +137,20 @@ export default class DebugRenderer {
       if (entity === localEntity) continue;
 
       if (entity.modelUri?.includes(PLAYER_MODEL_URI)) {
-        tempBox.setFromObject(entity.entityRoot, true);
-        if (tempBox.isEmpty()) continue;
+        const center = entity.getWorldPosition(new Vector3());
+        const feetY = center.y - PLAYER_HEIGHT / 2;
+        const bodyHalf = PLAYER_HEIGHT * HITBOX_BODY_HALF_WIDTH_FRAC;
+        const headHalf = PLAYER_HEIGHT * HITBOX_HEAD_HALF_WIDTH_FRAC;
+        const splitY = feetY + PLAYER_HEIGHT * HITBOX_BODY_TOP_FRAC;
 
-        const splitY = tempBox.max.y - (tempBox.max.y - tempBox.min.y) * PLAYER_HEAD_HEIGHT_FRACTION;
-        const bodyBox = new Box3(
-          tempBox.min.clone(),
-          new Vector3(tempBox.max.x, splitY, tempBox.max.z)
-        );
-        this._appendBox(positions, colors, bodyBox, BODY_BOX_COLOR);
-
-        const insetX = (tempBox.max.x - tempBox.min.x) * PLAYER_HEAD_XZ_INSET;
-        const insetZ = (tempBox.max.z - tempBox.min.z) * PLAYER_HEAD_XZ_INSET;
-        const headBox = new Box3(
-          new Vector3(tempBox.min.x + insetX, splitY, tempBox.min.z + insetZ),
-          new Vector3(tempBox.max.x - insetX, tempBox.max.y, tempBox.max.z - insetZ)
-        );
-        this._appendBox(positions, colors, headBox, HEAD_BOX_COLOR);
+        this._appendBox(positions, colors, tempBox.set(
+          new Vector3(center.x - bodyHalf, feetY, center.z - bodyHalf),
+          new Vector3(center.x + bodyHalf, splitY, center.z + bodyHalf)
+        ), BODY_BOX_COLOR);
+        this._appendBox(positions, colors, tempBox.set(
+          new Vector3(center.x - headHalf, splitY, center.z - headHalf),
+          new Vector3(center.x + headHalf, feetY + PLAYER_HEIGHT * HITBOX_HEAD_TOP_FRAC, center.z + headHalf)
+        ), HEAD_BOX_COLOR);
         continue;
       }
 

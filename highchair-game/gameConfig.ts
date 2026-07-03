@@ -26,6 +26,21 @@ export const ITEM_DESPAWN_TIME_MS = 25 * 1000; // 25 seconds
 // 1.135 above the floor.
 export const PLAYER_STAND_HEIGHT = 1.2;
 
+// ---------------------------------------------------------------------------
+// Canonical player hitboxes. Axis-aligned boxes centered on the entity,
+// sized as fractions of entity height (so they scale with the character).
+// These are what bullets actually test against AND what dev mode (H) draws —
+// one spec, mirrored in highchair-client/src/core/DebugRenderer.ts.
+// The body box runs feet -> bottom of head; the head box extends a bit above
+// the model. Volumes are ~2x the old model-bounds boxes by design.
+// ---------------------------------------------------------------------------
+export const PLAYER_HITBOX = {
+  bodyHalfWidthFrac: 0.33,  // half width/depth as a fraction of height
+  bodyTopFrac: 0.75,        // body box top (feet = 0): bottom of the head
+  headHalfWidthFrac: 0.24,
+  headTopFrac: 1.08,        // pokes a bit above the model
+} as const;
+
 export const SPAWN_POINTS = arenaMeta.spawnPoints.map(point => ({
   ...point,
   y: point.y + PLAYER_STAND_HEIGHT,

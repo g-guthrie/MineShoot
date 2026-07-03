@@ -12,6 +12,7 @@ import GamePlayerEntity from './GamePlayerEntity';
 import type { DamageFeedback } from './GamePlayerEntity';
 import ItemEntity from './ItemEntity';
 import TerrainDamageManager from './TerrainDamageManager';
+import { PLAYER_HITBOX } from '../gameConfig';
 import type { ItemEntityOptions } from './ItemEntity';
 
 export type GunHand = import('./ItemEntity').HeldHand;
@@ -106,8 +107,6 @@ export default abstract class GunEntity extends ItemEntity {
     
     this.setPosition({ x: 0, y: 0, z: -0.2 });
     this.setRotation(Quaternion.fromEuler(-90, 0, 0));
-    this._reloadAudio.play(this.world, true);
-
   }
 
   public override unequip(): void {
@@ -223,35 +222,104 @@ export default abstract class GunEntity extends ItemEntity {
     if (!this.parent?.world) return;
 
     const { world } = this.parent;
-    const raycastHit = this.parent.world.simulation.raycast(origin, direction, length, {
-      filterExcludeRigidBody: this.parent.rawRigidBody,
+    const shooter = this.parent;
+
+    // World geometry (and player-built blocks) via the physics ray. Player
+    // capsule hits are ignored here — players are resolved analytically
+    // against the canonical PLAYER_HITBOX boxes below, which are larger
+    // than the capsule and carry a real head volume.
+    const raycastHit = world.simulation.raycast(origin, direction, length, {
+      filterExcludeRigidBody: shooter.rawRigidBody,
     });
-
-    this._broadcastTracer(world, origin, direction, raycastHit?.hitPoint ?? {
-      x: origin.x + direction.x * length,
-      y: origin.y + direction.y * length,
-      z: origin.z + direction.z * length,
-    });
-
-    if (!raycastHit) return;
-
-    const hp = raycastHit.hitPoint;
-    const distance = hp
-      ? Math.hypot(hp.x - origin.x, hp.y - origin.y, hp.z - origin.z)
+    const worldHitIsPlayer = raycastHit?.hitEntity instanceof GamePlayerEntity;
+    const occlusionDistance = raycastHit?.hitPoint && !worldHitIsPlayer
+      ? Math.hypot(raycastHit.hitPoint.x - origin.x, raycastHit.hitPoint.y - origin.y, raycastHit.hitPoint.z - origin.z)
       : length;
-    const damage = Math.max(1, Math.round(this.damage * this._falloffScalar(distance)));
 
-    if (raycastHit.hitBlock) {
-      TerrainDamageManager.instance.damageBlock(world, raycastHit.hitBlock, damage);
+    // Analytic sweep: nearest player hitbox in front of the occluder.
+    let best: { target: GamePlayerEntity; t: number; headshot: boolean } | undefined;
+    for (const entity of world.entityManager.getAllPlayerEntities()) {
+      if (!(entity instanceof GamePlayerEntity) || entity === shooter || entity.isDead || !entity.isSpawned) continue;
+      const hit = GunEntity._rayVsPlayerHitbox(origin, direction, entity);
+      if (!hit || hit.t > occlusionDistance) continue;
+      if (!best || hit.t < best.t) best = { target: entity, t: hit.t, headshot: hit.headshot };
     }
 
-    if (raycastHit.hitEntity) {
-      this._handleHitEntity(raycastHit.hitEntity, direction, damage, raycastHit.hitPoint, {
+    const endPoint = best
+      ? { x: origin.x + direction.x * best.t, y: origin.y + direction.y * best.t, z: origin.z + direction.z * best.t }
+      : raycastHit?.hitPoint && !worldHitIsPlayer
+        ? raycastHit.hitPoint
+        : { x: origin.x + direction.x * length, y: origin.y + direction.y * length, z: origin.z + direction.z * length };
+
+    this._broadcastTracer(world, origin, direction, endPoint);
+
+    if (best) {
+      const damage = Math.max(1, Math.round(this.damage * this._falloffScalar(best.t)));
+      this._handleHitEntity(best.target, direction, damage, endPoint, {
         pelletIndex,
         pelletCount,
         weaponName: this.name,
-      });
+      }, best.headshot);
+      return;
     }
+
+    if (raycastHit?.hitBlock) {
+      const damage = Math.max(1, Math.round(this.damage * this._falloffScalar(occlusionDistance)));
+      TerrainDamageManager.instance.damageBlock(world, raycastHit.hitBlock, damage);
+    }
+  }
+
+  /**
+   * Ray vs the canonical player hitboxes (gameConfig PLAYER_HITBOX): an
+   * axis-aligned body box (feet to head-base) and a head box above it.
+   * Returns the nearest entry distance and whether it was the head.
+   */
+  private static _rayVsPlayerHitbox(
+    origin: Vector3Like,
+    direction: Vector3Like,
+    target: GamePlayerEntity,
+  ): { t: number; headshot: boolean } | undefined {
+    const h = target.height;
+    const center = target.position;
+    const feetY = center.y - h / 2;
+    const bodyHalf = h * PLAYER_HITBOX.bodyHalfWidthFrac;
+    const headHalf = h * PLAYER_HITBOX.headHalfWidthFrac;
+    const splitY = feetY + h * PLAYER_HITBOX.bodyTopFrac;
+
+    const headT = GunEntity._rayVsAabb(origin, direction,
+      { x: center.x - headHalf, y: splitY, z: center.z - headHalf },
+      { x: center.x + headHalf, y: feetY + h * PLAYER_HITBOX.headTopFrac, z: center.z + headHalf });
+    const bodyT = GunEntity._rayVsAabb(origin, direction,
+      { x: center.x - bodyHalf, y: feetY, z: center.z - bodyHalf },
+      { x: center.x + bodyHalf, y: splitY, z: center.z + bodyHalf });
+
+    if (headT === undefined && bodyT === undefined) return undefined;
+    if (headT !== undefined && (bodyT === undefined || headT <= bodyT)) {
+      return { t: headT, headshot: true };
+    }
+    return { t: bodyT!, headshot: false };
+  }
+
+  /** Slab-test ray vs AABB; returns entry distance (>= 0) or undefined. */
+  private static _rayVsAabb(origin: Vector3Like, dir: Vector3Like, min: Vector3Like, max: Vector3Like): number | undefined {
+    let tMin = 0;
+    let tMax = Infinity;
+    const axes: Array<'x' | 'y' | 'z'> = ['x', 'y', 'z'];
+    for (const a of axes) {
+      const d = dir[a];
+      if (Math.abs(d) < 1e-9) {
+        if (origin[a] < min[a] || origin[a] > max[a]) return undefined;
+        continue;
+      }
+      const inv = 1 / d;
+      let t1 = (min[a] - origin[a]) * inv;
+      let t2 = (max[a] - origin[a]) * inv;
+      if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+      tMin = Math.max(tMin, t1);
+      tMax = Math.min(tMax, t2);
+      if (tMin > tMax) return undefined;
+    }
+    return tMin;
   }
 
   /**
@@ -445,11 +513,11 @@ export default abstract class GunEntity extends ItemEntity {
     damage: number = this.damage,
     hitPoint?: Vector3Like,
     feedback: DamageFeedback = {},
+    headshot: boolean = false,
   ): void {
     if (!(hitEntity instanceof GamePlayerEntity) || hitEntity.isDead) return;
 
     const attacker = this.parent as GamePlayerEntity;
-    const headshot = this._isHeadshot(hitEntity, hitPoint);
     const finalDamage = headshot ? Math.round(damage * HEADSHOT_DAMAGE_MULTIPLIER) : damage;
 
     hitEntity.takeDamage(finalDamage, hitDirection, attacker);
@@ -458,14 +526,6 @@ export default abstract class GunEntity extends ItemEntity {
       headshot,
       killed: hitEntity.isDead,
     });
-  }
-
-  private _isHeadshot(hitEntity: GamePlayerEntity, hitPoint?: Vector3Like): boolean {
-    if (!hitPoint) return false;
-
-    const relativeY = hitPoint.y - hitEntity.position.y;
-    const headBaseY = hitEntity.height * 0.25;
-    return relativeY >= headBaseY;
   }
 
   public updateAmmoIndicatorUI(reloading: boolean = false): void {

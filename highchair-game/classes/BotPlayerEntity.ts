@@ -38,6 +38,7 @@ const NAVIGATION_MIN_PROGRESS = 0.35;
 const MAX_VERTICAL_TARGET_DELTA = 12;
 const MELEE_LOOT_OPPORTUNITY_RANGE = 8;
 const BEHAVIOR_LOCK_MS = 450;
+const WEAPON_SWITCH_COOLDOWN_MS = 2000;
 const REACTION_DELAY_MS = 180;
 const ENEMY_RETARGET_COOLDOWN_MS = 750;
 const ENEMY_LOST_GRACE_MS = 1400;
@@ -1234,7 +1235,10 @@ export default class BotPlayerEntity extends GamePlayerEntity {
         continue;
       }
 
-      const ammoScore = item.getClipAmmo() + item.getReserveAmmo();
+      const reserve = item.getReserveAmmo();
+      // Loadout guns carry infinite reserve (-1); treat it as a full pool
+      // so the score is stable instead of flapping around zero.
+      const ammoScore = item.getClipAmmo() + (reserve < 0 ? 999 : reserve);
       if (requireAmmo && ammoScore <= 0) continue;
 
       if (!best || ammoScore > best.score) {
@@ -1290,6 +1294,8 @@ export default class BotPlayerEntity extends GamePlayerEntity {
     setTimeout(() => this._reloadUntilFull(gun, attempt + 1), retryDelay);
   }
 
+  private _nextWeaponSwitchAt = 0;
+
   private _ensureBestWeaponEquipped(): GunEntity | undefined {
     const activeItem = this.activeInventoryItem;
     const activeGun = activeItem instanceof GunEntity ? activeItem : undefined;
@@ -1305,6 +1311,14 @@ export default class BotPlayerEntity extends GamePlayerEntity {
     if (activeGun === bestGunInfo.gun) {
       return activeGun;
     }
+
+    // Rate-limit switching: flapping between guns every tick replayed the
+    // equip path constantly (and sounded like a mechanical hummingbird).
+    const now = performance.now();
+    if (activeGun && now < this._nextWeaponSwitchAt) {
+      return activeGun;
+    }
+    this._nextWeaponSwitchAt = now + WEAPON_SWITCH_COOLDOWN_MS;
 
     this.setActiveInventorySlotIndex(bestGunInfo.slot);
     return bestGunInfo.gun;
