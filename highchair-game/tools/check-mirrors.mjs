@@ -33,6 +33,7 @@ function extract(source, pattern, label) {
 }
 
 const gameConfig = read('gameConfig.ts');
+const gunEntity = read('classes/GunEntity.ts');
 const debugRenderer = read('../highchair-client/src/core/DebugRenderer.ts');
 const ui = read('assets/ui/index.html');
 
@@ -71,9 +72,15 @@ if (debugMirror.height !== uiMirror.height) {
   failures.push(`player height: DebugRenderer=${debugMirror.height} but UI prediction=${uiMirror.height}`);
 }
 
+const serverHeadshot = extract(gunEntity, /HEADSHOT_DAMAGE_MULTIPLIER = ([\d.]+)/, 'GunEntity headshot multiplier');
+const uiHeadshot = extract(ui, /PREDICT_HEADSHOT_MULTIPLIER = ([\d.]+)/, 'UI headshot multiplier');
+if (serverHeadshot !== uiHeadshot) {
+  failures.push(`headshot multiplier: server=${serverHeadshot} but UI prediction=${uiHeadshot}`);
+}
+
 if (failures.length) {
   console.error('MIRROR DRIFT DETECTED:');
   for (const f of failures) console.error('  - ' + f);
   process.exit(1);
 }
-console.log('mirrors in sync: hitbox fractions x2 sites, player height x2 sites');
+console.log('mirrors in sync: hitbox fractions x2, player height x2, headshot multiplier');

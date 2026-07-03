@@ -19,7 +19,7 @@ import ItemEntity from './ItemEntity';
 import ItemFactory from './ItemFactory';
 import { DEFAULT_LOADOUT, GUN_CATALOG, LOADOUT_SLOTS, isCatalogGun } from './GunCatalog';
 import MeleeWeaponEntity from './MeleeWeaponEntity';
-import { BUILD_BLOCK_ID, INFINITE_RESERVE_AMMO } from '../gameConfig';
+import { PLAYER_STAND_HEIGHT, BUILD_BLOCK_ID, INFINITE_RESERVE_AMMO } from '../gameConfig';
 import GameManager from './GameManager';
 import { resolveShot } from './ShotResolver';
 
@@ -177,6 +177,14 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
       belongsTo: [CollisionGroup.PLAYER],
       collidesWith: [CollisionGroup.BLOCK, CollisionGroup.ENTITY, CollisionGroup.ENTITY_SENSOR, CollisionGroup.ENVIRONMENT_ENTITY],
     });
+    // Drift alarm for the measured-constant class: the capsule rests at
+    // exactly height/2, so PLAYER_STAND_HEIGHT must be that plus a small
+    // drop margin. If a scale pass forgets to re-measure, scream.
+    const expectedStand = this.height / 2;
+    if (PLAYER_STAND_HEIGHT < expectedStand || PLAYER_STAND_HEIGHT > expectedStand + 0.25) {
+      console.warn(`[drift] PLAYER_STAND_HEIGHT=${PLAYER_STAND_HEIGHT} but capsule rest is ${expectedStand.toFixed(3)} — re-measure after scale changes`);
+    }
+
     this._setupPlayerInventory();
     this._autoHealTicker();
     this._outOfWorldTicker();
@@ -488,6 +496,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
       fireRate: gun?.getFireRate() ?? 0,
       hitscan: gun?.isHitscan() ?? false,
       weaponName: gun?.name ?? '',
+      playerHeight: this.height, // live value for the client's hitbox mirrors
       tx: this._aimTangentX,
       ty: this._aimTangentY,
       scoped: false,

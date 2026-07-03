@@ -309,6 +309,12 @@ export default class GameManager {
         playerEntity.refreshLoadout(); // fresh loadout guns, nothing dropped
         playerEntity.resetCamera();
         playerEntity.resetMaterials();
+        if (playerEntity.isDead) {
+          // A player mid-death-timer at round reset must come back NOW —
+          // otherwise they'd wait out the old timer with full health but
+          // blocked inputs (and clients would still mark them dead).
+          playerEntity.respawn();
+        }
         playerEntity.health = playerEntity.maxHealth;
         playerEntity.shield = 0;
       }

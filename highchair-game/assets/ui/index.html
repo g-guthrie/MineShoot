@@ -870,12 +870,40 @@
   const PREDICTION_TTL_MS = 900;
   const PREDICTED_HIT_MAX = 48;
   // Mirror of highchair-game gameConfig PLAYER_HITBOX + DebugRenderer.
+  // Fallback only — the server sends the live value in every reticle
+  // packet (see predictedPlayerHeight below).
   const PREDICT_PLAYER_HEIGHT = 3.71;
+  let predictedPlayerHeight = PREDICT_PLAYER_HEIGHT;
   const PREDICT_BODY_HALF_FRAC = 0.369;
   const PREDICT_BODY_TOP_FRAC = 0.75;
   const PREDICT_HEAD_HALF_FRAC = 0.268;
   const PREDICT_HEAD_TOP_FRAC = 1.1;
   const PREDICT_HEADSHOT_MULTIPLIER = 1.5;
+
+  // World occlusion for prediction: the SAME collider boxes the server
+  // shoots against, fetched once (same origin). Rotated boxes use their
+  // conservative AABB — plenty for "is there a wall in front of them".
+  let worldColliders = null;
+  fetch('{{CDN_ASSETS_URL}}/maps/boxman-world.colliders.json')
+    .then(r => r.ok ? r.json() : null)
+    .then(list => {
+      if (!Array.isArray(list)) return;
+      worldColliders = list.map(c => {
+        const ex = (c.rotY || c.tiltX) ? Math.max(c.hx, c.hz) : c.hx;
+        const ez = (c.rotY || c.tiltX) ? Math.max(c.hx, c.hz) : c.hz;
+        return { minX: c.x - ex, maxX: c.x + ex, minY: c.y - c.hy, maxY: c.y + c.hy, minZ: c.z - ez, maxZ: c.z + ez };
+      });
+    })
+    .catch(() => {});
+
+  function worldBlocksAt(ox, oy, oz, dx, dy, dz, maxT) {
+    if (!worldColliders) return false; // not loaded yet: predict optimistically
+    for (const b of worldColliders) {
+      const t = rayVsAabb(ox, oy, oz, dx, dy, dz, b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ);
+      if (t !== undefined && t > 0.01 && t < maxT) return true;
+    }
+    return false;
+  }
 
   let predictedGun = null;      // from the reticle packet
   let predictedAmmo = 0;        // clip mirror from ammo-indicator
@@ -968,13 +996,14 @@
       let bestHead = false;
       for (const target of targets) {
         if (deadTargetIds.has(target.id)) continue; // no hitmarkers on corpses
-        const feetY = target.y - PREDICT_PLAYER_HEIGHT / 2;
-        const bodyHalf = PREDICT_PLAYER_HEIGHT * PREDICT_BODY_HALF_FRAC;
-        const headHalf = PREDICT_PLAYER_HEIGHT * PREDICT_HEAD_HALF_FRAC;
-        const splitY = feetY + PREDICT_PLAYER_HEIGHT * PREDICT_BODY_TOP_FRAC;
+        const H = predictedPlayerHeight;
+        const feetY = target.y - H / 2;
+        const bodyHalf = H * PREDICT_BODY_HALF_FRAC;
+        const headHalf = H * PREDICT_HEAD_HALF_FRAC;
+        const splitY = feetY + H * PREDICT_BODY_TOP_FRAC;
         const headT = rayVsAabb(ox, oy, oz, dx, dy, dz,
           target.x - headHalf, splitY, target.z - headHalf,
-          target.x + headHalf, feetY + PREDICT_PLAYER_HEIGHT * PREDICT_HEAD_TOP_FRAC, target.z + headHalf);
+          target.x + headHalf, feetY + H * PREDICT_HEAD_TOP_FRAC, target.z + headHalf);
         const bodyT = rayVsAabb(ox, oy, oz, dx, dy, dz,
           target.x - bodyHalf, feetY, target.z - bodyHalf,
           target.x + bodyHalf, splitY, target.z + bodyHalf);
@@ -985,6 +1014,7 @@
         }
       }
       if (!Number.isFinite(bestT)) continue;
+      if (worldBlocksAt(ox, oy, oz, dx, dy, dz, bestT)) continue; // wall in front
 
       anyHit = true;
       anyHead = anyHead || bestHead;
@@ -1258,6 +1288,10 @@
       reticleScoped = Boolean(data.scoped);
       aimTangentX = Number(data.tx) || 0;
       aimTangentY = Number(data.ty) || 0;
+      if (Number(data.playerHeight) > 0) {
+        predictedPlayerHeight = Number(data.playerHeight);
+        globalThis.__combatPlayerHeight = predictedPlayerHeight; // DebugRenderer reads this
+      }
       predictedGun = {
         spread: Number(data.bulletSpread) || reticleSpread,
         pellets: reticlePellets,

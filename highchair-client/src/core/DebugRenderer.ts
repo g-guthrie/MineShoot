@@ -10,7 +10,11 @@ const PLAYER_MODEL_URI = 'models/players/soldier-player.gltf';
 // against on the server: an axis-aligned body box (feet to head-base) and
 // a head box poking a bit above the model, sized as fractions of entity
 // height so they scale with the character.
-const PLAYER_HEIGHT = 3.71; // soldier-player at modelScale 1.22 (probe-measured)
+const PLAYER_HEIGHT = 3.71; // fallback; the game UI feeds the live value below
+function livePlayerHeight(): number {
+  const live = Number((globalThis as Record<string, unknown>).__combatPlayerHeight);
+  return Number.isFinite(live) && live > 0 ? live : PLAYER_HEIGHT;
+}
 const HITBOX_BODY_HALF_WIDTH_FRAC = 0.369;
 const HITBOX_BODY_TOP_FRAC = 0.75;
 const HITBOX_HEAD_HALF_WIDTH_FRAC = 0.268;
@@ -138,10 +142,11 @@ export default class DebugRenderer {
 
       if (entity.modelUri?.includes(PLAYER_MODEL_URI)) {
         const center = entity.getWorldPosition(new Vector3());
-        const feetY = center.y - PLAYER_HEIGHT / 2;
-        const bodyHalf = PLAYER_HEIGHT * HITBOX_BODY_HALF_WIDTH_FRAC;
-        const headHalf = PLAYER_HEIGHT * HITBOX_HEAD_HALF_WIDTH_FRAC;
-        const splitY = feetY + PLAYER_HEIGHT * HITBOX_BODY_TOP_FRAC;
+        const H = livePlayerHeight();
+        const feetY = center.y - H / 2;
+        const bodyHalf = H * HITBOX_BODY_HALF_WIDTH_FRAC;
+        const headHalf = H * HITBOX_HEAD_HALF_WIDTH_FRAC;
+        const splitY = feetY + H * HITBOX_BODY_TOP_FRAC;
 
         this._appendBox(positions, colors, tempBox.set(
           new Vector3(center.x - bodyHalf, feetY, center.z - bodyHalf),
@@ -149,7 +154,7 @@ export default class DebugRenderer {
         ), BODY_BOX_COLOR);
         this._appendBox(positions, colors, tempBox.set(
           new Vector3(center.x - headHalf, splitY, center.z - headHalf),
-          new Vector3(center.x + headHalf, feetY + PLAYER_HEIGHT * HITBOX_HEAD_TOP_FRAC, center.z + headHalf)
+          new Vector3(center.x + headHalf, feetY + H * HITBOX_HEAD_TOP_FRAC, center.z + headHalf)
         ), HEAD_BOX_COLOR);
         continue;
       }
