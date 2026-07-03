@@ -12,7 +12,8 @@ import GamePlayerEntity from './GamePlayerEntity';
 import type { DamageFeedback } from './GamePlayerEntity';
 import ItemEntity from './ItemEntity';
 import TerrainDamageManager from './TerrainDamageManager';
-import { PLAYER_HITBOX } from '../gameConfig';
+import { resolveShot } from './ShotResolver';
+import { INFINITE_RESERVE_AMMO } from '../gameConfig';
 import type { ItemEntityOptions } from './ItemEntity';
 
 export type GunHand = import('./ItemEntity').HeldHand;
@@ -21,7 +22,6 @@ const TRACER_VISIBLE_START_OFFSET = 1;
 // The original tuning's head/body damage ratio (rifle 78/50, pistol 102/68,
 // machinegun 27/18 — all 1.5x). Applied on top of distance falloff.
 const HEADSHOT_DAMAGE_MULTIPLIER = 1.5;
-const INFINITE_RESERVE_AMMO = -1;
 
 export type GunEntityOptions = {
   ammo: number;              // The amount of ammo in the clip.
@@ -167,6 +167,7 @@ export default abstract class GunEntity extends ItemEntity {
       style: scopeStyle,
       sniper: scopeStyle === 'sniper',
     });
+    player.refreshReticleUI(); // bullet spread just changed
   }
 
   protected getShootOriginDirection(): { origin: Vector3Like, direction: Vector3Like } {
@@ -222,104 +223,29 @@ export default abstract class GunEntity extends ItemEntity {
     if (!this.parent?.world) return;
 
     const { world } = this.parent;
-    const shooter = this.parent;
+    const shooter = this.parent as GamePlayerEntity;
 
-    // World geometry (and player-built blocks) via the physics ray. Player
-    // capsule hits are ignored here — players are resolved analytically
-    // against the canonical PLAYER_HITBOX boxes below, which are larger
-    // than the capsule and carry a real head volume.
-    const raycastHit = world.simulation.raycast(origin, direction, length, {
-      filterExcludeRigidBody: shooter.rawRigidBody,
-    });
-    const worldHitIsPlayer = raycastHit?.hitEntity instanceof GamePlayerEntity;
-    const occlusionDistance = raycastHit?.hitPoint && !worldHitIsPlayer
-      ? Math.hypot(raycastHit.hitPoint.x - origin.x, raycastHit.hitPoint.y - origin.y, raycastHit.hitPoint.z - origin.z)
-      : length;
+    // One canonical shot-resolution path (ShotResolver): analytic player
+    // hitboxes with world-geometry occlusion — shared with the red
+    // in-range probe and mobile autofire so they can never disagree.
+    const shot = resolveShot(world, shooter, origin, direction, length);
 
-    // Analytic sweep: nearest player hitbox in front of the occluder.
-    let best: { target: GamePlayerEntity; t: number; headshot: boolean } | undefined;
-    for (const entity of world.entityManager.getAllPlayerEntities()) {
-      if (!(entity instanceof GamePlayerEntity) || entity === shooter || entity.isDead || !entity.isSpawned) continue;
-      const hit = GunEntity._rayVsPlayerHitbox(origin, direction, entity);
-      if (!hit || hit.t > occlusionDistance) continue;
-      if (!best || hit.t < best.t) best = { target: entity, t: hit.t, headshot: hit.headshot };
-    }
+    this._broadcastTracer(world, origin, direction, shot.endPoint);
 
-    const endPoint = best
-      ? { x: origin.x + direction.x * best.t, y: origin.y + direction.y * best.t, z: origin.z + direction.z * best.t }
-      : raycastHit?.hitPoint && !worldHitIsPlayer
-        ? raycastHit.hitPoint
-        : { x: origin.x + direction.x * length, y: origin.y + direction.y * length, z: origin.z + direction.z * length };
+    const damage = Math.max(1, Math.round(this.damage * this._falloffScalar(shot.distance)));
 
-    this._broadcastTracer(world, origin, direction, endPoint);
-
-    if (best) {
-      const damage = Math.max(1, Math.round(this.damage * this._falloffScalar(best.t)));
-      this._handleHitEntity(best.target, direction, damage, endPoint, {
+    if (shot.target) {
+      this._handleHitEntity(shot.target, direction, damage, shot.endPoint, {
         pelletIndex,
         pelletCount,
         weaponName: this.name,
-      }, best.headshot);
+      }, shot.headshot);
       return;
     }
 
-    if (raycastHit?.hitBlock) {
-      const damage = Math.max(1, Math.round(this.damage * this._falloffScalar(occlusionDistance)));
-      TerrainDamageManager.instance.damageBlock(world, raycastHit.hitBlock, damage);
+    if (shot.hitBlock) {
+      TerrainDamageManager.instance.damageBlock(world, shot.hitBlock, damage);
     }
-  }
-
-  /**
-   * Ray vs the canonical player hitboxes (gameConfig PLAYER_HITBOX): an
-   * axis-aligned body box (feet to head-base) and a head box above it.
-   * Returns the nearest entry distance and whether it was the head.
-   */
-  private static _rayVsPlayerHitbox(
-    origin: Vector3Like,
-    direction: Vector3Like,
-    target: GamePlayerEntity,
-  ): { t: number; headshot: boolean } | undefined {
-    const h = target.height;
-    const center = target.position;
-    const feetY = center.y - h / 2;
-    const bodyHalf = h * PLAYER_HITBOX.bodyHalfWidthFrac;
-    const headHalf = h * PLAYER_HITBOX.headHalfWidthFrac;
-    const splitY = feetY + h * PLAYER_HITBOX.bodyTopFrac;
-
-    const headT = GunEntity._rayVsAabb(origin, direction,
-      { x: center.x - headHalf, y: splitY, z: center.z - headHalf },
-      { x: center.x + headHalf, y: feetY + h * PLAYER_HITBOX.headTopFrac, z: center.z + headHalf });
-    const bodyT = GunEntity._rayVsAabb(origin, direction,
-      { x: center.x - bodyHalf, y: feetY, z: center.z - bodyHalf },
-      { x: center.x + bodyHalf, y: splitY, z: center.z + bodyHalf });
-
-    if (headT === undefined && bodyT === undefined) return undefined;
-    if (headT !== undefined && (bodyT === undefined || headT <= bodyT)) {
-      return { t: headT, headshot: true };
-    }
-    return { t: bodyT!, headshot: false };
-  }
-
-  /** Slab-test ray vs AABB; returns entry distance (>= 0) or undefined. */
-  private static _rayVsAabb(origin: Vector3Like, dir: Vector3Like, min: Vector3Like, max: Vector3Like): number | undefined {
-    let tMin = 0;
-    let tMax = Infinity;
-    const axes: Array<'x' | 'y' | 'z'> = ['x', 'y', 'z'];
-    for (const a of axes) {
-      const d = dir[a];
-      if (Math.abs(d) < 1e-9) {
-        if (origin[a] < min[a] || origin[a] > max[a]) return undefined;
-        continue;
-      }
-      const inv = 1 / d;
-      let t1 = (min[a] - origin[a]) * inv;
-      let t2 = (max[a] - origin[a]) * inv;
-      if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
-      tMin = Math.max(tMin, t1);
-      tMax = Math.min(tMax, t2);
-      if (tMin > tMax) return undefined;
-    }
-    return tMin;
   }
 
   /**

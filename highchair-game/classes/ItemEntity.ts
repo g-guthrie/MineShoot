@@ -113,6 +113,11 @@ export default class ItemEntity extends Entity {
 
   }
 
+  /**
+   * SUNSETTED: weapons never exist on the map anymore (dropping despawns —
+   * see GamePlayerEntity.dropActiveInventoryItem). Kept for potential
+   * future pickups; nothing calls it.
+   */
   public drop(fromPosition: Vector3Like, direction: Vector3Like): void {
     if (!this.world) return;
 

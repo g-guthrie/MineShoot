@@ -1096,8 +1096,6 @@
       : 12 + Math.random() * 58;
     const startX = Math.cos(angle) * radius;
     const startY = Math.sin(angle) * radius * 0.62 - (isPelletCloud ? 8 : 20);
-    const driftX = startX + (Math.random() - 0.5) * (isPelletCloud ? 34 : 60);
-    const driftY = startY - (52 + Math.random() * 36);
 
     const damageNumber = document.createElement('div');
     damageNumber.className = `hit-damage-number${headshot ? ' headshot' : ''}${isPelletCloud ? ' pellet' : ''}`;
@@ -1118,8 +1116,6 @@
       damageNumber.style.setProperty('--start-x', `${startX.toFixed(1)}px`);
       damageNumber.style.setProperty('--start-y', `${startY.toFixed(1)}px`);
     }
-    damageNumber.style.setProperty('--drift-x', `${driftX.toFixed(1)}px`);
-    damageNumber.style.setProperty('--drift-y', `${driftY.toFixed(1)}px`);
 
     container.appendChild(damageNumber);
 
@@ -1256,7 +1252,7 @@
       aimTangentX = Number(data.tx) || 0;
       aimTangentY = Number(data.ty) || 0;
       predictedGun = {
-        spread: reticleSpread,
+        spread: Number(data.bulletSpread) || reticleSpread,
         pellets: reticlePellets,
         range: Number(data.range) || 0,
         damage: Number(data.damage) || 0,
@@ -1816,8 +1812,6 @@
   .hit-damage-number {
     --start-x: 0px;
     --start-y: 0px;
-    --drift-x: 0px;
-    --drift-y: -70px;
     color: #ffffff;
     font-family: 'Inter', sans-serif;
     font-size: 20px;

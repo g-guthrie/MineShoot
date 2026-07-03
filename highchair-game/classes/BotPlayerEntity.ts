@@ -1213,12 +1213,6 @@ export default class BotPlayerEntity extends GamePlayerEntity {
     return !!this._findBestGun();
   }
 
-  private _shouldSeekAmmo(): boolean {
-    const bestGun = this._findBestGun(true);
-    if (!bestGun) { return true; }
-    const ammoTotal = bestGun.gun.getClipAmmo() + bestGun.gun.getReserveAmmo();
-    return ammoTotal < 5;
-  }
 
   private _findBestGun(requireAmmo: boolean = true): { gun: GunEntity; slot: number } | undefined {
     const items = this.inventoryItems;

@@ -18,8 +18,9 @@ import ItemEntity from './ItemEntity';
 import ItemFactory from './ItemFactory';
 import { DEFAULT_LOADOUT, GUN_CATALOG, LOADOUT_SLOTS, isCatalogGun } from './GunCatalog';
 import MeleeWeaponEntity from './MeleeWeaponEntity';
-import { BUILD_BLOCK_ID } from '../gameConfig';
+import { BUILD_BLOCK_ID, INFINITE_RESERVE_AMMO } from '../gameConfig';
 import GameManager from './GameManager';
+import { resolveShot } from './ShotResolver';
 
 const BASE_HEALTH = 100;
 const BASE_SHIELD = 0;
@@ -48,7 +49,6 @@ const MAX_HEALTH = 100;
 const MAX_SHIELD = 100;
 const TOTAL_INVENTORY_SLOTS = 2; // two loadout guns; the pickaxe is sunsetted
 const STARTING_MATERIALS = 30;
-const INFINITE_RESERVE_AMMO = -1;
 const RADAR_SEGMENTS = 8;
 const RADAR_RANGE = 56;
 const RADAR_CORE_RANGE = 10;
@@ -455,6 +455,11 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
    * in camera tangent units. The HUD projects it through the live camera, so
    * FOV changes resize the circle from the same value bullets sample.
    */
+  /** Public resend hook (scope toggles change the live bullet spread). */
+  public refreshReticleUI(): void {
+    this._sendReticleUI();
+  }
+
   private _sendReticleUI(): void {
     const item = this._inventory[this._inventoryActiveSlotIndex];
     const gun = item instanceof GunEntity ? item : undefined;
@@ -463,6 +468,7 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     this.player.ui.sendData({
       type: 'reticle',
       spread: gun?.getSpread() ?? 0,
+      bulletSpread: gun?.getCurrentBulletSpread() ?? 0, // scoped-tightened; client prediction samples THIS
       pellets: gun?.getPellets() ?? 1,
       range: gun?.getEffectiveRange() ?? 0,
       damage: gun?.getDamage() ?? 0,
@@ -719,13 +725,9 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
     let active = false;
     if (item instanceof GunEntity) {
       const { origin, direction } = this.getReticleAimRay();
-      const hit = this.world.simulation.raycast(
-        origin,
-        direction,
-        item.getEffectiveRange(),
-        { filterExcludeRigidBody: this.rawRigidBody },
-      );
-      active = hit?.hitEntity instanceof GamePlayerEntity && !hit.hitEntity.isDead;
+      // Same resolver as actual gunfire: the red tint means "a shot fired
+      // right now would connect", hitboxes and occlusion included.
+      active = Boolean(resolveShot(this.world, this, origin, direction, item.getEffectiveRange()).target);
     }
 
     if (active !== this._reticleTargetActive) {
@@ -823,20 +825,8 @@ export default class GamePlayerEntity extends DefaultPlayerEntity {
 
     const { origin, direction } = this.getReticleAimRay();
 
-    const raycastHit = this.world.simulation.raycast(
-      origin,
-      direction,
-      activeGun.getEffectiveRange(),
-      {
-        filterExcludeRigidBody: this.rawRigidBody,
-      }
-    );
-
-    return Boolean(
-      raycastHit?.hitEntity instanceof GamePlayerEntity &&
-      raycastHit.hitEntity !== this &&
-      !raycastHit.hitEntity.isDead
-    );
+    // Same resolver as actual gunfire.
+    return Boolean(resolveShot(this.world, this, origin, direction, activeGun.getEffectiveRange()).target);
   }
 
   private _handleMouseLeftClick(): void {
